@@ -6008,7 +6008,14 @@ func _quit_now() -> void:
 	# Save sound settings before leaving
 	_save_sound_settings()
 
-	# Disconnect immediately - server will keep character for 10s
+	# Sync state to server before disconnecting (gives RPC time to arrive)
+	# This ensures inventory changes are saved even on quick quit
+	if NetworkManager and NetworkManager.is_authenticated and not NetworkManager.is_host:
+		NetworkManager.client_sync_state()
+		# Small delay to let sync RPC reach server before closing connection
+		await get_tree().create_timer(0.3).timeout
+
+	# Disconnect - server will keep character for remaining logout timer
 	# (Server-side logout timer continues even after client disconnects)
 	if NetworkManager:
 		NetworkManager.close_connection()

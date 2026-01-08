@@ -7,7 +7,7 @@ extends Node
 # DEBUG SETTINGS - Set to true to enable verbose logging
 # ============================================
 const DEBUG_FORGED_ICONS: bool = false  # Debug forged item icon loading
-const DEBUG_ICON_LOADING: bool = false  # Debug all icon loading (enable to trace failures)
+const DEBUG_ICON_LOADING: bool = true  # Debug all icon loading (enable to trace failures)
 
 # ============================================
 # ENHANCED ICONS - 256x256 upscaled versions
@@ -86,6 +86,18 @@ func get_item_icon(item: Dictionary) -> Texture2D:
 	var sprite_name = item.get("sprite_name", "")
 	var slot = item.get("slot", "")
 
+	# Known weapon types - if type field contains one of these, treat as weapon
+	var known_weapon_types = ["sword", "katana", "scimitar", "dagger", "mace", "spear", "bow", "staff",
+		"greatsword", "longsword", "shortsword", "broadsword", "claymore", "rapier", "saber",
+		"crossbow", "wand", "halberd", "lance", "pike", "glaive", "hammer", "club", "flail", "morningstar"]
+
+	# Fix: If type field contains a weapon type, normalize it
+	if item_type in known_weapon_types:
+		# Store the actual weapon type and set type to "weapon"
+		if not item.has("weapon_type") or item.get("weapon_type", "") == "":
+			item["weapon_type"] = item_type
+		item_type = "weapon"
+
 	# Infer type from other fields if missing
 	if item_type == "" and item.has("weapon_type"):
 		item_type = "weapon"
@@ -129,10 +141,26 @@ func get_item_icon(item: Dictionary) -> Texture2D:
 			icon_cache[cache_key] = icon
 		return icon
 
-	# Determine the sprite path based on item type
+	# Try to load enhanced icon FIRST (256x256 pre-generated versions)
+	# This doesn't require sprite_path since it uses item name inference
+	if USE_ENHANCED_ICONS:
+		var enhanced_cache_key = "enhanced:%s:%s:%s" % [item_type, slot, item_name]
+		if icon_cache.has(enhanced_cache_key):
+			return icon_cache[enhanced_cache_key]
+
+		var enhanced_icon = _try_load_enhanced_equipment_icon(item_type, sprite_name, slot, item)
+		if enhanced_icon:
+			if DEBUG_ICON_LOADING:
+				print("✅ [IconGen] Enhanced icon loaded for: %s" % item_name)
+			icon_cache[enhanced_cache_key] = enhanced_icon
+			return enhanced_icon
+		elif DEBUG_ICON_LOADING:
+			print("⚠️ [IconGen] No enhanced icon for: %s (type=%s, sprite=%s, slot=%s)" % [item_name, item_type, sprite_name, slot])
+
+	# Fallback: Determine the sprite path based on item type
 	var sprite_path = _get_sprite_path(item_type, sprite_name, item)
 	if sprite_path.is_empty():
-		if DEBUG_ICON_LOADING:
+		if DEBUG_ICON_LOADING or true:  # Always show this warning
 			print("⚠️ [IconGen] No sprite path for: %s (type=%s, sprite_name=%s, slot=%s)" % [item_name, item_type, sprite_name, slot])
 		return null
 
@@ -145,17 +173,6 @@ func get_item_icon(item: Dictionary) -> Texture2D:
 	# Check cache first
 	if icon_cache.has(cache_key):
 		return icon_cache[cache_key]
-
-	# Try to load enhanced icon first (256x256 pre-generated versions)
-	if USE_ENHANCED_ICONS:
-		var enhanced_icon = _try_load_enhanced_equipment_icon(item_type, sprite_name, slot, item)
-		if enhanced_icon:
-			if DEBUG_ICON_LOADING:
-				print("✅ [IconGen] Enhanced icon loaded for: %s" % item_name)
-			icon_cache[cache_key] = enhanced_icon
-			return enhanced_icon
-		elif DEBUG_ICON_LOADING:
-			print("⚠️ [IconGen] No enhanced icon for: %s (type=%s, sprite=%s, slot=%s)" % [item_name, item_type, sprite_name, slot])
 
 	# Generate the icon from sprite sheet (fallback)
 	var icon = _generate_icon_from_sprite(sprite_path, direction, slot)
@@ -251,12 +268,20 @@ func _try_load_enhanced_equipment_icon(item_type: String, sprite_name: String, s
 					slot_dir = "pants"
 				"feet":
 					slot_dir = "boots"
-			paths_to_try.append(ENHANCED_ICONS_PATH + "equipment/%s/%s.png" % [slot_dir, sprite_name])
-			# Also try the original slot name
-			if slot_dir != slot:
-				paths_to_try.append(ENHANCED_ICONS_PATH + "equipment/%s/%s.png" % [slot, sprite_name])
+
+			# Get name variants to try (same logic as _infer_sprite_name_from_item)
+			var name_variants = _get_sprite_name_variants(item, slot)
+			if sprite_name != "" and sprite_name not in name_variants:
+				name_variants.insert(0, sprite_name)
+
+			# Try each variant in each slot directory
+			for variant in name_variants:
+				paths_to_try.append(ENHANCED_ICONS_PATH + "equipment/%s/%s.png" % [slot_dir, variant])
+				if slot_dir != slot:
+					paths_to_try.append(ENHANCED_ICONS_PATH + "equipment/%s/%s.png" % [slot, variant])
+
 		"weapon":
-			var weapon_type = item.get("weapon_type", "sword")
+			var weapon_type = item.get("weapon_type", item.get("type", "sword"))
 			var actual_type = WEAPON_TYPE_FALLBACKS.get(weapon_type, weapon_type)
 			paths_to_try.append(ENHANCED_ICONS_PATH + "equipment/weapon/%s.png" % actual_type)
 		"tool":
@@ -272,6 +297,47 @@ func _try_load_enhanced_equipment_icon(item_type: String, sprite_name: String, s
 				return texture
 
 	return null
+
+func _get_sprite_name_variants(item: Dictionary, slot: String) -> Array[String]:
+	"""Get possible sprite name variants for an item (for enhanced icon lookup)"""
+	var item_name = item.get("name", "")
+	if item_name == "":
+		return []
+
+	# Slot-specific words to strip from item names
+	var slot_words = ["hood", "cap", "helm", "helmet", "hat", "gloves", "gauntlets", "bracers",
+		"trousers", "pants", "leggings", "greaves", "boots", "shoes", "sandals",
+		"shirt", "tunic", "vest", "robe", "chestplate", "armor", "mail"]
+
+	var name_lower = item_name.to_lower()
+	var variants: Array[String] = []
+	var words = name_lower.split(" ")
+
+	# 1. Full name as snake_case
+	var snake_name = name_lower.replace(" ", "_").replace("'", "")
+	variants.append(snake_name)
+
+	# 2. First two words for compound names (e.g., "Copper Plate Hood" -> "copper_plate")
+	if words.size() > 2:
+		var first_two = (words[0] + "_" + words[1]).replace("'", "")
+		if first_two not in variants:
+			variants.append(first_two)
+
+	# 3. Strip slot-specific words (e.g., "Linen Hood" -> "linen")
+	var stripped_name = name_lower
+	for word in slot_words:
+		stripped_name = stripped_name.replace(" " + word, "").replace(word + " ", "")
+	stripped_name = stripped_name.strip_edges().replace(" ", "_").replace("'", "")
+	if stripped_name != "" and stripped_name not in variants:
+		variants.append(stripped_name)
+
+	# 4. First word only
+	if words.size() > 1:
+		var first_word = words[0].replace("'", "")
+		if first_word != "" and first_word not in variants:
+			variants.append(first_word)
+
+	return variants
 
 func _generate_icon_from_sprite(sprite_path: String, direction: int = DIR_DOWN, slot: String = "") -> ImageTexture:
 	"""Extract a single frame from sprite sheet and create an icon texture"""
@@ -421,29 +487,69 @@ func _infer_sprite_name_from_item(item: Dictionary, slot: String) -> String:
 	if ITEM_NAME_TO_SPRITE.has(item_name):
 		return ITEM_NAME_TO_SPRITE[item_name]
 
-	# Try to generate sprite name from item name
-	# e.g., "Leather Boots" -> "leather_boots"
-	if item_name != "":
-		var snake_name = item_name.to_lower().replace(" ", "_").replace("'", "")
-		# Check if the file might exist with this name
-		var test_paths = []
-		match slot:
-			"chest":
-				test_paths.append("res://assets/characters/shirt/%s_walk.png" % snake_name)
-			"legs":
-				test_paths.append("res://assets/characters/pants/%s_walk.png" % snake_name)
-			"feet":
-				test_paths.append("res://assets/characters/boots/%s_walk.png" % snake_name)
-			"head":
-				test_paths.append("res://assets/characters/head/%s_walk.png" % snake_name)
-			"hands":
-				test_paths.append("res://assets/characters/hands/%s_walk.png" % snake_name)
-			"arms":
-				test_paths.append("res://assets/characters/arms/%s_walk.png" % snake_name)
+	if item_name == "":
+		return ""
 
-		for path in test_paths:
-			if ResourceLoader.exists(path):
-				return snake_name
+	# Slot-specific words to strip from item names
+	# e.g., "Linen Hood" -> "linen", "Rawhide Boots" -> "rawhide"
+	# NOTE: Don't include "plate" as it's part of material names like "Copper Plate"
+	var slot_words = ["hood", "cap", "helm", "helmet", "hat", "gloves", "gauntlets", "bracers",
+		"trousers", "pants", "leggings", "greaves", "boots", "shoes", "sandals",
+		"shirt", "tunic", "vest", "robe", "chestplate", "armor", "mail"]
+
+	# Try multiple variants of the name
+	var name_lower = item_name.to_lower()
+	var variants_to_try = []
+	var words = name_lower.split(" ")
+
+	# 1. Full name as snake_case (e.g., "leather_boots")
+	var snake_name = name_lower.replace(" ", "_").replace("'", "")
+	variants_to_try.append(snake_name)
+
+	# 2. Try first two words for compound material names (e.g., "Copper Plate Hood" -> "copper_plate")
+	if words.size() > 2:
+		var first_two = (words[0] + "_" + words[1]).replace("'", "")
+		if first_two not in variants_to_try:
+			variants_to_try.append(first_two)
+
+	# 3. Strip slot-specific words to get material name (e.g., "Linen Hood" -> "linen")
+	var stripped_name = name_lower
+	for word in slot_words:
+		stripped_name = stripped_name.replace(" " + word, "").replace(word + " ", "")
+	stripped_name = stripped_name.strip_edges().replace(" ", "_").replace("'", "")
+	if stripped_name != "" and stripped_name != snake_name and stripped_name not in variants_to_try:
+		variants_to_try.append(stripped_name)
+
+	# 4. Try first word only as last resort (e.g., "Leather Boots" -> "leather")
+	if words.size() > 1:
+		var first_word = words[0].replace("'", "")
+		if first_word != "" and first_word not in variants_to_try:
+			variants_to_try.append(first_word)
+
+	# Get the path template for this slot
+	var path_template = ""
+	match slot:
+		"chest":
+			path_template = "res://assets/characters/shirt/%s_walk.png"
+		"legs":
+			path_template = "res://assets/characters/pants/%s_walk.png"
+		"feet":
+			path_template = "res://assets/characters/boots/%s_walk.png"
+		"head":
+			path_template = "res://assets/characters/head/%s_walk.png"
+		"hands":
+			path_template = "res://assets/characters/hands/%s_walk.png"
+		"arms":
+			path_template = "res://assets/characters/arms/%s_walk.png"
+
+	if path_template == "":
+		return ""
+
+	# Try each variant
+	for variant in variants_to_try:
+		var path = path_template % variant
+		if ResourceLoader.exists(path):
+			return variant
 
 	return ""
 

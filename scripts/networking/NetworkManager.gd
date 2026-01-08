@@ -28,7 +28,7 @@ var GIT_HASH: String = ""
 # - MAJOR: Breaking changes (new network protocol, save format changes)
 # - MINOR: New features (both client and server should update together)
 # - PATCH: Bug fixes (client and server can differ in patch version)
-const GAME_VERSION: String = "0.1.1"
+const GAME_VERSION: String = "0.1.2"
 
 # Minimum client version the server accepts (server-only setting)
 # - Server-only patches: bump GAME_VERSION, keep MIN_CLIENT_VERSION same
@@ -781,7 +781,18 @@ func receive_login_response(success: bool, error: String, player_data: Dictionar
 	"""Client receives login response from server"""
 	if success:
 		is_authenticated = true
-		is_guest = player_data.get("id", 0) < 0  # Negative ID = guest
+
+		# Check Ashbane auth - if authenticated there, we're NOT a guest
+		# (even if game server assigned a guest ID)
+		var ashbane_auth = get_node_or_null("/root/AshbaneAuth")
+		if ashbane_auth and ashbane_auth.is_authenticated and not ashbane_auth.is_guest:
+			is_guest = false
+			# Use Ashbane username for persistence
+			player_data["username"] = ashbane_auth.username
+			LogManager.info("Ashbane-authenticated user: %s (overriding guest status)" % ashbane_auth.username, "network")
+		else:
+			is_guest = player_data.get("id", 0) < 0  # Negative ID = guest
+
 		local_player_data = player_data
 		# Prefer display_name > character_name > username > "Player"
 		player_name = player_data.get("display_name", player_data.get("character_name", player_data.get("username", "Player")))

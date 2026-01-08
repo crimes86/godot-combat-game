@@ -45,6 +45,9 @@ var quest_message_label: Label = null  # Message label inside Quests tab
 var _pending_purchase: Dictionary = {}  # Tracks in-flight purchase {type, index, item_data}
 var _purchase_in_progress: bool = false
 
+# Active notification labels for stacking
+var _active_notifications: Array[Control] = []
+
 # Forge tab colors
 const FORGE_RARITY_COLORS = {
 	"common": Color(0.6, 0.6, 0.6),
@@ -850,8 +853,8 @@ func purchase_tool(index: int) -> void:
 		# Add tool to inventory
 		InventorySystem.add_item(tool_data)
 
-		# Show item added notification
-		NotificationManager.notify_item_added(tool_name, 1, tool_rarity)
+		# Show item added notification (use direct method - NotificationManager has CanvasLayer issues)
+		_show_purchase_notification("+ " + tool_name, tool_rarity)
 
 		item_purchased.emit(tool_name, price)
 
@@ -883,9 +886,157 @@ func show_message(text: String, color: Color) -> void:
 	if message_label:
 		message_label.modulate.a = 0.0
 
+func _show_purchase_notification(message: String, rarity: String = "COMMON", is_sell: bool = false, is_gold: bool = false) -> void:
+	"""Simple floating text - spawns at anchor, floats up while fading out"""
+	var color: Color
+
+	if is_gold:
+		color = Color(1.0, 0.85, 0.2, 1.0)
+	elif is_sell:
+		color = Color(1.0, 0.4, 0.4, 1.0)
+	else:
+		var rarity_colors = {
+			"COMMON": Color(0.85, 0.85, 0.85, 1.0),
+			"UNCOMMON": Color(0.4, 0.95, 0.4, 1.0),
+			"RARE": Color(0.4, 0.6, 1.0, 1.0),
+			"EPIC": Color(0.7, 0.3, 0.95, 1.0),
+			"LEGENDARY": Color(1.0, 0.6, 0.1, 1.0)
+		}
+		color = rarity_colors.get(rarity.to_upper(), rarity_colors["COMMON"])
+
+	# Create text label
+	var notif = Label.new()
+	notif.text = message
+	notif.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	notif.add_theme_font_size_override("font_size", 14)
+	notif.add_theme_color_override("font_color", color)
+	notif.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.95))
+	notif.add_theme_constant_override("outline_size", 3)
+	notif.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Position at bottom-center anchor
+	var viewport_size = get_viewport().get_visible_rect().size
+	var start_y = viewport_size.y - 160
+	notif.position = Vector2((viewport_size.x / 2) - 100, start_y)
+	notif.custom_minimum_size = Vector2(200, 0)
+	notif.z_index = 200
+	add_child(notif)
+
+	# Float up 100px over 3 seconds - fast start (EASE_OUT) so it clears quickly
+	var tween = create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(notif, "position:y", start_y - 100, 3.0).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(notif, "modulate:a", 0.0, 3.0).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.set_parallel(false)
+	tween.tween_callback(notif.queue_free)
+
+func _remove_notification(notif: Control) -> void:
+	"""Remove notification from tracking and free it"""
+	var idx = _active_notifications.find(notif)
+	if idx >= 0:
+		_active_notifications.remove_at(idx)
+	if is_instance_valid(notif):
+		notif.queue_free()
+
 func _show_login_required_message() -> void:
-	"""Show auth overlay prompting guest to login to make purchases"""
-	# Trigger the in-game auth overlay (use get_node_or_null to avoid parse errors on server)
+	"""Show confirmation popup before triggering auth flow"""
+	# Create popup overlay
+	var overlay = ColorRect.new()
+	overlay.name = "LoginRequiredOverlay"
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.color = Color(0, 0, 0, 0.75)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.z_index = 100
+	add_child(overlay)
+
+	var center = CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = Vector2(360, 0)
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.08, 0.07, 0.06, 0.98)
+	panel_style.set_corner_radius_all(8)
+	panel_style.set_border_width_all(2)
+	panel_style.border_color = Color(0.5, 0.5, 0.52, 0.8)
+	panel_style.shadow_color = Color(0, 0, 0, 0.5)
+	panel_style.shadow_size = 12
+	panel.add_theme_stylebox_override("panel", panel_style)
+	center.add_child(panel)
+
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 24)
+	margin.add_theme_constant_override("margin_right", 24)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	panel.add_child(margin)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 16)
+	margin.add_child(vbox)
+
+	var title = Label.new()
+	title.text = "Login Required"
+	title.add_theme_font_size_override("font_size", 18)
+	title.add_theme_color_override("font_color", Color(0.92, 0.92, 0.94))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+
+	var msg = Label.new()
+	msg.text = "Buying and selling in the shop requires an account.\n\nWould you like to log in now?\nYou'll be redirected back to the game automatically."
+	msg.add_theme_font_size_override("font_size", 14)
+	msg.add_theme_color_override("font_color", Color(0.7, 0.7, 0.72))
+	msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(msg)
+
+	var btn_hbox = HBoxContainer.new()
+	btn_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_hbox.add_theme_constant_override("separation", 16)
+	vbox.add_child(btn_hbox)
+
+	var cancel_btn = Button.new()
+	cancel_btn.text = "Cancel"
+	cancel_btn.custom_minimum_size = Vector2(100, 36)
+	_style_dialog_button(cancel_btn, false)
+	cancel_btn.pressed.connect(func(): overlay.queue_free())
+	btn_hbox.add_child(cancel_btn)
+
+	var login_btn = Button.new()
+	login_btn.text = "Login"
+	login_btn.custom_minimum_size = Vector2(100, 36)
+	_style_dialog_button(login_btn, true)
+	login_btn.pressed.connect(func():
+		overlay.queue_free()
+		_proceed_to_auth_flow()
+	)
+	btn_hbox.add_child(login_btn)
+
+func _style_dialog_button(button: Button, is_primary: bool) -> void:
+	"""Style a dialog button"""
+	var style = StyleBoxFlat.new()
+	if is_primary:
+		style.bg_color = Color(0.25, 0.45, 0.25, 1.0)  # Green for primary action
+	else:
+		style.bg_color = Color(0.22, 0.22, 0.24, 1.0)  # Gray for cancel
+	style.set_corner_radius_all(4)
+	style.set_content_margin_all(8)
+	button.add_theme_stylebox_override("normal", style)
+
+	var hover_style = style.duplicate()
+	hover_style.bg_color = style.bg_color.lightened(0.15)
+	button.add_theme_stylebox_override("hover", hover_style)
+
+	var pressed_style = style.duplicate()
+	pressed_style.bg_color = style.bg_color.darkened(0.15)
+	button.add_theme_stylebox_override("pressed", pressed_style)
+
+	button.add_theme_color_override("font_color", Color(0.92, 0.92, 0.94))
+	button.add_theme_font_size_override("font_size", 14)
+
+func _proceed_to_auth_flow() -> void:
+	"""Start the actual auth flow after user confirms"""
 	var auth_overlay = get_node_or_null("/root/AuthOverlay")
 	if auth_overlay:
 		# Connect signals if not already connected
@@ -936,21 +1087,21 @@ func _on_backend_purchase_completed(success: bool, response: Dictionary) -> void
 					if weapon:
 						var weapon_dict = vendor.weapon_to_dict(weapon, price)
 						InventorySystem.add_item(weapon_dict)
-						NotificationManager.notify_item_added(weapon.weapon_name, 1, _pending_purchase.get("rarity_str", "COMMON"))
+						_show_purchase_notification("+ " + weapon.weapon_name, _pending_purchase.get("rarity_str", "COMMON"))
 						item_purchased.emit(weapon.weapon_name, response.get("gold_spent", price))
 
 				"armor":
 					var item_data = _pending_purchase.get("item_data", {})
 					if not item_data.is_empty():
 						InventorySystem.add_item(item_data)
-						NotificationManager.notify_item_added(_pending_purchase.get("name", "Item"), 1, _pending_purchase.get("rarity_str", "COMMON"))
+						_show_purchase_notification("+ " + _pending_purchase.get("name", "Item"), _pending_purchase.get("rarity_str", "COMMON"))
 						item_purchased.emit(_pending_purchase.get("name", "Item"), response.get("gold_spent", 0))
 
 				"tool":
 					var item_data = _pending_purchase.get("item_data", {})
 					if not item_data.is_empty():
 						InventorySystem.add_item(item_data)
-						NotificationManager.notify_item_added(_pending_purchase.get("name", "Item"), 1, _pending_purchase.get("rarity_str", "COMMON"))
+						_show_purchase_notification("+ " + _pending_purchase.get("name", "Item"), _pending_purchase.get("rarity_str", "COMMON"))
 						item_purchased.emit(_pending_purchase.get("name", "Item"), response.get("gold_spent", 0))
 
 			# Play purchase sounds (gold + item pickup layered)
@@ -1321,8 +1472,15 @@ func _complete_sell(slot: int, item: Dictionary, override_gold: int = -1) -> voi
 		# Guest mode - local only
 		CharacterStats.add_gold(total_value)
 
-	# Show item removed notification
-	NotificationManager.notify_item_removed(item_name, quantity, item_rarity)
+	# Show sold notification and gold gained (staggered for better readability)
+	if quantity > 1:
+		_show_purchase_notification("- %s x%d" % [item_name, quantity], item_rarity, true)
+	else:
+		_show_purchase_notification("- " + item_name, item_rarity, true)
+	if total_value > 0:
+		# Stagger the gold notification so first one clears
+		await get_tree().create_timer(0.4).timeout
+		_show_purchase_notification("+%d Gold" % total_value, "", false, true)
 
 	item_sold.emit(item_name, total_value)
 
@@ -2560,16 +2718,15 @@ func _on_playtest_forge_slot_clicked(event: InputEvent, slot: PanelContainer) ->
 		# Add to inventory
 		if InventorySystem.add_item(inventory_item):
 			print("[ShopUI] ✅ Claimed: %s" % inventory_item.get("name"))
-			# Use NotificationManager for clean floating notification
+			# Use direct notification (NotificationManager has CanvasLayer issues)
 			var item_name = inventory_item.get("name", "Item")
 			var item_rarity = inventory_item.get("rarity", "COMMON")
-			NotificationManager.notify_item_added(item_name, 1, item_rarity)
+			_show_purchase_notification("+ " + item_name, item_rarity)
 			# Refresh the forge tab
 			populate_forge()
 		else:
 			print("[ShopUI] Failed to add to inventory (full?)")
-			# Use NotificationManager for error too
-			NotificationManager.show_notification("Inventory full!", "error")
+			show_message("Inventory full!", Color.RED)
 
 func _on_forge_slot_clicked(event: InputEvent, slot: PanelContainer) -> void:
 	"""Handle forge slot click to claim item (OLD BACKEND SYSTEM - NOT USED FOR PLAYTEST)"""
