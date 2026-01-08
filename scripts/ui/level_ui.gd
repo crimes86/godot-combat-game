@@ -162,6 +162,10 @@ func is_player_in_combat() -> bool:
 		if not is_instance_valid(enemy):
 			continue
 
+		# Skip dying or corpse enemies - they're not in combat
+		if enemy.get("is_dying") or enemy.get("is_corpse"):
+			continue
+
 		# Check if enemy has AI and is in combat
 		if enemy.has_node("EnemyAI"):
 			var ai = enemy.get_node("EnemyAI")

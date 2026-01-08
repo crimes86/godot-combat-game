@@ -1895,9 +1895,10 @@ func become_corpse() -> void:
 			equip_sprite.scale = Vector2.ONE
 	z_index = 0
 
-	# Disable AI
+	# Disable AI and clear combat state
 	if has_node("EnemyAI"):
 		var ai = get_node("EnemyAI")
+		ai.is_in_combat = false  # CRITICAL: Clear combat state to stop red border
 		ai.set_process(false)
 		ai.set_physics_process(false)
 
