@@ -73,6 +73,21 @@ Commands:
     return_to_corpse        - Return to last death location for gear
     threats                 - Get threat/aggro status (safe to loot?)
 
+    TACTICAL AWARENESS (NEW!):
+    tactical                - Full situational awareness snapshot:
+                              * Player HP, position, gold
+                              * Aggro count (enemies targeting you)
+                              * Enemy clusters (grouped enemies to avoid)
+                              * Isolated targets (safe to engage)
+                              * Corpses to loot (with gold/item counts)
+                              * Bones to pick up (quest items)
+                              * Loot on ground
+                              * Campfire location
+                              * Threat level: safe/combat/caution/danger/critical
+                              * Recommended action: fight/retreat/loot/heal/engage
+    engage <enemy_id>       - Smart engage: approach enemy, check for adds
+    loot_phase              - Safely loot all nearby corpses/bones/items
+
 Examples:
     python mcp_control.py ping
     python mcp_control.py take_control
@@ -303,6 +318,10 @@ def main():
     elif command == "goto_campfire":
         cmd = {"action": "goto_campfire"}
 
+    elif command == "fuel_campfire":
+        amount = int(args[0]) if args else 1
+        cmd = {"action": "fuel_campfire", "amount": amount}
+
     # Forge items
     elif command == "forge_items":
         item_type = args[0] if args else ""
@@ -328,6 +347,25 @@ def main():
     # Skip tutorial
     elif command == "skip_tutorial":
         cmd = {"action": "skip_tutorial"}
+
+    # Close bug report indicator
+    elif command == "close_bug_report":
+        cmd = {"action": "close_bug_report"}
+
+    # TACTICAL - Full situational awareness
+    elif command == "tactical":
+        cmd = {"action": "tactical"}
+
+    # Smart engage - pull single enemy carefully
+    elif command == "engage":
+        if len(args) < 1:
+            print("Usage: engage <enemy_id>  (get IDs from 'tactical' command)")
+            sys.exit(1)
+        cmd = {"action": "engage", "id": int(args[0])}
+
+    # Loot phase - safely loot all nearby corpses/bones/items
+    elif command == "loot_phase":
+        cmd = {"action": "loot_phase"}
 
     else:
         print(f"Unknown command: {command}")
