@@ -6056,9 +6056,6 @@ func _complete_logout() -> void:
 		var inventory_data = []
 		for item in InventorySystem.inventory_items:
 			if item != null:
-				# DEBUG: Log item data to trace serialization issues
-				print("[Player] Syncing item to backend: %s" % item.get("name", "?"))
-				print("[Player]   type='%s', slot='%s', weapon_type='%s'" % [item.get("type", "MISSING"), item.get("slot", "MISSING"), item.get("weapon_type", "MISSING")])
 				inventory_data.append(item)
 
 		var equipped_armor_data = {}

@@ -616,9 +616,6 @@ async def logout_sync(
         else:
             item_dict = dict(item) if not isinstance(item, dict) else item
 
-        # DEBUG: Log item data to trace serialization issues
-        logger.info(f"[LOGOUT_SYNC] Received item: {item_dict.get('name', '?')}, type={item_dict.get('type', 'MISSING')}, slot={item_dict.get('slot', 'MISSING')}, keys={list(item_dict.keys())}")
-
         item_id = item_dict.get("id")
 
         # Preserve purchased_at metadata from server if not already present
@@ -739,11 +736,6 @@ async def initialize_character(
         # Return existing character with full data - don't overwrite with guest data
         logger.info(f"User {user.id} has existing character (level {character.level}, {character.gold} gold) - not applying guest progress")
         char_data = character.character_data or {}
-
-        # DEBUG: Log inventory items being returned to client
-        inventory = char_data.get("inventory", [])
-        for item in inventory:
-            logger.info(f"[INIT_RETURN] Returning item: {item.get('name', '?')}, type={item.get('type', 'MISSING')}, slot={item.get('slot', 'MISSING')}, keys={list(item.keys())}")
 
         # Log telemetry event for character load
         log_backend_event(
