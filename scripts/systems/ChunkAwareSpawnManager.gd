@@ -63,6 +63,11 @@ var LEVEL_BANDS: Array:
 ## Minimum spacing between spawned enemies (prevents crowding)
 const MIN_ENEMY_SPACING: float = 80.0
 
+## Enemy naming counters for readable names (Skeleton_1, Wolf_2, Spider_3)
+static var _skeleton_counter: int = 0
+static var _wolf_counter: int = 0
+static var _spider_counter: int = 0
+
 ## Roaming enemy configuration (wolves and spiders in open areas)
 const ROAMING_SPAWN_DISTANCE_MIN: float = 400.0  # Min distance from lava pools
 const ROAMING_SPAWN_DISTANCE_MAX: float = 800.0  # Max distance for open area spawns
@@ -629,9 +634,9 @@ func spawn_single_enemy(pos: Vector2, level: int, chunk_key: String) -> Node:
 	var enemy = enemy_scene.instantiate()
 	enemy.enemy_level = level
 
-	# Generate unique name
-	var enemy_name = "Enemy_%s_%d" % [chunk_key.replace(",", "_"), randi()]
-	enemy.name = enemy_name
+	# Generate unique readable name
+	_skeleton_counter += 1
+	enemy.name = "Skeleton_%d" % _skeleton_counter
 
 	# Set position BEFORE adding to tree, so _ready() sees the correct position
 	# Use 'position' (local) since game_world is at origin, this equals global_position
@@ -782,9 +787,9 @@ func spawn_single_spider(pos: Vector2, level: int, chunk_key: String) -> Node:
 	# Random spider variant (1-11)
 	spider.spider_variant = spawn_rng.randi_range(1, 11)
 
-	# Generate unique name
-	var spider_name = "Spider_%s_%d" % [chunk_key.replace(",", "_"), randi()]
-	spider.name = spider_name
+	# Generate unique readable name
+	_spider_counter += 1
+	spider.name = "Spider_%d" % _spider_counter
 
 	# Set position BEFORE adding to tree
 	spider.position = pos
@@ -831,9 +836,9 @@ func spawn_single_wolf_roaming(pos: Vector2, level: int, chunk_key: String, is_d
 		wolf.base_damage *= 1.5  # 50% more damage
 		# The wolf script can check for dire status via level/stats
 
-	# Generate unique name
-	var wolf_name = "%s_%s_%d" % ["DireWolf" if is_dire else "Wolf", chunk_key.replace(",", "_"), randi()]
-	wolf.name = wolf_name
+	# Generate unique readable name
+	_wolf_counter += 1
+	wolf.name = "%s_%d" % ["DireWolf" if is_dire else "Wolf", _wolf_counter]
 
 	# Set position BEFORE adding to tree
 	wolf.position = pos

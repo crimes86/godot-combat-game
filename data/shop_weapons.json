@@ -27,6 +27,19 @@
 			"notes": "Free test weapon for katana animations"
 		},
 		{
+			"id": "test_longsword",
+			"name": "Test Longsword",
+			"description": "A standard longsword for testing sword animations.",
+			"weapon_type": "sword",
+			"base_damage": 5,
+			"attack_speed": "medium",
+			"required_level": 1,
+			"price": 0,
+			"rarity": "Common",
+			"zone": 1,
+			"notes": "Free test weapon for sword animations"
+		},
+		{
 			"_comment": "========== ZONE 1 TIER 1: STARTER WEAPONS ==========",
 			"id": "morning_star",
 			"name": "Morning Star",

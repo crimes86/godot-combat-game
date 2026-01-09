@@ -291,7 +291,10 @@ async def purchase_item(
 
 class SellRequest(BaseModel):
     """Request body for vendor sell."""
-    item_value: int = Field(..., ge=0, le=999999)
+    item_id: str = Field(..., min_length=1, max_length=64)
+    vendor_type: str = Field(..., pattern="^(weapons|armor|misc|tools|loot)$")
+    quantity: int = Field(default=1, ge=1, le=99)
+    # Keep item_name for logging/display (optional, not trusted for value)
     item_name: str = Field(default="Item")
 
 
@@ -301,6 +304,23 @@ class SellResponse(BaseModel):
     gold_earned: int = 0
     new_gold_balance: int = 0
     error: Optional[str] = None
+    message: Optional[str] = None
+
+
+# Sell value multiplier (items sell for 50% of purchase price)
+SELL_VALUE_MULTIPLIER = 0.5
+
+# Maximum sell value per item (anti-exploit cap)
+MAX_SELL_VALUE_PER_ITEM = 10000
+
+# Loot item base values by rarity (for items not in shop catalog)
+LOOT_BASE_VALUES = {
+    "common": 1,
+    "uncommon": 3,
+    "rare": 8,
+    "epic": 20,
+    "legendary": 50,
+}
 
 
 @router.post("/sell", response_model=SellResponse)
@@ -311,14 +331,50 @@ async def sell_item(
     user: User = Depends(get_current_user_dep)
 ):
     """
-    Sell an item to vendor - adds gold to character balance.
+    Sell an item to vendor - validates item and calculates gold server-side.
 
-    Client handles inventory removal, this just awards gold server-side.
+    Security: Server determines sell value from its own catalog, never trusts client.
+    Items sell for 50% of their purchase price (SELL_VALUE_MULTIPLIER).
+    Loot items use rarity-based values since they're not in shop catalog.
     """
     character = get_active_character(user, db)
 
+    # Calculate server-authoritative sell value
+    sell_value = 0
+
+    if sell.vendor_type == "loot":
+        # Loot items aren't in shop catalog - use rarity-based values
+        # Client must send item_id in format "item_name" or with rarity suffix
+        # For safety, use minimum loot value
+        sell_value = LOOT_BASE_VALUES.get("common", 1) * sell.quantity
+        logger.info(f"Loot sell: {sell.item_name} x{sell.quantity} = {sell_value}g (base loot value)")
+    else:
+        # Look up item in server catalog
+        item = vendor_service.get_item(sell.vendor_type, sell.item_id)
+
+        if item is None:
+            # Item not in catalog - could be a loot drop or invalid
+            # Allow minimal value for unknown items (1g each) to not break gameplay
+            sell_value = 1 * sell.quantity
+            logger.warning(
+                f"Sell unknown item: user={user.id} item_id={sell.item_id} "
+                f"type={sell.vendor_type} - awarding minimal value {sell_value}g"
+            )
+        else:
+            # Calculate sell value from catalog price
+            buy_price = item.get("price", 0)
+            item_sell_value = int(buy_price * SELL_VALUE_MULTIPLIER)
+
+            # Cap per-item sell value
+            item_sell_value = min(item_sell_value, MAX_SELL_VALUE_PER_ITEM)
+
+            sell_value = item_sell_value * sell.quantity
+
+    # Final safety cap
+    sell_value = min(sell_value, MAX_SELL_VALUE_PER_ITEM * sell.quantity)
+
     # Add gold
-    character.gold += sell.item_value
+    character.gold += sell_value
     character.last_played_at = datetime.utcnow()
 
     # Log telemetry event
@@ -328,8 +384,11 @@ async def sell_item(
         character_id=character.id,
         event_type="vendor_sell",
         event_data={
+            "item_id": sell.item_id,
             "item_name": sell.item_name,
-            "gold_earned": sell.item_value,
+            "vendor_type": sell.vendor_type,
+            "quantity": sell.quantity,
+            "gold_earned": sell_value,
             "new_balance": character.gold
         },
         ip_address=request.client.host if request.client else None
@@ -339,14 +398,15 @@ async def sell_item(
     db.refresh(character)
 
     logger.info(
-        f"Sell: user={user.id} char={character.id} item={sell.item_name} "
-        f"value={sell.item_value} new_balance={character.gold}"
+        f"Sell: user={user.id} char={character.id} item={sell.item_id} ({sell.item_name}) "
+        f"qty={sell.quantity} value={sell_value}g new_balance={character.gold}"
     )
 
     return SellResponse(
         success=True,
-        gold_earned=sell.item_value,
-        new_gold_balance=character.gold
+        gold_earned=sell_value,
+        new_gold_balance=character.gold,
+        message=f"Sold {sell.item_name} for {sell_value} gold"
     )
 
 

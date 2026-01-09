@@ -922,9 +922,17 @@ func _on_vendor_purchase_response(result: int, response_code: int, _headers: Pac
 
 signal vendor_sell_completed(success: bool, response: Dictionary)
 
-func sell_to_vendor(item_value: int, item_name: String = "Item") -> void:
+func sell_to_vendor(item_id: String, vendor_type: String, item_name: String = "Item", quantity: int = 1) -> void:
 	"""
 	Sell an item to the vendor via backend API.
+	Server calculates sell value from its catalog (50% of buy price).
+
+	Args:
+		item_id: The item's unique ID (e.g., "rusty_blade", "copper_plate_cuirass")
+		vendor_type: One of "weapons", "armor", "misc", "tools", "loot"
+		item_name: Display name for logging (not used for value calculation)
+		quantity: Number of items to sell
+
 	Emits vendor_sell_completed when done.
 	"""
 	if not is_authenticated or auth_token == "":
@@ -944,9 +952,12 @@ func sell_to_vendor(item_value: int, item_name: String = "Item") -> void:
 		"ngrok-skip-browser-warning: true"
 	]
 
+	# Server calculates sell value - we just send item info
 	var body = JSON.stringify({
-		"item_value": item_value,
-		"item_name": item_name
+		"item_id": item_id,
+		"vendor_type": vendor_type,
+		"item_name": item_name,
+		"quantity": quantity
 	})
 
 	var request = HTTPRequest.new()
@@ -954,7 +965,7 @@ func sell_to_vendor(item_value: int, item_name: String = "Item") -> void:
 	add_child(request)
 	request.request_completed.connect(_on_vendor_sell_response.bind(request))
 
-	LogManager.info("Selling %s for %d gold..." % [item_name, item_value], "vendor")
+	LogManager.info("Selling %s (x%d) to vendor..." % [item_name, quantity], "vendor")
 
 	var error = request.request(url, headers, HTTPClient.METHOD_POST, body)
 	if error != OK:

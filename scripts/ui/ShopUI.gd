@@ -1455,17 +1455,28 @@ func _on_forged_sell_confirmed() -> void:
 func _complete_sell(slot: int, item: Dictionary, override_gold: int = -1) -> void:
 	"""Complete the sale of an item"""
 	var item_name = item.get("name", "Unknown")
+	var item_id = item.get("id", item_name.to_lower().replace(" ", "_"))
 	var item_value = item.get("value", 0) if override_gold < 0 else override_gold
 	var quantity = item.get("quantity", 1)
 	var total_value = item_value * quantity
 	var item_rarity = item.get("rarity", "COMMON")
+
+	# Determine vendor type from item properties
+	var vendor_type = "loot"  # Default for unknown items
+	if item.has("weapon_type") or item.get("type", "") in ["sword", "dagger", "spear", "bow", "mace", "hammer", "staff", "rapier", "saber", "halberd", "scimitar", "katana"]:
+		vendor_type = "weapons"
+	elif item.has("armor_type") or item.has("defense") or item.get("slot", "") in ["chest", "legs", "feet", "hands", "arms", "head", "offhand"]:
+		vendor_type = "armor"
+	elif item.has("tool_type") or item.get("type", "") in ["axe", "pickaxe"]:
+		vendor_type = "tools"
 
 	# Remove from inventory
 	InventorySystem.remove_item(slot)
 
 	# Sync gold with backend if authenticated
 	if AshbaneAuth and AshbaneAuth.is_authenticated:
-		AshbaneAuth.sell_to_vendor(total_value, item_name)
+		# Server calculates sell value - send item info for validation
+		AshbaneAuth.sell_to_vendor(item_id, vendor_type, item_name, quantity)
 		# Gold will be updated when backend responds - update locally too for immediate feedback
 		CharacterStats.add_gold(total_value)
 	else:
