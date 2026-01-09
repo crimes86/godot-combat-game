@@ -4936,7 +4936,11 @@ func die() -> void:
 	if multiplayer.has_multiplayer_peer():
 		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
 		if network_enemy_mgr:
-			network_enemy_mgr.notify_player_death.rpc_id(1)
+			if multiplayer.is_server():
+				# We ARE the server - call directly to avoid RPC-on-self crash
+				network_enemy_mgr.notify_player_death()
+			else:
+				network_enemy_mgr.notify_player_death.rpc_id(1)
 
 	var death_position = global_position
 	print("\n💀 ===== PLAYER DEATH =====")
@@ -5085,7 +5089,11 @@ func die() -> void:
 	if multiplayer.has_multiplayer_peer():
 		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
 		if network_enemy_mgr:
-			network_enemy_mgr.notify_player_respawn.rpc_id(1)
+			if multiplayer.is_server():
+				# We ARE the server - call directly to avoid RPC-on-self crash
+				network_enemy_mgr.notify_player_respawn()
+			else:
+				network_enemy_mgr.notify_player_respawn.rpc_id(1)
 
 	print("✨ Player respawned at bind point")
 	print("   XP lost: %d (now at %d)" % [xp_lost, CharacterStats.experience])
