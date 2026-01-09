@@ -1465,6 +1465,7 @@ func _on_enemy_damaged(_damage: float, is_crit: bool) -> void:
 
 func disengage() -> void:
 	"""Exit combat and return to patrol"""
+	print("[EnemyAI] 🏃 DISENGAGE: enemy=%s returning to patrol (target lost/dead)" % enemy.name)
 	is_in_combat = false
 	leash_cooldown_timer = LEASH_COOLDOWN_DURATION  # Prevent immediate re-aggro
 
