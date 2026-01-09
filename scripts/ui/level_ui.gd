@@ -153,10 +153,15 @@ func is_player_in_combat() -> bool:
 		return false
 
 	# Primary check: Player's own combat state (set when taking damage)
+	# This is the main indicator - player was recently hit
 	if player.get("is_in_combat"):
 		return true
 
-	# Secondary check: Any enemy actively in combat with player
+	# Secondary check: Any NEARBY enemy actively targeting the player
+	# Only check enemies within combat range - distant enemies don't matter
+	const COMBAT_CHECK_RADIUS := 400.0  # Only consider enemies within this distance
+	var player_pos = player.global_position
+
 	var enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
 	for enemy in enemies:
 		if not is_instance_valid(enemy):
@@ -166,11 +171,19 @@ func is_player_in_combat() -> bool:
 		if enemy.get("is_dying") or enemy.get("is_corpse"):
 			continue
 
-		# Check if enemy has AI and is in combat
+		# CRITICAL: Only check enemies that are actually nearby
+		var dist = enemy.global_position.distance_to(player_pos)
+		if dist > COMBAT_CHECK_RADIUS:
+			continue
+
+		# Check if enemy has AI and is in combat AND targeting this player
 		if enemy.has_node("EnemyAI"):
 			var ai = enemy.get_node("EnemyAI")
 			if is_instance_valid(ai) and ai.get("is_in_combat"):
-				return true
+				# Additional check: is this enemy actually targeting the player?
+				var enemy_target = ai.get("player")
+				if enemy_target == player:
+					return true
 
 	return false
 

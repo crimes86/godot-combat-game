@@ -112,10 +112,22 @@ def add_item_to_inventory(character: Character, item: dict, quantity: int = 1):
                 return
 
     # Add new item entry
+    # Determine item type: weapons have weapon_type, armor has armor_type
+    is_weapon = "weapon_type" in item
+    is_armor = "armor_type" in item
+
+    # Set type correctly: "weapon" for weapons, "armor" for armor, else use item's type field
+    if is_weapon:
+        item_type = "weapon"
+    elif is_armor:
+        item_type = "armor"
+    else:
+        item_type = item.get("type", "misc")
+
     new_item = {
         "id": item["id"],
         "name": item["name"],
-        "type": item.get("type", item.get("weapon_type", item.get("armor_type", "misc"))),
+        "type": item_type,
         "quantity": quantity,
         "purchased_at": datetime.utcnow().isoformat(),
     }
@@ -123,6 +135,8 @@ def add_item_to_inventory(character: Character, item: dict, quantity: int = 1):
     # Include relevant item properties
     if "weapon_type" in item:
         new_item["weapon_type"] = item["weapon_type"]
+        # Weapons always go in mainhand slot
+        new_item["slot"] = item.get("slot", "mainhand")
     if "armor_type" in item:
         new_item["armor_type"] = item["armor_type"]
     if "slot" in item:
@@ -133,6 +147,22 @@ def add_item_to_inventory(character: Character, item: dict, quantity: int = 1):
         new_item["defense"] = item["defense"]
     if "rarity" in item:
         new_item["rarity"] = item["rarity"]
+    if "attack_speed" in item:
+        new_item["attack_speed"] = item["attack_speed"]
+    if "required_level" in item:
+        new_item["required_level"] = item["required_level"]
+    if "description" in item:
+        new_item["description"] = item["description"]
+    if "price" in item:
+        # Store sell value as half of purchase price
+        new_item["value"] = max(1, int(item["price"] * 0.5))
+    # Healing weapon properties
+    if "attack_mode" in item:
+        new_item["attack_mode"] = item["attack_mode"]
+    if "healing_power" in item:
+        new_item["healing_power"] = item["healing_power"]
+    if "heal_radius" in item:
+        new_item["heal_radius"] = item["heal_radius"]
 
     data["inventory"].append(new_item)
     character.character_data = data
@@ -586,6 +616,9 @@ async def logout_sync(
         else:
             item_dict = dict(item) if not isinstance(item, dict) else item
 
+        # DEBUG: Log item data to trace serialization issues
+        logger.info(f"[LOGOUT_SYNC] Received item: {item_dict.get('name', '?')}, type={item_dict.get('type', 'MISSING')}, slot={item_dict.get('slot', 'MISSING')}, keys={list(item_dict.keys())}")
+
         item_id = item_dict.get("id")
 
         # Preserve purchased_at metadata from server if not already present
@@ -706,6 +739,11 @@ async def initialize_character(
         # Return existing character with full data - don't overwrite with guest data
         logger.info(f"User {user.id} has existing character (level {character.level}, {character.gold} gold) - not applying guest progress")
         char_data = character.character_data or {}
+
+        # DEBUG: Log inventory items being returned to client
+        inventory = char_data.get("inventory", [])
+        for item in inventory:
+            logger.info(f"[INIT_RETURN] Returning item: {item.get('name', '?')}, type={item.get('type', 'MISSING')}, slot={item.get('slot', 'MISSING')}, keys={list(item.keys())}")
 
         # Log telemetry event for character load
         log_backend_event(

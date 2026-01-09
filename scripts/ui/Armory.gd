@@ -11053,6 +11053,10 @@ func _load_character_from_backend() -> void:
 			InventorySystem.inventory_items.append(null)
 		for item in character.inventory:
 			if item != null and item is Dictionary:
+				# DEBUG: Log item data to trace serialization issues
+				print("[Armory] Loading item from backend: %s" % item.get("name", "?"))
+				print("[Armory]   type='%s', slot='%s', weapon_type='%s'" % [item.get("type", "MISSING"), item.get("slot", "MISSING"), item.get("weapon_type", "MISSING")])
+				print("[Armory]   keys: %s" % str(item.keys()))
 				InventorySystem.add_item(item)
 		LogManager.info("Loaded %d inventory items from backend" % character.inventory.size(), "armory")
 

@@ -536,6 +536,7 @@ func setup_lpc_sprite(
 		shield_sprite.name = "ShieldLayer"
 		shield_sprite.centered = true
 		shield_sprite.z_index = 9
+		shield_sprite.position.y = 5  # Offset down 5px to align with body
 		shield_sprite.sprite_frames = SpriteFrames.new()
 		shield_sprite.modulate = Color(1, 1, 1, 1)
 
@@ -1418,10 +1419,11 @@ func play_lpc_animation(anim_name: String, direction: String):
 
 	if shield_sprite:
 		# Adjust shield z-index based on direction
+		# Shield must ALWAYS be above hands (z=6 default, z=10 when east/west idle)
 		if direction == "north":
 			shield_sprite.z_index = -1  # Behind player when facing north
 		elif direction in ["east", "west"] and anim_name in ["walk", "idle"]:
-			shield_sprite.z_index = 5  # Middle layer when walking sideways
+			shield_sprite.z_index = 11  # Above hands (z=10) when sideways
 		else:
 			shield_sprite.z_index = 9  # In front for south and attacks
 

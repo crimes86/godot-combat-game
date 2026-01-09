@@ -67,6 +67,9 @@ func _on_body_exited(body):
 
 func apply_lava_damage(player: Node):
 	if player and player.has_method("take_damage"):
+		# Don't damage dead players
+		if player.get("is_dead"):
+			return
 		var damage = damage_per_second * damage_interval
 		player.take_damage(damage)
 		print("🔥 Player taking %.1f lava damage" % damage)

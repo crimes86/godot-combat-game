@@ -822,7 +822,14 @@ func _equip_or_use_item(slot_index: int) -> void:
 				SoundManager.play_equip_sound()
 				refresh_all()
 		# Check if it's a weapon
-		elif item.get("type", "") == "weapon" and item.get("slot", "") == "mainhand":
+		# DEBUG: Print item data to trace equip issues after login
+		var is_weapon = item.get("type", "") == "weapon" and item.get("slot", "") == "mainhand"
+		if DEBUG_EQUIP and not is_weapon and item.get("weapon_type", "") != "":
+			# Only log weapons that aren't being recognized
+			print("[Equip] NOT equippable as weapon: %s" % item.get("name", "Unknown"))
+			print("[Equip] Item type='%s', slot='%s', weapon_type='%s'" % [item.get("type", "MISSING"), item.get("slot", "MISSING"), item.get("weapon_type", "MISSING")])
+			print("[Equip] Full item keys: %s" % str(item.keys()))
+		if is_weapon:
 			var weapon = dict_to_weapon(item)
 			if weapon:
 				# If there's already a weapon equipped, do a direct swap
