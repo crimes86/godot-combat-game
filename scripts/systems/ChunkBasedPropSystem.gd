@@ -71,32 +71,65 @@ const PROP_TEXTURES = {
 	"ground_crack_2": "res://assets/environment/dreadland/ground_crack_2.png",
 }
 
+# === DEAD TREE GROVE SYSTEM ===
+# Trees organized by size for grove hierarchy (large at center, small at edges)
+const DEAD_TREE_TEXTURES = {
+	# Large centerpiece trees - thick trunks, tall, dominant (scale 0.9-1.1)
+	"large": [
+		"res://assets/environment/dreadland/dead_tree_lpc_33.png",  # Very thick gnarled trunk
+		"res://assets/environment/dreadland/dead_tree_lpc_45.png",  # Tall thick trunk, many branches
+		"res://assets/environment/dreadland/dead_tree_lpc_37.png",  # Tall with good spread
+	],
+	# Medium supporting trees - around centerpieces (scale 0.7-0.9)
+	"medium": [
+		"res://assets/environment/dreadland/dead_tree_lpc_28.png",  # Thick trunk, spreading
+		"res://assets/environment/dreadland/dead_tree_lpc_35.png",  # Spreading branches
+		"res://assets/environment/dreadland/dead_tree_lpc_44.png",  # Gnarled twisted
+		"res://assets/environment/dreadland/dead_tree_lpc_26.png",  # Sprawling branches
+	],
+	# Small filler/edge trees - at grove edges (scale 0.5-0.7)
+	"small": [
+		"res://assets/environment/dreadland/dead_tree_lpc_24.png",  # Twisted branches
+		"res://assets/environment/dreadland/dead_tree_lpc_25.png",  # Sprawling low
+		"res://assets/environment/dreadland/dead_tree_lpc_27.png",  # Thin upward branches
+		"res://assets/environment/dreadland/dead_tree_lpc_30.png",  # Very thin simple
+		"res://assets/environment/dreadland/dead_tree_lpc_46.png",  # Tilted/curved
+	],
+}
+
+# Grove configuration
+const GROVES_PER_CHUNK = 2  # Number of grove centers per chunk
+const GROVE_CENTER_RADIUS = 120.0  # How close medium trees cluster to center
+const GROVE_OUTER_RADIUS = 200.0  # How far small trees extend
+const GROVE_LARGE_COUNT = 2  # Large trees per grove
+const GROVE_MEDIUM_COUNT = 4  # Medium trees per grove
+const GROVE_SMALL_COUNT = 6  # Small trees per grove
+
 # === TIERED ROCK SYSTEM ===
-# Zone 1 = Tier 1 (tan), Zone 2 = Tier 2 (grey), Zone 3 = Tier 3 (ancient)
+# Zone 1 = Tier 1, Zone 2 = Tier 2 (grey), Zone 3 = Tier 3 (ancient)
+# NOTE: Zone 1 now uses Zone 2 grey rocks to match environment better
 const ROCK_TEXTURES = {
-	# Zone 1 - Tan/Brown rocks (Tier 1)
+	# Zone 1 - Now uses grey rocks (same as Zone 2) for visual consistency
 	"zone1": {
 		"small": [
-			"res://assets/environment/dreadland/rocks/zone1/rock_small_1.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_small_1.png",
 		],
 		"medium": [
-			"res://assets/environment/dreadland/rocks/zone1/rock_medium_1.png",
-			"res://assets/environment/dreadland/rocks/zone1/rock_medium_2.png",
-			"res://assets/environment/dreadland/rocks/zone1/rock_medium_flat.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_medium_1.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_medium_flat.png",
 		],
 		"large": [
-			"res://assets/environment/dreadland/rocks/zone1/rock_large_1.png",
-			"res://assets/environment/dreadland/rocks/zone1/rock_boulder_pair.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_large_1.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_large_flat.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_boulder_1.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_boulder_2.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_boulder_3.png",
 		],
 		"cluster": [
-			"res://assets/environment/dreadland/rocks/zone1/rock_spike_cluster.png",
-			"res://assets/environment/dreadland/rocks/zone1/rock_cluster_wide.png",
-			"res://assets/environment/dreadland/rocks/zone1/rock_xlarge_cluster.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_xlarge_cluster.png",
 		],
 		"standing": [
-			"res://assets/environment/dreadland/rocks/zone1/rock_standing_1.png",
-			"res://assets/environment/dreadland/rocks/zone1/rock_standing_2.png",
-			"res://assets/environment/dreadland/rocks/zone1/rock_spike_tall.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_standing_1.png",
 		],
 	},
 	# Zone 2 - Grey rocks (Tier 2)
@@ -171,8 +204,11 @@ const TREE_SCENES = {
 	"autumn_tree": "res://scenes/environment/AutumnTree.tscn"
 }
 
-# Tree types with weighted rarity: 60% dead, 30% pine, 10% autumn
-const TREE_TYPES = ["dead_tree", "pine_tree", "autumn_tree"]
+# Zone-specific tree types
+# Zone 1: Dead trees only (groves of dead trees for dreadland aesthetic)
+# Zone 2+: Mix of tree types for variety
+const ZONE1_TREE_TYPES = ["dead_tree"]  # Only dead trees in zone 1
+const ZONE2_TREE_TYPES = ["dead_tree", "pine_tree", "autumn_tree"]  # Mix in zone 2
 
 # Zone to tier mapping - determines which rock textures and tier data to use
 # Chunk -1 and 0 = Zone 1 (tier 1, tan rocks)
@@ -915,64 +951,132 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 			if harvested_items.has(tree_id):
 				return
 
-			# Try multiple positions to find valid spot (better distribution)
-			const MIN_TREE_SPACING = 180.0  # Minimum distance between trees
-			const MAX_ATTEMPTS = 15
+			var zone = get_zone_for_chunk(chunk_key)
 
-			var tree_pos = Vector2.ZERO
-			var found_valid = false
+			# === GROVE SYSTEM FOR ZONE 1 ===
+			# First indices spawn grove trees (clustered), remaining are fill trees (scattered)
+			var trees_per_grove = GROVE_LARGE_COUNT + GROVE_MEDIUM_COUNT + GROVE_SMALL_COUNT
+			var total_grove_trees = GROVES_PER_CHUNK * trees_per_grove
 
-			for _attempt in range(MAX_ATTEMPTS):
-				# Square chunks: CHUNK_SIZE x CHUNK_SIZE (no edge buffer - fill to edges)
-				tree_pos = chunk_center + Vector2(
-					rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2),
-					rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2)
-				)
+			if zone == "zone1" and index < total_grove_trees:
+				# This tree is part of a grove
+				var grove_index = index / trees_per_grove
+				var tree_in_grove = index % trees_per_grove
 
-				# Check world bounds
+				# Get or create grove center position
+				var grove_center_key = "%s:grove:%d" % [chunk_key, grove_index]
+				var grove_center: Vector2
+
+				if not chunk_data.has("grove_centers"):
+					chunk_data["grove_centers"] = {}
+
+				if chunk_data.grove_centers.has(grove_center_key):
+					grove_center = chunk_data.grove_centers[grove_center_key]
+				else:
+					# Find a valid grove center position
+					grove_center = find_grove_center(chunk_center, campfire_pos, avoid_campfire_radius, chunk_data, rng)
+					if grove_center == Vector2.ZERO:
+						return  # Couldn't find valid grove center
+					chunk_data.grove_centers[grove_center_key] = grove_center
+
+				# Determine tree size category based on position in grove
+				var size_category: String
+				var offset_radius: float
+				var tree_scale_range: Vector2
+
+				if tree_in_grove < GROVE_LARGE_COUNT:
+					# Large centerpiece trees - at the heart of the grove
+					size_category = "large"
+					offset_radius = 50.0  # Very close to center
+					tree_scale_range = Vector2(0.9, 1.1)
+				elif tree_in_grove < GROVE_LARGE_COUNT + GROVE_MEDIUM_COUNT:
+					# Medium supporting trees - inner ring
+					size_category = "medium"
+					offset_radius = GROVE_CENTER_RADIUS
+					tree_scale_range = Vector2(0.7, 0.9)
+				else:
+					# Small filler trees - outer ring
+					size_category = "small"
+					offset_radius = GROVE_OUTER_RADIUS
+					tree_scale_range = Vector2(0.5, 0.7)
+
+				# Position tree within its ring
+				var angle = rng.randf() * TAU
+				var distance = rng.randf_range(offset_radius * 0.5, offset_radius)
+				var tree_pos = grove_center + Vector2(cos(angle), sin(angle)) * distance
+
+				# Basic validity checks
 				if not is_in_world_bounds(tree_pos):
-					continue
-
-				# Avoid campfire area
-				if tree_pos.distance_to(campfire_pos) < avoid_campfire_radius:
-					continue
-
-				# Avoid lava pools
+					return
 				if is_position_in_lava_pool(tree_pos, chunk_data):
-					continue
+					return
 
-				# Avoid main path (keeps paths visually clear)
-				if is_position_on_path(tree_pos, PATH_WIDTH + 50):
-					continue
+				# Pick random texture from size category
+				var texture_path = DEAD_TREE_TEXTURES[size_category][rng.randi() % DEAD_TREE_TEXTURES[size_category].size()]
 
-				# Check minimum spacing from other trees (prevents clustering)
-				var too_close = false
-				for existing_tree in chunk_data.tree_positions:
-					if tree_pos.distance_to(existing_tree) < MIN_TREE_SPACING:
-						too_close = true
-						break
-				if too_close:
-					continue
-
-				found_valid = true
-				break
-
-			if not found_valid:
-				return  # Couldn't find valid position after all attempts
-
-			# Weighted tree selection: 60% dead, 30% pine, 10% autumn
-			var roll = rng.randf()
-			var tree_type: String
-			if roll < 0.6:
-				tree_type = "dead_tree"
-			elif roll < 0.9:
-				tree_type = "pine_tree"
+				# Create grove tree with dynamic texture
+				create_grove_tree(tree_pos, texture_path, tree_scale_range, container, rng, tree_id)
+				chunk_data.tree_positions.append(tree_pos)
+				chunk_data.all_prop_positions.append({"pos": tree_pos, "radius": 60.0})
 			else:
-				tree_type = "autumn_tree"
-			create_tree(tree_pos, tree_type, container, rng, tree_id)
-			# Track position for spacing and bone fill
-			chunk_data.tree_positions.append(tree_pos)
-			chunk_data.all_prop_positions.append({"pos": tree_pos, "radius": 80.0})
+				# === FILL TREES (scattered between groves) ===
+				const MIN_TREE_SPACING = 120.0  # Reduced from 180 to allow some natural clustering
+				const MAX_ATTEMPTS = 15
+
+				var tree_pos = Vector2.ZERO
+				var found_valid = false
+
+				for _attempt in range(MAX_ATTEMPTS):
+					tree_pos = chunk_center + Vector2(
+						rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2),
+						rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2)
+					)
+
+					if not is_in_world_bounds(tree_pos):
+						continue
+					if tree_pos.distance_to(campfire_pos) < avoid_campfire_radius:
+						continue
+					if is_position_in_lava_pool(tree_pos, chunk_data):
+						continue
+					if is_position_on_path(tree_pos, PATH_WIDTH + 50):
+						continue
+
+					# Check minimum spacing from other trees
+					var too_close = false
+					for existing_tree in chunk_data.tree_positions:
+						if tree_pos.distance_to(existing_tree) < MIN_TREE_SPACING:
+							too_close = true
+							break
+					if too_close:
+						continue
+
+					found_valid = true
+					break
+
+				if not found_valid:
+					return
+
+				# Zone-based tree selection
+				if zone == "zone1":
+					# Zone 1: Only dead trees - pick random from all size categories
+					var all_dead_textures = DEAD_TREE_TEXTURES.large + DEAD_TREE_TEXTURES.medium + DEAD_TREE_TEXTURES.small
+					var texture_path = all_dead_textures[rng.randi() % all_dead_textures.size()]
+					var tree_scale_range = Vector2(0.5, 0.9)  # Varied sizes for fill
+					create_grove_tree(tree_pos, texture_path, tree_scale_range, container, rng, tree_id)
+				else:
+					# Zone 2+: Mix of tree types (60% dead, 30% pine, 10% autumn)
+					var roll = rng.randf()
+					var tree_type: String
+					if roll < 0.6:
+						tree_type = "dead_tree"
+					elif roll < 0.9:
+						tree_type = "pine_tree"
+					else:
+						tree_type = "autumn_tree"
+					create_tree(tree_pos, tree_type, container, rng, tree_id)
+
+				chunk_data.tree_positions.append(tree_pos)
+				chunk_data.all_prop_positions.append({"pos": tree_pos, "radius": 80.0})
 
 		"rock_large":
 			var rock_id = "%s:rock_large:%d" % [chunk_key, index]
@@ -1432,6 +1536,114 @@ func create_tree(pos: Vector2, tree_type: String, container: Node2D, rng: Random
 		collision.position = Vector2(0, base_collision_y * tree_scale)
 		if collision.shape is CircleShape2D:
 			collision.shape.radius = 10 * tree_scale
+
+	# Store tree ID for harvest tracking
+	tree_node.set_meta("tree_id", tree_id)
+	tree_node.set_meta("lootable_type", "tree")
+	tree_node.set_meta("network_id", tree_id)
+
+	container.add_child(tree_node)
+
+	# Track for network sync
+	harvestables_by_id[tree_id] = tree_node
+
+func find_grove_center(chunk_center: Vector2, campfire_pos: Vector2, avoid_campfire_radius: float, chunk_data: Dictionary, rng: RandomNumberGenerator) -> Vector2:
+	"""Find a valid position for a grove center (where clustered trees will spawn)"""
+	const MAX_ATTEMPTS = 20
+	const MIN_GROVE_SPACING = 600.0  # Minimum distance between grove centers
+
+	for _attempt in range(MAX_ATTEMPTS):
+		var pos = chunk_center + Vector2(
+			rng.randf_range(-CHUNK_SIZE / 2 + 300, CHUNK_SIZE / 2 - 300),  # Keep groves away from edges
+			rng.randf_range(-CHUNK_SIZE / 2 + 300, CHUNK_SIZE / 2 - 300)
+		)
+
+		# Check world bounds
+		if not is_in_world_bounds(pos):
+			continue
+
+		# Avoid campfire area
+		if pos.distance_to(campfire_pos) < avoid_campfire_radius + 200:
+			continue
+
+		# Avoid lava pools
+		if is_position_in_lava_pool(pos, chunk_data):
+			continue
+
+		# Avoid main path
+		if is_position_on_path(pos, PATH_WIDTH + 150):
+			continue
+
+		# Check spacing from other grove centers
+		var too_close = false
+		if chunk_data.has("grove_centers"):
+			for existing_center in chunk_data.grove_centers.values():
+				if pos.distance_to(existing_center) < MIN_GROVE_SPACING:
+					too_close = true
+					break
+		if too_close:
+			continue
+
+		return pos
+
+	return Vector2.ZERO  # Failed to find valid position
+
+func create_grove_tree(pos: Vector2, texture_path: String, scale_range: Vector2, container: Node2D, rng: RandomNumberGenerator, tree_id: String) -> void:
+	"""Create a dead tree with a dynamic texture (for grove system)"""
+	# Use DeadTree scene as base (has proper collision setup)
+	var scene_path = "res://scenes/environment/DeadTree.tscn"
+	if not ResourceLoader.exists(scene_path):
+		return
+
+	var tree_scene = load(scene_path)
+	var tree_node = tree_scene.instantiate()
+
+	tree_node.name = "Tree_" + tree_id.replace(":", "_")
+	tree_node.position = pos
+	tree_node.collision_layer = 2
+	tree_node.collision_mask = 0
+	tree_node.z_index = 10
+
+	# Scale within specified range
+	var tree_scale = rng.randf_range(scale_range.x, scale_range.y)
+	var tree_flipped = rng.randf() < 0.5
+
+	# Get nodes from scene
+	var sprite = tree_node.get_node_or_null("Sprite")
+	var shadow = tree_node.get_node_or_null("Shadow")
+	var collision = tree_node.get_node_or_null("CollisionShape2D")
+
+	if sprite:
+		# Load and apply dynamic texture
+		var texture = load(texture_path) as Texture2D
+		if texture:
+			sprite.texture = texture
+
+		sprite.scale = Vector2(tree_scale, tree_scale)
+		sprite.flip_h = tree_flipped
+		sprite.z_index = 10
+
+		# Apply dead tree color variation
+		var brightness = rng.randf_range(0.75, 1.1)
+		var hue_shift = rng.randf_range(-0.08, 0.08)
+		var dead_tree_darkness = 0.6
+		sprite.modulate = Color(
+			brightness * dead_tree_darkness * (1.0 + hue_shift),
+			brightness * dead_tree_darkness * (0.95 - abs(hue_shift) * 0.5),
+			brightness * dead_tree_darkness * (0.9 - hue_shift),
+			1.0
+		)
+
+	if shadow:
+		var shadow_width = 35 * tree_scale  # Slightly smaller shadows for LPC trees
+		var shadow_height = shadow_width * 0.4
+		shadow.size = Vector2(shadow_width, shadow_height)
+		shadow.position = Vector2(-shadow_width / 2, 40 * tree_scale)
+
+	if collision:
+		collision.position = Vector2(0, 35 * tree_scale)  # Adjusted for LPC tree proportions
+		if collision.shape is CircleShape2D:
+			collision.shape.radius = 12 * tree_scale
 
 	# Store tree ID for harvest tracking
 	tree_node.set_meta("tree_id", tree_id)

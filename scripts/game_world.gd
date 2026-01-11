@@ -27,10 +27,10 @@ const PROP_TEXTURES = {
 	"pine_tree": "res://assets/environment/dreadland/pine_tree.png",
 	"autumn_tree": "res://assets/environment/dreadland/autumn_tree.png",
 	# Rock spawning now handled by ChunkBasedPropSystem with zone-based textures
-	# These are fallback paths for legacy code using zone1 rocks
-	"rock_large": "res://assets/environment/dreadland/rocks/zone1/rock_large_1.png",
-	"rock_medium": "res://assets/environment/dreadland/rocks/zone1/rock_medium_1.png",
-	"rock_small": "res://assets/environment/dreadland/rocks/zone1/rock_small_1.png",
+	# These are fallback paths for legacy code - now using grey zone2 rocks
+	"rock_large": "res://assets/environment/dreadland/rocks/zone2/rock_large_1.png",
+	"rock_medium": "res://assets/environment/dreadland/rocks/zone2/rock_medium_1.png",
+	"rock_small": "res://assets/environment/dreadland/rocks/zone2/rock_small_1.png",
 	"skull": "res://assets/environment/dreadland/skull.png",
 	"bones": "res://assets/environment/dreadland/bones.png",
 	"ground_crack_1": "res://assets/environment/dreadland/ground_crack_1.png",

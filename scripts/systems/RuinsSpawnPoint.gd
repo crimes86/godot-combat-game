@@ -416,10 +416,10 @@ func create_ground_circle() -> void:
 
 func create_stone_circle() -> void:
 	"""Arrange rocks in a natural-looking ritual circle - scaled up 25%"""
-	# Use zone1 rock textures (zone-based system in ChunkBasedPropSystem)
-	var rock_large_tex = load("res://assets/environment/dreadland/rocks/zone1/rock_large_1.png")
-	var rock_medium_tex = load("res://assets/environment/dreadland/rocks/zone1/rock_medium_1.png")
-	var rock_small_tex = load("res://assets/environment/dreadland/rocks/zone1/rock_small_1.png")
+	# Use zone2 grey rock textures for visual consistency
+	var rock_large_tex = load("res://assets/environment/dreadland/rocks/zone2/rock_large_1.png")
+	var rock_medium_tex = load("res://assets/environment/dreadland/rocks/zone2/rock_medium_1.png")
+	var rock_small_tex = load("res://assets/environment/dreadland/rocks/zone2/rock_small_1.png")
 
 	var rng = RandomNumberGenerator.new()
 	rng.seed = hash(global_position)

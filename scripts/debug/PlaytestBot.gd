@@ -716,9 +716,9 @@ func _dash_away():
 	var away = (player.global_position - target_enemy.global_position).normalized()
 	_dash_direction(away)
 
-func _dash_direction(dir: Vector2):
+func _dash_direction(_dir: Vector2):
 	if player and player.has_method("start_dash"):
-		player.start_dash(dir, player.global_position + dir * 100)
+		player.start_dash()
 	else:
 		Input.action_press("dash")
 		await get_tree().create_timer(0.1).timeout
