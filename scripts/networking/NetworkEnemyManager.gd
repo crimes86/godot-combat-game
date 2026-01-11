@@ -921,6 +921,8 @@ func _client_enemy_died(enemy_network_id: int, kill_credit_id: int, last_attacke
 	var local_peer_id = multiplayer.get_unique_id()
 	if kill_credit_id == local_peer_id:
 		_track_quest_kill(enemy)
+		# Log kill to telemetry for anomaly detection (works for guests too)
+		_log_kill_telemetry(enemy, enemy_network_id, loot_gold)
 
 func _track_quest_kill(enemy: Node) -> void:
 	"""Notify QuestManager of enemy kill for quest tracking"""
@@ -950,6 +952,38 @@ func _on_enemy_died(enemy_network_id: int) -> void:
 	"""Called when enemy dies (connected in register_enemy)."""
 	# Death is now handled through _handle_enemy_death
 	pass
+
+func _log_kill_telemetry(enemy: Node, enemy_network_id: int, gold_dropped: int) -> void:
+	"""Log kill event to TelemetryManager for anomaly detection."""
+	if not has_node("/root/TelemetryManager"):
+		return
+
+	var tm = get_node("/root/TelemetryManager")
+
+	# Get enemy type
+	var enemy_type = "skeleton"
+	if enemy.has_method("get_enemy_type"):
+		enemy_type = enemy.get_enemy_type()
+	elif "enemy_type" in enemy:
+		enemy_type = enemy.enemy_type
+
+	# Get enemy level
+	var enemy_level = 1
+	if "level" in enemy:
+		enemy_level = enemy.level
+
+	# Estimate XP (base 10 per level for now)
+	var xp_granted = enemy_level * 10
+
+	# Get equipped weapon type
+	var weapon_used = ""
+	var local_player = get_tree().get_first_node_in_group("local_player")
+	if local_player and "equipped_weapon" in local_player:
+		var weapon = local_player.equipped_weapon
+		if weapon and "weapon_type" in weapon:
+			weapon_used = weapon.weapon_type
+
+	tm.log_kill(enemy_type, enemy_level, xp_granted, gold_dropped, weapon_used, false, 0, enemy_network_id)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # POSITION SYNC (Server -> Clients)
@@ -1897,9 +1931,9 @@ func _client_gold_looted(enemy_network_id: int, looter_id: int, gold_amount: int
 	This RPC handles corpse sync for all clients."""
 	LogManager.debug("_client_gold_looted: enemy=%d, looter=%d, gold=%d" % [enemy_network_id, looter_id, gold_amount], "loot")
 
-	# Log gold loot to backend telemetry (only for the looter)
+	# Log gold loot to backend telemetry (only for the looter - works for guests too)
 	var my_peer_id = multiplayer.get_unique_id() if multiplayer else 1
-	if looter_id == my_peer_id and AshbaneAuth and AshbaneAuth.is_authenticated:
+	if looter_id == my_peer_id:
 		TelemetryManager.log_loot_gold("enemy_corpse", str(enemy_network_id), gold_amount)
 
 	# Note: Looter already added gold optimistically in LootBodyUI
@@ -2022,9 +2056,9 @@ func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int,
 
 	var item_name = item.get("name", "")
 
-	# Log item loot to backend telemetry (only for the looter)
+	# Log item loot to backend telemetry (only for the looter - works for guests too)
 	var my_peer_id = multiplayer.get_unique_id() if multiplayer else 1
-	if looter_id == my_peer_id and AshbaneAuth and AshbaneAuth.is_authenticated:
+	if looter_id == my_peer_id:
 		var item_id = item.get("id", item_name.to_snake_case())
 		var item_rarity = item.get("rarity", "Common")
 		var quantity = item.get("quantity", 1)
