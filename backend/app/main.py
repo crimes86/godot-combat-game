@@ -408,7 +408,75 @@ def complete_device_auth(device_code: str, user_id: int, username: str, session_
             db.close()
 
 
-def make_auth_response(request: Request, user, device_code: Optional[str], provider: str, db: DbSession):
+async def auto_sync_provider(user, provider: str, db: DbSession) -> dict:
+    """
+    Automatically sync achievements for a provider after login.
+
+    This is called from make_auth_response to trigger sync on login.
+    Errors are logged but don't block the login flow.
+
+    Returns sync result dict or empty dict on error/skip.
+    """
+    import time
+
+    # Skip providers that don't support achievement sync
+    # (local auth has no achievements to sync)
+    if provider == "local":
+        return {}
+
+    try:
+        # Get the provider account we just authenticated with
+        provider_account = db.query(ProviderAccount).filter(
+            ProviderAccount.user_id == user.id,
+            ProviderAccount.provider_name == provider,
+            ProviderAccount.is_active == True
+        ).first()
+
+        if not provider_account:
+            logger.warning(f"[AUTO-SYNC] No active {provider} account found for user {user.id}")
+            return {}
+
+        # Get the sync function for this provider
+        sync_map = get_provider_sync_map(db)
+        sync_function = sync_map.get(provider.lower())
+
+        if not sync_function:
+            logger.debug(f"[AUTO-SYNC] No sync function for provider {provider}")
+            return {}
+
+        logger.info(f"[AUTO-SYNC] Starting auto-sync for {provider} user {user.username}")
+        start_time = time.time()
+
+        # Run the sync
+        result = await sync_function(user, provider_account)
+        elapsed = round(time.time() - start_time, 2)
+
+        credited = result.get("credited", 0)
+        total_found = result.get("details", {}).get("total_achievements", 0)
+
+        # Update last_sync_at
+        provider_account.last_sync_at = datetime.utcnow()
+        provider_account.last_credited_count = credited
+        db.commit()
+
+        # Announce sync in global feed if there were new achievements
+        if credited > 0:
+            post_sync_announcement(db, user, provider, credited)
+
+        logger.info(
+            f"[AUTO-SYNC] Completed {provider} for {user.username}: "
+            f"{credited} credited, {total_found} total ({elapsed}s)"
+        )
+
+        return result
+
+    except Exception as e:
+        # Log but don't raise - auto-sync failures shouldn't block login
+        logger.warning(f"[AUTO-SYNC] Failed for {provider} user {user.id}: {type(e).__name__}: {e}")
+        return {}
+
+
+async def make_auth_response(request: Request, user, device_code: Optional[str], provider: str, db: DbSession):
     """Create appropriate response after auth - either device success page or dashboard redirect"""
     device_record = get_device_code_data(device_code, db) if device_code else None
 
@@ -419,6 +487,9 @@ def make_auth_response(request: Request, user, device_code: Optional[str], provi
         details={"provider": provider, "device_auth": bool(device_code and device_record)},
         request=request
     )
+
+    # Auto-sync achievements on login (non-blocking on failure)
+    await auto_sync_provider(user, provider, db)
 
     if device_code and device_record:
         # Device auth flow - create session token for Godot to use
@@ -716,7 +787,7 @@ def create_new_user_with_provider(db: DbSession, provider_name: str, provider_us
     return user
 
 
-def handle_provider_login(
+async def handle_provider_login(
     db: DbSession,
     request: Request,
     provider_name: str,
@@ -759,7 +830,7 @@ def handle_provider_login(
                 existing_active.provider_username = provider_username
             db.commit()
             logger.info(f"{provider_name.upper()} LOGIN: User {user.username} logged in via active provider")
-            return make_auth_response(request, user, device_code, provider_name, db)
+            return await make_auth_response(request, user, device_code, provider_name, db)
         else:
             # Orphan - user was deleted
             logger.info(f"{provider_name.upper()} LOGIN: Found orphan active provider (user deleted), removing")
@@ -797,7 +868,7 @@ def handle_provider_login(
         refresh_token=refresh_token,
         token_expires_at=token_expires_at
     )
-    return make_auth_response(request, new_user, device_code, provider_name, db)
+    return await make_auth_response(request, new_user, device_code, provider_name, db)
 
 
 # =============================================================================
@@ -1283,7 +1354,7 @@ async def steam_callback(
             # If it's the SAME Steam account, just log them in (redirect to dashboard)
             if existing_active.provider_user_id == steam_id:
                 logger.info("STEAM CALLBACK: Same Steam account, redirecting to dashboard.")
-                return make_auth_response(request, current_user, device_code, "steam", db)
+                return await make_auth_response(request, current_user, device_code, "steam", db)
             # Different Steam account - can't link another
             logger.warning("STEAM CALLBACK: User already has active Steam, trying to link different one.")
             return templates.TemplateResponse(
@@ -1443,7 +1514,7 @@ async def steam_callback(
             status_code=503,
         )
 
-    return handle_provider_login(
+    return await handle_provider_login(
         db=db,
         request=request,
         provider_name="steam",
@@ -1722,7 +1793,7 @@ async def battlenet_callback(request: Request, db: DbSession = Depends(get_db)):
 
         # — Login flow for visitors —
         logger.info("BATTLENET CALLBACK: Login flow (not logged in)")
-        return handle_provider_login(
+        return await handle_provider_login(
             db=db,
             request=request,
             provider_name="battlenet",
@@ -1939,7 +2010,7 @@ async def xbox_callback(request: Request, db: DbSession = Depends(get_db)):
 
         else:
             # === LOGIN FLOW: No session, creating/finding user ===
-            return handle_provider_login(
+            return await handle_provider_login(
                 db=db,
                 request=request,
                 provider_name="xbox",
@@ -2160,7 +2231,7 @@ async def local_register(
         logger.info(f"[LOCAL] New local account registered: {username} (ID: {new_user.id})")
 
         # Handle device auth flow or web login
-        return make_auth_response(request, new_user, device_code, "local", db)
+        return await make_auth_response(request, new_user, device_code, "local", db)
 
     except Exception as e:
         logger.error(f"[LOCAL] Registration error: {e}", exc_info=True)
@@ -2221,7 +2292,7 @@ async def local_login(
         logger.info(f"[LOCAL] Login successful: {username} (ID: {user.id})")
 
         # Handle device auth flow or web login
-        return make_auth_response(request, user, device_code, "local", db)
+        return await make_auth_response(request, user, device_code, "local", db)
 
     except Exception as e:
         logger.error(f"[LOCAL] Login error: {e}", exc_info=True)
@@ -2435,7 +2506,7 @@ async def discord_callback(request: Request, db: DbSession = Depends(get_db)):
             # Only use device_code if it's still pending (not stale)
             if device_code and not get_device_code_data(device_code, db):
                 device_code = None
-            return handle_provider_login(
+            return await handle_provider_login(
                 db=db,
                 request=request,
                 provider_name="discord",
@@ -2636,7 +2707,7 @@ async def github_callback(request: Request, db: DbSession = Depends(get_db)):
         else:
             # Not logged in - use unified login flow
             device_code = request.session.get("device_code")
-            return handle_provider_login(
+            return await handle_provider_login(
                 db=db,
                 request=request,
                 provider_name="github",

@@ -56,6 +56,16 @@ def get_current_user_dep(request: Request, db: DbSession = Depends(get_db)):
     return _get_current_user_func(request, db)
 
 
+def get_current_user_optional(request: Request, db: DbSession = Depends(get_db)) -> Optional[User]:
+    """Get current user if authenticated, or None for guests."""
+    if _get_current_user_func is None:
+        return None
+    try:
+        return _get_current_user_func(request, db)
+    except HTTPException:
+        return None
+
+
 def init_telemetry_routes(get_current_user: Callable, limiter=None):
     """Initialize telemetry routes with dependencies from main app."""
     global _get_current_user_func, _limiter
@@ -327,15 +337,18 @@ async def log_batch(
     request: Request,
     batch: BatchTelemetryRequest,
     db: DbSession = Depends(get_db),
-    user: User = Depends(get_current_user_dep)
+    user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Log multiple telemetry events in a single request.
 
     More efficient for high-frequency events. Events are processed
     and flagged individually.
+
+    Supports both authenticated users and guest sessions (user_id=None).
     """
-    character = get_active_character(user, db)
+    # Get character for authenticated users, None for guests
+    character = get_active_character(user, db) if user else None
     client_ip = request.client.host if request.client else None
 
     events_logged = 0
@@ -362,10 +375,10 @@ async def log_batch(
             if loot_type in ("gold", "item"):
                 event_type = f"loot_{loot_type}"
 
-        # Create event
+        # Create event (user_id and character_id can be None for guests)
         event = GameEventLog(
-            user_id=user.id,
-            character_id=character.id,
+            user_id=user.id if user else None,
+            character_id=character.id if character else None,
             event_type=event_type,
             event_data=event_req.event_data,
             session_id=event_req.session_id or batch.session_id,
@@ -384,7 +397,8 @@ async def log_batch(
         events_logged += 1
         if is_suspicious:
             events_flagged += 1
-            logger.warning(f"Suspicious event from user {user.id}: {reason}")
+            user_info = f"user {user.id}" if user else "guest"
+            logger.warning(f"Suspicious event from {user_info}: {reason}")
 
     db.commit()
 

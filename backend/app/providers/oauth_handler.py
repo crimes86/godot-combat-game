@@ -438,6 +438,11 @@ def create_oauth_routes(
                     inactive_account.provider_username = display_name
                     db.commit()
                     logger.info(f"User {current_user.username} reclaimed {provider} {provider_user_id}")
+
+                    # Auto-sync achievements for reclaimed provider
+                    from app.main import auto_sync_provider
+                    await auto_sync_provider(current_user, provider, db)
+
                     return RedirectResponse(url="/dashboard", status_code=303)
 
                 # Create new provider account
@@ -456,6 +461,11 @@ def create_oauth_routes(
                 try:
                     db.commit()
                     logger.info(f"User {current_user.username} linked {provider} {provider_user_id}")
+
+                    # Auto-sync achievements for newly linked provider
+                    from app.main import auto_sync_provider
+                    await auto_sync_provider(current_user, provider, db)
+
                     return RedirectResponse(url="/dashboard", status_code=303)
                 except IntegrityError:
                     db.rollback()
@@ -482,6 +492,10 @@ def create_oauth_routes(
                         account.profile_data = profile_data
                         account.provider_username = display_name
                         db.commit()
+
+                    # Auto-sync achievements on login
+                    from app.main import auto_sync_provider
+                    await auto_sync_provider(existing_user, provider, db)
 
                     # Create session
                     if device_code:
@@ -522,6 +536,10 @@ def create_oauth_routes(
                     refresh_token=refresh_token,
                     token_expires_at=token_expires_at
                 )
+
+                # Auto-sync achievements for new user
+                from app.main import auto_sync_provider
+                await auto_sync_provider(new_user, provider, db)
 
                 if device_code:
                     from app.main import complete_device_auth

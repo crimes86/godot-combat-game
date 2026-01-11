@@ -201,7 +201,7 @@ func log_kill(enemy_type: String, enemy_level: int, xp_granted: int, gold_droppe
 		weapon_used: String = "", was_critical: bool = false, overkill_damage: int = 0,
 		enemy_network_id: int = 0) -> void:
 	"""Log an enemy kill event for anti-cheat auditing."""
-	if not gameplay_telemetry_enabled or not _is_authenticated():
+	if not gameplay_telemetry_enabled:
 		return
 
 	var event_data = {
@@ -224,7 +224,7 @@ func log_loot_gold(source_type: String, source_id: String, gold_amount: int) -> 
 	source_type: enemy_corpse, chest, tree, rock, ground
 	source_id: enemy_network_id or chest identifier
 	"""
-	if not gameplay_telemetry_enabled or not _is_authenticated():
+	if not gameplay_telemetry_enabled:
 		return
 
 	var event_data = {
@@ -245,7 +245,7 @@ func log_loot_item(source_type: String, source_id: String, item_id: String,
 	source_type: enemy_corpse, chest, tree, rock, ground
 	source_id: enemy_network_id or chest identifier
 	"""
-	if not gameplay_telemetry_enabled or not _is_authenticated():
+	if not gameplay_telemetry_enabled:
 		return
 
 	var event_data = {
@@ -268,7 +268,7 @@ func log_resource(resource_type: String, source_type: String, amount: int) -> vo
 	resource_type: wood, stone, ore, herb
 	source_type: tree, rock, node, bush
 	"""
-	if not gameplay_telemetry_enabled or not _is_authenticated():
+	if not gameplay_telemetry_enabled:
 		return
 
 	var event_data = {
@@ -537,11 +537,6 @@ func _flush_gameplay_batch() -> void:
 	if _pending_gameplay_events.is_empty() or _is_sending_gameplay:
 		return
 
-	if not _is_authenticated():
-		# Gameplay telemetry requires authentication
-		_pending_gameplay_events.clear()
-		return
-
 	_is_sending_gameplay = true
 	var batch = _pending_gameplay_events.duplicate()
 	_pending_gameplay_events.clear()
@@ -567,7 +562,7 @@ func _flush_gameplay_batch() -> void:
 
 func _flush_gameplay_batch_sync() -> void:
 	"""Synchronous flush for exit (best effort)."""
-	if _pending_gameplay_events.is_empty() or not _is_authenticated():
+	if _pending_gameplay_events.is_empty():
 		return
 
 	var http = HTTPRequest.new()
