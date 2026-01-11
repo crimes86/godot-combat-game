@@ -1547,7 +1547,7 @@ func create_tree(pos: Vector2, tree_type: String, container: Node2D, rng: Random
 	# Track for network sync
 	harvestables_by_id[tree_id] = tree_node
 
-func find_grove_center(chunk_center: Vector2, campfire_pos: Vector2, avoid_campfire_radius: float, chunk_data: Dictionary, rng: RandomNumberGenerator) -> Vector2:
+func find_grove_center(chunk_center: Vector2, campfire_pos: Vector2, avoid_campfire_radius: float, chunk_data: ChunkData, rng: RandomNumberGenerator) -> Vector2:
 	"""Find a valid position for a grove center (where clustered trees will spawn)"""
 	const MAX_ATTEMPTS = 20
 	const MIN_GROVE_SPACING = 600.0  # Minimum distance between grove centers
