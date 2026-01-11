@@ -269,6 +269,7 @@ class ChunkData:
 	var tree_positions: Array[Vector2] = []  # Tree positions for spacing enforcement
 	var all_prop_positions: Array[Dictionary] = []  # [{pos: Vector2, radius: float}] ALL props for bone fill
 	var ritual_sites: Array[Dictionary] = []  # {pos: Vector2, size: int} - dense bone ritual areas
+	var grove_centers: Dictionary = {}  # Grove center positions for tree clustering
 	# Bone optimization: store deferred pickable bones (spawn when player is near)
 	var deferred_pickable_bones: Array[Dictionary] = []  # [{pos, texture, scale, rotation, modulate}]
 	var active_pickable_bones: Array[Node2D] = []  # Currently spawned pickable bones
@@ -966,9 +967,6 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 				# Get or create grove center position
 				var grove_center_key = "%s:grove:%d" % [chunk_key, grove_index]
 				var grove_center: Vector2
-
-				if not chunk_data.has("grove_centers"):
-					chunk_data["grove_centers"] = {}
 
 				if chunk_data.grove_centers.has(grove_center_key):
 					grove_center = chunk_data.grove_centers[grove_center_key]
