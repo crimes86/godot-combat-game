@@ -71,17 +71,23 @@ signal corpse_clicked(corpse)
 signal corpse_looted_empty(corpse)
 
 # Spider sprite sheet: 640x320, 64x64 per frame, 10 cols x 5 rows
-# Row 0: Walk down (8 frames)
+# LPC spider uses Up, Left, Down, Right ordering (different from humanoids!)
+# Row 0: Walk up (8 frames)
 # Row 1: Walk left (8 frames)
-# Row 2: Walk right (8 frames)
-# Row 3: Walk up (8 frames)
+# Row 2: Walk down (8 frames)
+# Row 3: Walk right (8 frames)
 # Row 4: Death (4 frames)
 const FRAME_SIZE = Vector2(64, 64)
 const SPIDER_ANIMS = {
-	"walk_down": {"row": 0, "frames": 8},
+	"walk_up": {"row": 0, "frames": 8},
 	"walk_left": {"row": 1, "frames": 8},
-	"walk_right": {"row": 2, "frames": 8},
-	"walk_up": {"row": 3, "frames": 8},
+	"walk_down": {"row": 2, "frames": 8},
+	"walk_right": {"row": 3, "frames": 8},
+	# Attack animations use same sprites as walk (spiders have no attack frames)
+	"attack_up": {"row": 0, "frames": 8},
+	"attack_left": {"row": 1, "frames": 8},
+	"attack_down": {"row": 2, "frames": 8},
+	"attack_right": {"row": 3, "frames": 8},
 	"die": {"row": 4, "frames": 4},
 }
 
@@ -236,6 +242,33 @@ func update_animation_for_direction(direction: Vector2) -> void:
 
 	if new_anim != _current_anim:
 		play_animation(new_anim)
+
+
+func set_facing_direction(direction: Vector2) -> void:
+	"""Set facing direction without animating (for idle facing)"""
+	if direction.length() < 0.1:
+		return
+
+	# Determine facing direction
+	var new_direction: String
+	var new_anim: String
+	if abs(direction.x) > abs(direction.y):
+		new_direction = "right" if direction.x > 0 else "left"
+		new_anim = "walk_right" if direction.x > 0 else "walk_left"
+	else:
+		new_direction = "down" if direction.y > 0 else "up"
+		new_anim = "walk_down" if direction.y > 0 else "walk_up"
+
+	current_direction = new_direction
+	_is_idle = true
+	current_animation = "idle_" + current_direction
+
+	# Set to first frame of the direction's walk animation (idle pose)
+	if sprite and SPIDER_ANIMS.has(new_anim):
+		var anim_data = SPIDER_ANIMS[new_anim]
+		sprite.region_rect = Rect2(0, anim_data.row * FRAME_SIZE.y, FRAME_SIZE.x, FRAME_SIZE.y)
+		_current_anim = new_anim
+		_current_frame = 0
 
 
 func setup_shadow() -> void:
@@ -858,11 +891,16 @@ func _physics_process(delta: float) -> void:
 		is_running = true
 		velocity = direction * BASE_SPEED * RUN_SPEED_MULT
 		move_and_slide()
-		update_animation_for_direction(direction)
+		# Use actual velocity after move_and_slide (may differ due to collisions)
+		var actual_direction = velocity.normalized() if velocity.length() > 0.1 else direction
+		update_animation_for_direction(actual_direction)
 	elif distance <= ATTACK_RANGE:
 		_is_wandering = false
 		is_running = false
 		velocity = Vector2.ZERO
+		# Face the player when in attack range (idle, not walking animation)
+		if not is_attacking:
+			set_facing_direction(direction)
 		if attack_cooldown <= 0 and not is_attacking:
 			perform_attack(target_player, direction)
 	else:
@@ -893,7 +931,9 @@ func _do_wander(delta: float) -> void:
 			var direction = (_wander_target - global_position).normalized()
 			velocity = direction * BASE_SPEED * 0.5
 			move_and_slide()
-			update_animation_for_direction(direction)
+			# Use actual velocity after move_and_slide (may differ due to collisions)
+			var actual_direction = velocity.normalized() if velocity.length() > 0.1 else direction
+			update_animation_for_direction(actual_direction)
 		else:
 			_is_wandering = false
 			_wander_target = Vector2.ZERO
@@ -908,26 +948,35 @@ func perform_attack(player: Node, direction: Vector2) -> void:
 	is_attacking = true
 	attack_cooldown = ATTACK_COOLDOWN_TIME
 
-	# Spider lunges toward player
-	var attack_anim = "walk_down"
+	# Spider lunges toward player - use attack_ prefix so network syncs properly
+	var attack_anim = "attack_down"
 	if abs(direction.x) > abs(direction.y):
-		attack_anim = "walk_right" if direction.x > 0 else "walk_left"
+		attack_anim = "attack_right" if direction.x > 0 else "attack_left"
 	else:
-		attack_anim = "walk_down" if direction.y > 0 else "walk_up"
+		attack_anim = "attack_down" if direction.y > 0 else "attack_up"
 
 	play_animation(attack_anim)
 
-	# Quick lunge
-	var lunge_tween = create_tween()
-	lunge_tween.tween_property(self, "global_position", global_position + direction * 20, 0.15)
+	# Play attack sound (reuse skeleton attack sound for now)
+	# Note: On dedicated server this won't play - client plays via NetworkEnemyManager
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_skeleton_attack_sound(global_position, -14.0)
 
-	await get_tree().create_timer(0.2).timeout
+	# Small lunge using velocity (physics-based, won't push player)
+	# Don't tween position directly as it causes collision issues
+	velocity = direction * BASE_SPEED * 1.5
+	move_and_slide()
 
+	await get_tree().create_timer(0.15).timeout
+	velocity = Vector2.ZERO
+
+	# Deal damage if still in range
 	if is_instance_valid(player) and global_position.distance_to(player.global_position) <= ATTACK_RANGE * 1.8:
 		if player.has_method("take_damage"):
 			player.take_damage(base_damage)
 
-	await get_tree().create_timer(0.3).timeout
+	await get_tree().create_timer(0.35).timeout
 	is_attacking = false
 
 

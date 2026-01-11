@@ -1377,7 +1377,7 @@ func trigger_aggro() -> void:
 	trigger_chain_aggro()
 
 	# Enter combat immediately
-	if current_state == State.PATROLLING:
+	if current_state == State.PATROLLING or current_state == State.RETURNING:
 		change_state(State.COMBAT)
 
 func trigger_chain_aggro() -> void:

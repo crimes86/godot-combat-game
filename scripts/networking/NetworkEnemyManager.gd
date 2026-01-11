@@ -1103,7 +1103,7 @@ func _play_enemy_animation_sound(enemy: Node, anim_name: String, prev_anim: Stri
 			if enemy.name.begins_with("Wolf"):
 				sound_manager.play_wolf_attack_sound(enemy.global_position, -14.0)
 			elif enemy.name.begins_with("Spider"):
-				pass  # TODO: Add spider attack sound when available
+				sound_manager.play_skeleton_attack_sound(enemy.global_position, -14.0)  # Reuse skeleton sound
 			else:
 				sound_manager.play_skeleton_attack_sound(enemy.global_position, -14.0)
 
