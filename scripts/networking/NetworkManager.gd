@@ -28,12 +28,12 @@ var GIT_HASH: String = ""
 # - MAJOR: Breaking changes (new network protocol, save format changes)
 # - MINOR: New features (both client and server should update together)
 # - PATCH: Bug fixes (client and server can differ in patch version)
-const GAME_VERSION: String = "0.1.2"
+const GAME_VERSION: String = "0.1.3"
 
 # Minimum client version the server accepts (server-only setting)
 # - Server-only patches: bump GAME_VERSION, keep MIN_CLIENT_VERSION same
 # - Client-breaking changes: bump both GAME_VERSION and MIN_CLIENT_VERSION
-const MIN_CLIENT_VERSION: String = "0.1.0"
+const MIN_CLIENT_VERSION: String = "0.1.3"
 
 # Legacy alias for update checks
 const CLIENT_VERSION: String = GAME_VERSION
