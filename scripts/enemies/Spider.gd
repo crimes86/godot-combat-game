@@ -973,7 +973,13 @@ func perform_attack(player: Node, direction: Vector2) -> void:
 
 	# Deal damage if still in range
 	if is_instance_valid(player) and global_position.distance_to(player.global_position) <= ATTACK_RANGE * 1.8:
-		if player.has_method("take_damage"):
+		# Use NetworkEnemyManager for proper multiplayer damage sync
+		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+		if network_enemy_mgr and network_enemy_mgr.has_method("deal_damage_to_player"):
+			var peer_id = player.get_multiplayer_authority() if player.has_method("get_multiplayer_authority") else 1
+			network_enemy_mgr.deal_damage_to_player(peer_id, base_damage)
+		elif player.has_method("take_damage"):
+			# Fallback for singleplayer
 			player.take_damage(base_damage)
 
 	await get_tree().create_timer(0.35).timeout
