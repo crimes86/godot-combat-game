@@ -902,9 +902,77 @@ async def view_logs_html(
             @media (max-width: 900px) {{
                 .grid-2col {{ grid-template-columns: 1fr; }}
             }}
+
+            /* Admin Navbar */
+            .admin-navbar {{
+                background: rgba(20,20,25,0.95);
+                border-bottom: 1px solid rgba(255,106,0,0.2);
+                padding: 12px 24px;
+                margin: -24px -24px 24px -24px;
+                display: flex;
+                align-items: center;
+                gap: 24px;
+                backdrop-filter: blur(10px);
+            }}
+            .admin-navbar-brand {{
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                color: #ff6a00;
+                text-decoration: none;
+                font-weight: 700;
+                font-size: 16px;
+            }}
+            .admin-navbar-brand img {{
+                width: 28px;
+                height: 28px;
+                filter: drop-shadow(0 0 6px rgba(255,140,50,0.6));
+            }}
+            .admin-navbar-links {{
+                display: flex;
+                gap: 8px;
+            }}
+            .admin-navbar-links a {{
+                color: #888;
+                text-decoration: none;
+                padding: 6px 14px;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: 500;
+                transition: all 0.2s;
+            }}
+            .admin-navbar-links a:hover {{
+                background: rgba(255,255,255,0.05);
+                color: #e0e0e0;
+            }}
+            .admin-navbar-links a.active {{
+                background: rgba(255,106,0,0.15);
+                color: #ff8533;
+            }}
+            .admin-navbar-spacer {{
+                flex: 1;
+            }}
+            .admin-navbar-user {{
+                color: #666;
+                font-size: 12px;
+            }}
         </style>
     </head>
     <body>
+        <!-- Admin Navbar -->
+        <nav class="admin-navbar">
+            <a href="/dashboard" class="admin-navbar-brand">
+                <img src="/static/icons/ashbane-tree.png" alt="Ashbane" />
+                <span>ASHBANE</span>
+            </a>
+            <div class="admin-navbar-links">
+                <a href="/logs/view" class="active">Operations</a>
+                <a href="/dashboard">Player Dashboard</a>
+                <a href="/tapestry">Tapestry</a>
+            </div>
+            <div class="admin-navbar-spacer"></div>
+            <span class="admin-navbar-user">Admin View</span>
+        </nav>
         <div class="dashboard-container">
 
         <!-- Header -->
