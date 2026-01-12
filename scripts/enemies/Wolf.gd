@@ -1333,12 +1333,22 @@ func _physics_process(delta: float) -> void:
 
 	# Lose interest if player too far
 	if distance_to_player > LOSE_INTEREST_RANGE:
-		target_player = null
-		is_running = false
-		_has_alerted_pack = false  # Reset so pack can be alerted again later
-		_was_attacked = false  # Reset attacked state
-		_do_wander_behavior(delta)
-		return
+		# Only lose interest if we weren't attacked from range
+		# If we were shot, keep chasing until we attack or they escape further
+		if not _was_attacked:
+			target_player = null
+			is_running = false
+			_has_alerted_pack = false  # Reset so pack can be alerted again later
+			_do_wander_behavior(delta)
+			return
+		# If attacked from range but beyond LOSE_INTEREST, use extended chase range
+		elif distance_to_player > LOSE_INTEREST_RANGE * 2.5:  # 1500px max chase when attacked
+			target_player = null
+			is_running = false
+			_has_alerted_pack = false
+			_was_attacked = false  # Only reset after truly escaping
+			_do_wander_behavior(delta)
+			return
 
 	# Chase if: in detection range OR was attacked (ranged weapons trigger chase from any distance)
 	if (distance_to_player <= _detection_range or _was_attacked) and distance_to_player > ATTACK_RANGE:
@@ -1676,8 +1686,16 @@ func perform_attack(player: Node, direction: Vector2) -> void:
 	await get_tree().create_timer(0.3).timeout
 
 	if is_instance_valid(player) and global_position.distance_to(player.global_position) <= ATTACK_RANGE * 1.5:
-		if player.has_method("take_damage"):
+		# Use NetworkEnemyManager for proper multiplayer damage sync
+		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+		if network_enemy_mgr and network_enemy_mgr.has_method("deal_damage_to_player"):
+			var peer_id = player.get_multiplayer_authority() if player.has_method("get_multiplayer_authority") else 1
+			network_enemy_mgr.deal_damage_to_player(peer_id, base_damage)
+		elif player.has_method("take_damage"):
+			# Fallback for singleplayer
 			player.take_damage(base_damage)
+		# Reset _was_attacked after successfully attacking - wolf got its revenge
+		_was_attacked = false
 
 	# Wait for attack animation to finish
 	await get_tree().create_timer(0.5).timeout

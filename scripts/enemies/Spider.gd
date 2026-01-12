@@ -879,11 +879,20 @@ func _physics_process(delta: float) -> void:
 	var direction = (target_player.global_position - global_position).normalized()
 
 	if distance > LOSE_INTEREST_RANGE:
-		target_player = null
-		is_running = false
-		_was_attacked = false  # Reset attack flag when losing interest
-		_do_wander(delta)
-		return
+		# Only lose interest if we weren't attacked from range
+		# If we were shot, keep chasing until we attack or they escape further
+		if not _was_attacked:
+			target_player = null
+			is_running = false
+			_do_wander(delta)
+			return
+		# If attacked from range but beyond LOSE_INTEREST, use extended chase range
+		elif distance > LOSE_INTEREST_RANGE * 3:  # 1500px max chase when attacked
+			target_player = null
+			is_running = false
+			_was_attacked = false  # Only reset after truly escaping
+			_do_wander(delta)
+			return
 
 	# Chase if: in detection range OR was attacked (ranged weapons trigger chase from any distance)
 	if (distance <= _detection_range or _was_attacked) and distance > ATTACK_RANGE:
@@ -981,6 +990,8 @@ func perform_attack(player: Node, direction: Vector2) -> void:
 		elif player.has_method("take_damage"):
 			# Fallback for singleplayer
 			player.take_damage(base_damage)
+		# Reset _was_attacked after successfully attacking - spider got its revenge
+		_was_attacked = false
 
 	await get_tree().create_timer(0.35).timeout
 	is_attacking = false
