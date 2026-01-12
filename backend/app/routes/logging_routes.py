@@ -6,7 +6,7 @@ Receives batched logs from Godot clients and provides admin query endpoints.
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session as DbSession
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, and_
 from typing import Optional, Callable, List
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
@@ -384,7 +384,16 @@ async def get_log_stats(
     )
 
     # Unique users and sessions
-    unique_users = db.query(func.count(func.distinct(GameLog.user_id))).filter(GameLog.created_at >= cutoff).scalar() or 0
+    # Authenticated users (user_id is not null)
+    auth_users = db.query(func.count(func.distinct(GameLog.user_id))).filter(
+        and_(GameLog.created_at >= cutoff, GameLog.user_id.isnot(None))
+    ).scalar() or 0
+    # Guest sessions (user_id is null)
+    guest_sessions = db.query(func.count(func.distinct(GameLog.session_id))).filter(
+        and_(GameLog.created_at >= cutoff, GameLog.user_id.is_(None))
+    ).scalar() or 0
+    # Total unique players = authenticated + guests
+    unique_users = auth_users + guest_sessions
     unique_sessions = db.query(func.count(func.distinct(GameLog.session_id))).filter(GameLog.created_at >= cutoff).scalar() or 0
 
     return {
@@ -439,9 +448,16 @@ async def view_logs_html(
     unique_sessions_24h = db.query(func.count(func.distinct(GameLog.session_id))).filter(
         GameLog.created_at >= cutoff_24h
     ).scalar() or 0
-    unique_users_24h = db.query(func.count(func.distinct(GameLog.user_id))).filter(
-        GameLog.created_at >= cutoff_24h
+    # Authenticated users (user_id is not null)
+    auth_users_24h = db.query(func.count(func.distinct(GameLog.user_id))).filter(
+        and_(GameLog.created_at >= cutoff_24h, GameLog.user_id.isnot(None))
     ).scalar() or 0
+    # Guest sessions (user_id is null)
+    guest_sessions_24h = db.query(func.count(func.distinct(GameLog.session_id))).filter(
+        and_(GameLog.created_at >= cutoff_24h, GameLog.user_id.is_(None))
+    ).scalar() or 0
+    # Total unique players = authenticated + guests
+    unique_users_24h = auth_users_24h + guest_sessions_24h
 
     # Database file size
     db_path = "/root/ashbane-backend/backend/socialauth.db"

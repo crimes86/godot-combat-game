@@ -555,13 +555,28 @@ async def get_telemetry_stats(
     )
 
     # Unique users and sessions
-    unique_users = db.query(func.count(func.distinct(GameEventLog.user_id))).filter(
-        GameEventLog.created_at >= cutoff
+    # Authenticated users (user_id is not null)
+    authenticated_users = db.query(func.count(func.distinct(GameEventLog.user_id))).filter(
+        and_(
+            GameEventLog.created_at >= cutoff,
+            GameEventLog.user_id.isnot(None)
+        )
+    ).scalar() or 0
+
+    # Guest sessions (user_id is null)
+    guest_sessions = db.query(func.count(func.distinct(GameEventLog.session_id))).filter(
+        and_(
+            GameEventLog.created_at >= cutoff,
+            GameEventLog.user_id.is_(None)
+        )
     ).scalar() or 0
 
     unique_sessions = db.query(func.count(func.distinct(GameEventLog.session_id))).filter(
         GameEventLog.created_at >= cutoff
     ).scalar() or 0
+
+    # Total unique players = authenticated + guests
+    unique_users = authenticated_users + guest_sessions
 
     # Top zones
     zone_counts = dict(
@@ -626,6 +641,8 @@ async def get_telemetry_stats(
             "by_reason": suspicious_reasons
         },
         "unique_users": unique_users,
+        "authenticated_users": authenticated_users,
+        "guest_sessions": guest_sessions,
         "unique_sessions": unique_sessions,
         "top_zones": zone_counts,
         "backend_ops": _get_backend_ops_stats(db, cutoff),
