@@ -92,7 +92,7 @@ func _start_dedicated_server(args: Array):
 		print("📀 Database initialized: %s" % DatabaseManager.players_file_path)
 
 	# Start server with no local player (empty player_data = no host player)
-	if NetworkManager.host_game(port, {}):
+	if NetworkManager.host_game(port, {}, true):  # is_dedicated=true
 		print("✅ Server started successfully!")
 		print("   Version: %s" % NetworkManager.GAME_VERSION)
 		print("   Git: %s" % NetworkManager.GIT_HASH)

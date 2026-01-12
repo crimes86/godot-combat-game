@@ -98,7 +98,8 @@ func _ready():
 	multiplayer.connection_failed.connect(_on_connection_failed)
 
 # Host a game server
-func host_game(port: int = DEFAULT_PORT, host_player_data: Dictionary = {}) -> bool:
+# is_dedicated: true for headless dedicated servers (no host player)
+func host_game(port: int = DEFAULT_PORT, host_player_data: Dictionary = {}, is_dedicated: bool = false) -> bool:
 	peer = ENetMultiplayerPeer.new()
 	# Bind to IPv4 only to avoid IPv6 port conflicts on some systems
 	peer.set_bind_ip("0.0.0.0")
@@ -114,28 +115,29 @@ func host_game(port: int = DEFAULT_PORT, host_player_data: Dictionary = {}) -> b
 			DatabaseManager.initialize_database()
 			DatabaseManager.reset_all_online_status()
 
-		# Add host to player list
+		# Add host to player list (skip for dedicated servers - they have no host player)
 		var host_id = multiplayer.get_unique_id()
 		var host_is_guest = host_player_data.is_empty()
 
-		# Use display_name/character_name from player_data if authenticated, otherwise use random player_name
-		var display_name = player_name
-		if not host_is_guest:
-			# Prefer display_name > character_name > username
-			display_name = host_player_data.get("display_name", host_player_data.get("character_name", host_player_data.get("username", player_name)))
-			player_name = display_name  # Update player_name to match authenticated name
+		if not is_dedicated:
+			# Use display_name/character_name from player_data if authenticated, otherwise use random player_name
+			var display_name = player_name
+			if not host_is_guest:
+				# Prefer display_name > character_name > username
+				display_name = host_player_data.get("display_name", host_player_data.get("character_name", host_player_data.get("username", player_name)))
+				player_name = display_name  # Update player_name to match authenticated name
 
-		connected_players[host_id] = {
-			"name": display_name,
-			"ready": true
-		}
+			connected_players[host_id] = {
+				"name": display_name,
+				"ready": true
+			}
 
-		# Store host's auth info
-		authenticated_players[host_id] = {
-			"username": display_name if host_is_guest else host_player_data.get("username", player_name),
-			"player_data": host_player_data,
-			"is_guest": host_is_guest
-		}
+			# Store host's auth info
+			authenticated_players[host_id] = {
+				"username": display_name if host_is_guest else host_player_data.get("username", player_name),
+				"player_data": host_player_data,
+				"is_guest": host_is_guest
+			}
 		local_player_data = host_player_data
 		is_guest = host_is_guest
 
