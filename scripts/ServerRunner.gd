@@ -41,6 +41,10 @@ var stdin_thread: Thread = null
 var command_queue: Array = []
 var command_mutex: Mutex = null
 var current_shard_id: String = "default"  # Shard this server instance is running
+var _last_status_write: int = 0  # Last time we wrote status file (for monitor)
+
+const STATUS_FILE_PATH = "/tmp/ashbane-server-status.json"
+const STATUS_WRITE_INTERVAL_MS = 5000  # Write status every 5 seconds
 
 func _ready():
 	var args = OS.get_cmdline_user_args()  # Gets args after "--"
@@ -446,6 +450,11 @@ func _process(_delta):
 	if frame % 600 == 0 and frame > 0:
 		_print_server_status()
 
+	# Write status file for monitor agent (every 5 seconds)
+	if current_time - _last_status_write >= STATUS_WRITE_INTERVAL_MS:
+		_write_status_file(player_count)
+		_last_status_write = current_time
+
 func _physics_process(_delta):
 	if not is_dedicated_server:
 		return
@@ -463,6 +472,22 @@ func _print_server_status() -> void:
 	var minutes = (int(uptime) % 3600) / 60
 
 	print("📊 [Shard:%s] Players: %d | Uptime: %dh %dm" % [current_shard_id, auth_count, hours, minutes])
+
+func _write_status_file(player_count: int) -> void:
+	"""Write server status to /tmp for monitor agent to read."""
+	var status = {
+		"players_online": player_count,
+		"players_max": NetworkManager.MAX_PLAYERS if NetworkManager else 50,
+		"shard_id": current_shard_id,
+		"version": NetworkManager.GIT_HASH if NetworkManager else "unknown",
+		"uptime_seconds": Time.get_unix_time_from_system() - server_start_time,
+		"timestamp": Time.get_unix_time_from_system()
+	}
+
+	var file = FileAccess.open(STATUS_FILE_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(status))
+		file.close()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # BUG REPORT COMMANDS
