@@ -2107,7 +2107,8 @@ func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int,
 						break
 
 		if not removed:
-			LogManager.warn("Could not find '%s' (loot_id=%d) in corpse loot to remove (expected index %d)" % [item_name, loot_id, item_index], "loot")
+			# This is expected with optimistic client updates - item already looted locally before server RPC arrived
+			LogManager.debug("Item already removed: '%s' (loot_id=%d) not in corpse (expected index %d)" % [item_name, loot_id, item_index], "loot")
 		LogManager.debug("Client corpse now has %d items" % enemy.corpse_loot.size(), "loot")
 
 	# Check if corpse is now fully empty

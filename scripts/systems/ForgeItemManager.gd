@@ -32,6 +32,7 @@ var _debug_claims_cleared: bool = false  # When true, sync_to_inventory will ski
 # Locally deleted forged items - prevents re-sync until server confirms deletion
 # Keys: token_id (string), item_id, or any unique identifier
 var _locally_deleted_items: Dictionary = {}  # id -> timestamp of deletion
+var _warned_no_unique_id: Dictionary = {}  # item_id -> true (warn once per session)
 
 # Wallet and bridge status
 var _wallet_connected: bool = false
@@ -1149,7 +1150,11 @@ func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 	else:
 		# Last resort - but this causes shared weapon stats bug!
 		unique_forged_id = forged.get("item_id", "unknown_forged")
-		LogManager.warning("Forged item '%s' has no unique ID - weapon stats may be shared!" % forged.get("item_name", "Unknown"), "forge")
+		# Only warn once per item_id to avoid log spam
+		var warn_key = forged.get("item_id", "unknown")
+		if warn_key not in _warned_no_unique_id:
+			_warned_no_unique_id[warn_key] = true
+			LogManager.warning("Forged item '%s' has no unique ID - weapon stats may be shared!" % forged.get("item_name", "Unknown"), "forge")
 
 	var base_item = {
 		"name": forged.get("item_name", "Forged Item"),
