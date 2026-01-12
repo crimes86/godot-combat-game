@@ -978,6 +978,11 @@ func perform_attack(player: Node, direction: Vector2) -> void:
 	move_and_slide()
 
 	await get_tree().create_timer(0.15).timeout
+
+	# Bail out if spider died during attack animation
+	if not is_instance_valid(self) or is_dying or is_corpse:
+		return
+
 	velocity = Vector2.ZERO
 
 	# Deal damage if still in range
@@ -994,6 +999,11 @@ func perform_attack(player: Node, direction: Vector2) -> void:
 		_was_attacked = false
 
 	await get_tree().create_timer(0.35).timeout
+
+	# Bail out if spider died during attack cooldown
+	if not is_instance_valid(self) or is_dying or is_corpse:
+		return
+
 	is_attacking = false
 
 

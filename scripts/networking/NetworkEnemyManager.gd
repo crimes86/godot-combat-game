@@ -554,7 +554,7 @@ func _client_enemy_damaged(enemy_network_id: int, damage: float, new_health: flo
 	enemy.current_health = new_health
 
 	# Emit damage signal for AI aggro (needed on server for enemy AI)
-	if enemy.is_inside_tree():
+	if enemy.is_inside_tree() and enemy.has_signal("damage_taken"):
 		enemy.damage_taken.emit(damage, is_crit)
 
 	# DEDICATED SERVER: Skip all visual/audio operations to prevent memory leak
