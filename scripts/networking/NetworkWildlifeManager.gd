@@ -413,9 +413,9 @@ func _client_wildlife_died(network_id: int) -> void:
 	if animal and is_instance_valid(animal):
 		animal.current_state = animal.State.DEAD
 		# Fade out
-		if animal.current_sprite:
+		if animal.sprite:
 			var tween = animal.create_tween()
-			tween.tween_property(animal.current_sprite, "modulate:a", 0.0, 0.5)
+			tween.tween_property(animal.sprite, "modulate:a", 0.0, 0.5)
 			tween.tween_callback(animal.queue_free)
 		else:
 			animal.queue_free()

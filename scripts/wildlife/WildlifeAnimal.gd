@@ -27,6 +27,14 @@ enum State {
 @export var carcass_item_id: String = "rabbit_carcass"
 @export var base_pelt_quality: float = 1.0  # Affected by how it was killed
 
+# Sprite sheet textures (exported from scene)
+@export var idle_texture: Texture2D
+@export var walk_texture: Texture2D
+@export var run_texture: Texture2D
+@export var idle_frames: int = 8
+@export var walk_frames: int = 8
+@export var run_frames: int = 6
+
 # State
 var current_state: State = State.IDLE
 var current_health: float = 20.0
@@ -42,16 +50,15 @@ const IDLE_TIME_MIN: float = 1.0
 const IDLE_TIME_MAX: float = 4.0
 const ALERT_TIME: float = 1.5
 
-# References - multiple sprites for different animations (sprite sheets)
-@onready var idle_sprite: Sprite2D = $IdleSprite if has_node("IdleSprite") else null
-@onready var walk_sprite: Sprite2D = $WalkSprite if has_node("WalkSprite") else null
-@onready var run_sprite: Sprite2D = $RunSprite if has_node("RunSprite") else null
+# Single sprite reference (we switch textures instead of multiple sprites)
+@onready var sprite: Sprite2D = $Sprite if has_node("Sprite") else null
 @onready var detection_area: Area2D = $DetectionArea if has_node("DetectionArea") else null
 
 # Animation state
-var current_sprite: Sprite2D = null
+var current_anim: String = "idle"
+var current_frames: int = 8
 var frame_timer: float = 0.0
-var animation_fps: float = 10.0
+var animation_fps: float = 8.0
 
 # Signals
 signal animal_died(animal: WildlifeAnimal, killer: Node)
@@ -73,8 +80,7 @@ func _ready() -> void:
 	# Start with random idle time
 	idle_timer = randf_range(IDLE_TIME_MIN, IDLE_TIME_MAX)
 
-	# Initialize sprite references
-	current_sprite = idle_sprite
+	# Initialize sprite with idle animation
 	_play_animation("idle")
 
 
@@ -191,7 +197,7 @@ func _pick_roam_target() -> void:
 
 
 func _update_animation(delta: float) -> void:
-	if not current_sprite:
+	if not sprite:
 		return
 
 	frame_timer += delta
@@ -200,54 +206,55 @@ func _update_animation(delta: float) -> void:
 	if frame_timer >= frame_duration:
 		frame_timer -= frame_duration
 		# Advance to next frame, loop if needed
-		var next_frame = current_sprite.frame + 1
-		if next_frame >= current_sprite.hframes:
+		var next_frame = sprite.frame + 1
+		if next_frame >= current_frames:
 			next_frame = 0
-		current_sprite.frame = next_frame
-
-		# Debug: Log animation updates occasionally
-		if Engine.get_frames_drawn() % 60 == 0:
-			print("[Wildlife] %s anim: frame=%d/%d fps=%.1f delta=%.4f" % [
-				animal_type, current_sprite.frame, current_sprite.hframes, animation_fps, delta])
+		sprite.frame = next_frame
 
 
 func _update_facing() -> void:
 	if velocity.length_squared() > 1.0:
 		facing_right = velocity.x > 0
 
-	# Update all sprites' flip_h (sprites face right by default)
-	var flip = not facing_right
-	if idle_sprite: idle_sprite.flip_h = flip
-	if walk_sprite: walk_sprite.flip_h = flip
-	if run_sprite: run_sprite.flip_h = flip
+	# Update sprite flip_h (sprites face right by default)
+	if sprite:
+		sprite.flip_h = not facing_right
 
 
 func _play_animation(anim_name: String) -> void:
-	# Hide all sprites
-	if idle_sprite: idle_sprite.visible = false
-	if walk_sprite: walk_sprite.visible = false
-	if run_sprite: run_sprite.visible = false
+	if not sprite:
+		return
 
-	# Show and set current sprite based on animation
-	# DEBUG: Slow FPS to diagnose scrolling issue
+	# Don't restart if same animation
+	if anim_name == current_anim and sprite.texture != null:
+		return
+
+	current_anim = anim_name
+
+	# Switch texture and frame count based on animation
 	match anim_name:
 		"idle":
-			current_sprite = idle_sprite
-			animation_fps = 2.0  # Very slow for debugging
+			sprite.texture = idle_texture
+			current_frames = idle_frames
+			animation_fps = 8.0
 		"walk":
-			current_sprite = walk_sprite
-			animation_fps = 4.0  # Slow for debugging
+			sprite.texture = walk_texture
+			current_frames = walk_frames
+			animation_fps = 10.0
 		"run":
-			current_sprite = run_sprite
-			animation_fps = 6.0  # Slow for debugging
+			sprite.texture = run_texture
+			current_frames = run_frames
+			animation_fps = 12.0
 		_:
-			current_sprite = idle_sprite
-			animation_fps = 2.0
+			sprite.texture = idle_texture
+			current_frames = idle_frames
+			animation_fps = 8.0
 
-	if current_sprite:
-		current_sprite.visible = true
-		current_sprite.frame = 0
-		frame_timer = 0.0
+	# Configure sprite for horizontal sprite sheet
+	sprite.hframes = current_frames
+	sprite.vframes = 1
+	sprite.frame = 0
+	frame_timer = 0.0
 
 
 func _get_nearest_player() -> Node2D:
@@ -316,13 +323,13 @@ func take_damage(amount: float, attacker: Node = null) -> void:
 
 
 func _set_all_sprites_modulate(color: Color) -> void:
-	if idle_sprite: idle_sprite.modulate = color
-	if walk_sprite: walk_sprite.modulate = color
-	if run_sprite: run_sprite.modulate = color
+	if sprite:
+		sprite.modulate = color
 
 
 func _reset_sprite_modulate() -> void:
-	_set_all_sprites_modulate(Color.WHITE)
+	if sprite:
+		sprite.modulate = Color.WHITE
 
 
 func _die(killer: Node = null) -> void:
@@ -337,10 +344,10 @@ func _die(killer: Node = null) -> void:
 	# Spawn carcass loot or add to player inventory
 	_drop_carcass(killer, quality)
 
-	# Death animation - fade out current sprite
-	if current_sprite:
+	# Death animation - fade out sprite
+	if sprite:
 		var tween = create_tween()
-		tween.tween_property(current_sprite, "modulate:a", 0.0, 0.5)
+		tween.tween_property(sprite, "modulate:a", 0.0, 0.5)
 		tween.tween_callback(queue_free)
 	else:
 		queue_free()
