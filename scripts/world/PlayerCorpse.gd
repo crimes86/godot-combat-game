@@ -424,12 +424,13 @@ func _setup_corpse_visual() -> void:
 	var hair_path = "res://assets/characters/hair_female/standard/hurt.png" if is_female else "res://assets/characters/hair_male/standard/hurt.png"
 	_setup_layer_from_hurt(hair_layer, hair_path)
 
-	# Add name label above corpse
+	# Add name label above corpse (centered over the lying body)
 	var name_label = Label.new()
 	name_label.name = "NameLabel"
 	name_label.text = owner_player_name + "'s Corpse"
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.position = Vector2(-60, -50)
+	name_label.custom_minimum_size = Vector2(120, 0)  # Fixed width for centering
+	name_label.position = Vector2(-60, -20)  # Center: -width/2, above corpse
 	name_label.add_theme_font_size_override("font_size", 10)
 	name_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
 	name_label.add_theme_color_override("font_outline_color", Color.BLACK)

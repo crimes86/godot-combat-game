@@ -27,6 +27,7 @@ const DIRECTION_ROWS = {
 
 # Current state
 var current_direction := "south"
+var _is_dead := false  # Flag to prevent equipment sync during death animation
 
 # Helper to detect attack animation frame count from image width
 # Thrust = 8 frames (512px), Slash = 6 frames (384px)
@@ -90,6 +91,10 @@ var head_armor_path: String = ""  # Head armor (helmets)
 
 # Frame sync - ensures all layers play at exactly the same frame
 func _process(_delta: float) -> void:
+	# Don't sync equipment when dead - they're hidden and shouldn't be restored
+	if _is_dead:
+		return
+	
 	# Sync all child layer sprites to match body frame and animation
 	# This prevents drift between independently playing AnimatedSprite2Ds
 	var body_frame = frame
@@ -267,10 +272,10 @@ func setup_lpc_sprite(
 			# Use attack_anim_prefix for animation name (slash_, thrust_, or shoot_)
 			create_animation_from_image(slash_img, attack_anim_prefix + "_" + dir_name, row, body_attack_frames, frame_indices, slash_fps, false, null, 64)
 
-	# Create hurt animation (single direction - south/row 2)
+	# Create hurt animation (single row texture - hurt.png is 384x64, only 1 row)
 	if hurt_tex:
 		var hurt_img = hurt_tex.get_image()
-		create_animation_from_image(hurt_img, "hurt", 2, 6, [0, 1, 2, 3, 4, 5], 10.0, false, null, 64)
+		create_animation_from_image(hurt_img, "hurt", 0, 6, [0, 1, 2, 3, 4, 5], 10.0, false, null, 64)
 
 	# Setup shadow layer (z=-10 - below everything)
 	if shadow_walk_tex or shadow_slash_tex:
@@ -1062,21 +1067,24 @@ func has_multi_slash() -> bool:
 	return weapon_slash_variants.size() > 1
 
 func play_death_animation() -> int:
-	"""Play death (hurt) animation with equipment faded/lowered.
+	"""Play death (hurt) animation with equipment hurt sprites.
 	Returns the frame count for freezing on corpse pose."""
-	# Lower equipment z-index so body hurt animation shows on top
-	# Also make equipment semi-transparent so body is clearly visible
-	_fade_layer_for_death(shadow_sprite)
-	_fade_layer_for_death(cape_sprite)
-	_fade_layer_for_death(base_head_sprite)
-	_fade_layer_for_death(boots_sprite)
-	_fade_layer_for_death(pants_sprite)
-	_fade_layer_for_death(shirt_sprite)
-	_fade_layer_for_death(arms_sprite)
-	_fade_layer_for_death(hands_sprite)
-	_fade_layer_for_death(head_sprite)
-	_fade_layer_for_death(hair_sprite)
-	# Hide combat equipment - doesn't make sense on corpse
+	_is_dead = true  # Prevent normal equipment sync during death
+	
+	# Load and play hurt animations for equipment layers
+	# Equipment that has hurt textures will animate, others will be hidden
+	_setup_layer_hurt_animation(shadow_sprite, "shadow", "")
+	_setup_layer_hurt_animation(cape_sprite, "cape", "")
+	_setup_layer_hurt_animation(base_head_sprite, "base_head", body_type_path)
+	_setup_layer_hurt_animation(boots_sprite, "boots", boots_armor_path)
+	_setup_layer_hurt_animation(pants_sprite, "pants", pants_armor_path)
+	_setup_layer_hurt_animation(shirt_sprite, "shirt", shirt_armor_path)
+	_setup_layer_hurt_animation(arms_sprite, "arms", arms_armor_path)
+	_setup_layer_hurt_animation(hands_sprite, "hands", hands_armor_path)
+	_setup_layer_hurt_animation(head_sprite, "head", head_armor_path)
+	_setup_layer_hurt_animation(hair_sprite, "hair", body_type_path.replace("body_", "hair_") if body_type_path else "")
+	
+	# Hide combat equipment (weapon/shield don't have hurt animations)
 	if shield_sprite:
 		shield_sprite.visible = false
 	if weapon_sprite:
@@ -1087,6 +1095,7 @@ func play_death_animation() -> int:
 	# Make sure body (self) is on top and visible
 	z_index = 10
 	modulate.a = 1.0
+	visible = true
 
 	# Play hurt animation on base body
 	if sprite_frames and sprite_frames.has_animation("hurt"):
@@ -1098,19 +1107,153 @@ func play_death_animation() -> int:
 	print("💀 [SimpleLPCSprite] WARNING: No hurt animation found!")
 	return 0
 
-func _fade_layer_for_death(layer: AnimatedSprite2D) -> void:
-	"""Lower z-index and fade equipment layer for death animation."""
+func _setup_layer_hurt_animation(layer: AnimatedSprite2D, slot: String, armor_path: String) -> void:
+	"""Setup hurt animation for an equipment layer during death."""
 	if not layer:
 		return
-	# Lower z-index to be below body (body will be at z=10)
-	layer.z_index = -5
-	# Fade to 40% opacity so body animation is clearly visible
-	layer.modulate.a = 0.4
-	# Stop any animation
+	
+	# Try to find and load hurt texture for this layer
+	var hurt_tex = _find_hurt_texture(slot, armor_path)
+	
+	if hurt_tex:
+		# Create hurt animation on this layer
+		if not layer.sprite_frames:
+			layer.sprite_frames = SpriteFrames.new()
+		
+		# Remove old hurt animation if exists
+		if layer.sprite_frames.has_animation("hurt"):
+			layer.sprite_frames.remove_animation("hurt")
+		
+		# Create hurt animation (row 0, 6 frames)
+		var hurt_img = hurt_tex.get_image()
+		create_animation_from_image(hurt_img, "hurt", 0, 6, [0, 1, 2, 3, 4, 5], 10.0, false, layer.sprite_frames, 64)
+		
+		# Play the hurt animation
+		layer.visible = true
+		layer.modulate.a = 1.0
+		layer.stop()
+		layer.play("hurt")
+	else:
+		# No hurt texture found - hide this layer during death
+		layer.visible = false
+
+func _find_hurt_texture(slot: String, armor_path: String) -> Texture2D:
+	"""Find hurt texture for equipment slot. Returns null if not found."""
+	# Special cases for body-related layers
+	if slot == "shadow":
+		var path = "res://assets/characters/shadow/standard/hurt.png"
+		if ResourceLoader.exists(path):
+			return load(path)
+		return null
+	
+	if slot == "base_head":
+		# Base head uses body type (head_female or head_male)
+		var head_type = body_type_path.replace("body_", "head_") if body_type_path else "head_male"
+		var path = "res://assets/characters/%s/standard/hurt.png" % head_type
+		if ResourceLoader.exists(path):
+			return load(path)
+		return null
+	
+	if slot == "hair":
+		# Hair uses body type (hair_female or hair_male)
+		var hair_type = body_type_path.replace("body_", "hair_") if body_type_path else "hair_male"
+		var path = "res://assets/characters/%s/standard/hurt.png" % hair_type
+		if ResourceLoader.exists(path):
+			return load(path)
+		return null
+	
+	if slot == "cape" or armor_path == "":
+		return null
+	
+	# For armor pieces, extract the item name from armor_path
+	# armor_path format: "folder/item_name" e.g. "pants/green_pants" or "legs/green_pants"
+	var parts = armor_path.split("/")
+	if parts.size() < 2:
+		return null
+	
+	var folder = parts[0]
+	var item_name = parts[1]
+	
+	# Map slot to correct folder if needed
+	var folder_map = {
+		"boots": "boots",
+		"pants": "pants", 
+		"shirt": "shirt",
+		"arms": "arms",
+		"hands": "hands",
+		"head": "head"
+	}
+	
+	# Use slot-based folder or original folder
+	var search_folder = folder_map.get(slot, folder)
+	
+	# Try flat structure: assets/characters/{folder}/{item_name}_hurt.png
+	var hurt_path_flat = "res://assets/characters/%s/%s_hurt.png" % [search_folder, item_name]
+	if ResourceLoader.exists(hurt_path_flat):
+		return load(hurt_path_flat)
+	
+	# Try LPC structure: assets/characters/{item_name}/standard/hurt.png
+	var hurt_path_lpc = "res://assets/characters/%s/standard/hurt.png" % item_name
+	if ResourceLoader.exists(hurt_path_lpc):
+		return load(hurt_path_lpc)
+	
+	return null
+
+func _hide_layer_for_death(layer: AnimatedSprite2D) -> void:
+	"""Fade equipment layer for death animation."""
+	if not layer:
+		return
+	# Fade to 30% opacity - equipment doesn't have hurt animations
+	# so it will freeze at last pose, but fading makes body more visible
+	layer.modulate.a = 0.3
+	layer.z_index = -5  # Put behind body
 	layer.stop()
+
+func reset_from_death() -> void:
+	"""Reset sprite state after respawn - call this when player respawns."""
+	_is_dead = false
+	# Restore equipment visibility (they'll be properly configured on next animation)
+	if shadow_sprite:
+		shadow_sprite.visible = true
+		shadow_sprite.modulate.a = 1.0
+	if cape_sprite:
+		cape_sprite.visible = true
+		cape_sprite.modulate.a = 1.0
+	if base_head_sprite:
+		base_head_sprite.visible = true
+		base_head_sprite.modulate.a = 1.0
+	if boots_sprite:
+		boots_sprite.visible = true
+		boots_sprite.modulate.a = 1.0
+	if pants_sprite:
+		pants_sprite.visible = true
+		pants_sprite.modulate.a = 1.0
+	if shirt_sprite:
+		shirt_sprite.visible = true
+		shirt_sprite.modulate.a = 1.0
+	if arms_sprite:
+		arms_sprite.visible = true
+		arms_sprite.modulate.a = 1.0
+	if hands_sprite:
+		hands_sprite.visible = true
+		hands_sprite.modulate.a = 1.0
+	if head_sprite:
+		head_sprite.visible = true
+		head_sprite.modulate.a = 1.0
+	if hair_sprite:
+		hair_sprite.visible = true
+		hair_sprite.modulate.a = 1.0
+	# Weapons/shields will be restored when player equips them
+	z_index = 0
+	modulate.a = 1.0
 
 func play_lpc_animation(anim_name: String, direction: String):
 	"""Play animation with direction - NO FLIPPING!"""
+	# Auto-reset from death if we get a non-hurt animation request
+	# This handles multiplayer respawn sync without needing explicit RPC
+	if _is_dead and anim_name != "hurt":
+		reset_from_death()
+	
 	current_direction = direction
 
 	# Check if this animation has directions

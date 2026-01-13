@@ -279,11 +279,8 @@ func _create_indicator() -> void:
 	var version_label = Label.new()
 	version_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var version_str = "v???"
-	if NetworkManager and NetworkManager.NETWORK_VERSION != "":
-		version_str = NetworkManager.NETWORK_VERSION
-		# Truncate long git hashes
-		if version_str.length() > 8:
-			version_str = version_str.substr(0, 7)
+	if NetworkManager and NetworkManager.GAME_VERSION != "":
+		version_str = "v" + NetworkManager.GAME_VERSION
 	version_label.text = version_str
 	version_label.add_theme_font_size_override("font_size", 12)
 	version_label.add_theme_color_override("font_color", UITheme.TEXT_MUTED)

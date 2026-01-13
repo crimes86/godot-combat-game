@@ -1633,10 +1633,8 @@ func create_grove_tree(pos: Vector2, texture_path: String, scale_range: Vector2,
 		)
 
 	if shadow:
-		var shadow_width = 35 * tree_scale  # Slightly smaller shadows for LPC trees
-		var shadow_height = shadow_width * 0.4
-		shadow.size = Vector2(shadow_width, shadow_height)
-		shadow.position = Vector2(-shadow_width / 2, 40 * tree_scale)
+		# LPC trees have built-in shadows, hide the programmatic one
+		shadow.visible = false
 
 	if collision:
 		collision.position = Vector2(0, 35 * tree_scale)  # Adjusted for LPC tree proportions

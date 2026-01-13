@@ -17,8 +17,27 @@ var CHUNK_SIZE: float:
 	get: return Constants.CHUNK_SIZE
 
 # Props per cell (distributed from chunk totals)
-# Chunk has ~900 props, cell is 1/64 of chunk area
-const TREES_PER_CELL: int = 3  # 180/64 ≈ 3
+const TREES_PER_CELL: int = 3  # Base scattered trees per cell (not on treelines)
+
+# Treeline system - dense lines of trees forming barriers
+# 2 large treelines + 2 small treelines per chunk
+const LARGE_TREELINES_PER_CHUNK: int = 2
+const SMALL_TREELINES_PER_CHUNK: int = 2
+const TREELINE_TREE_SPACING: float = 160.0  # Distance between trees along treeline (increased for interaction)
+const TREELINE_WIDTH: float = 50.0  # Perpendicular jitter (not rows, just variation)
+const TREELINE_ROWS: int = 2  # Number of parallel rows in treeline
+const TREELINE_ROW_SPACING: float = 110.0  # Distance between rows (enough to click each tree)
+const LARGE_TREELINE_MIN_LENGTH: float = 2500.0  # Much longer treelines
+const LARGE_TREELINE_MAX_LENGTH: float = 5000.0  # Very long treelines
+const SMALL_TREELINE_MIN_LENGTH: float = 1000.0  # Small ones are still decent size
+const SMALL_TREELINE_MAX_LENGTH: float = 2000.0
+const TREELINE_WAVINESS: float = 250.0  # More curve for longer lines
+
+# Cache for treeline data (deterministic per chunk)
+var _treeline_cache: Dictionary = {}  # chunk_key -> Array of treeline segments
+
+# Tree position cache for collision checking
+var _tree_positions_cache: Dictionary = {}  # chunk_key -> Array of Vector2
 const ROCKS_LARGE_PER_CELL: int = 1  # 60/64 ≈ 1
 const ROCKS_MEDIUM_PER_CELL: int = 1  # 30/64 ≈ 0.5, round up
 const ROCKS_SMALL_PER_CELL: int = 1  # 25/64 ≈ 0.4, round up
@@ -87,6 +106,200 @@ func get_chunk_id_from_key(chunk_key: String) -> int:
 	var parts = chunk_key.split(",")
 	return int(parts[0])
 
+func get_treelines_for_chunk(chunk_key: String) -> Array:
+	"""Get deterministic treeline segments for a chunk (2 large + 2 small)"""
+	if _treeline_cache.has(chunk_key):
+		return _treeline_cache[chunk_key]
+
+	var treelines = []
+	var chunk_id = get_chunk_id_from_key(chunk_key)
+
+	# Create deterministic RNG for this chunk's treelines
+	var rng = RandomNumberGenerator.new()
+	rng.seed = hash("treeline_" + chunk_key) + world_seed
+
+	# Chunk bounds
+	var chunk_start_x = chunk_id * CHUNK_SIZE
+	var chunk_end_x = chunk_start_x + CHUNK_SIZE
+	var chunk_half_height = CHUNK_SIZE / 2.0
+	var margin = 600.0
+
+	# Track existing treeline centers to avoid overlap
+	var existing_centers = []
+
+	# Generate large treelines first
+	for i in range(LARGE_TREELINES_PER_CHUNK):
+		var treeline = _generate_single_treeline(rng, chunk_start_x, chunk_end_x, chunk_half_height, margin, existing_centers, true)
+		if treeline:
+			treelines.append(treeline)
+			existing_centers.append(treeline.center)
+
+	# Then generate small treelines
+	for i in range(SMALL_TREELINES_PER_CHUNK):
+		var treeline = _generate_single_treeline(rng, chunk_start_x, chunk_end_x, chunk_half_height, margin, existing_centers, false)
+		if treeline:
+			treelines.append(treeline)
+			existing_centers.append(treeline.center)
+
+	_treeline_cache[chunk_key] = treelines
+	return treelines
+
+func _generate_single_treeline(rng: RandomNumberGenerator, chunk_start_x: float, chunk_end_x: float, chunk_half_height: float, margin: float, existing_centers: Array, is_large: bool) -> Dictionary:
+	"""Generate a single treeline, avoiding existing ones"""
+	var min_length = LARGE_TREELINE_MIN_LENGTH if is_large else SMALL_TREELINE_MIN_LENGTH
+	var max_length = LARGE_TREELINE_MAX_LENGTH if is_large else SMALL_TREELINE_MAX_LENGTH
+	var min_separation = 1500.0 if is_large else 800.0
+
+	# Try a few times to find a good position
+	for attempt in range(5):
+		var start = Vector2(
+			rng.randf_range(chunk_start_x + margin, chunk_end_x - margin),
+			rng.randf_range(-chunk_half_height + margin, chunk_half_height - margin)
+		)
+
+		# Skip if too close to campfire
+		if start.distance_to(CAMPFIRE_POS) < CAMPFIRE_SAFE_RADIUS + 300:
+			continue
+
+		# Skip if too close to existing treelines
+		var too_close = false
+		for center in existing_centers:
+			if start.distance_to(center) < min_separation:
+				too_close = true
+				break
+		if too_close:
+			continue
+
+		# Random angle (prefer horizontal/diagonal lines)
+		var angle = rng.randf_range(-PI/4, PI/4)  # -45 to +45 degrees
+		if rng.randf() > 0.5:
+			angle += PI  # Some lines go the other way
+
+		# Random length
+		var length = rng.randf_range(min_length, max_length)
+
+		# Generate wavy line points
+		var points = []
+		var segments = int(length / 250.0)  # Control point every ~250px
+		segments = max(segments, 2)
+		var dir = Vector2.from_angle(angle)
+		var perp = dir.rotated(PI/2)
+
+		for j in range(segments + 1):
+			var t = float(j) / segments
+			var base_pos = start + dir * (t * length)
+			# Add waviness with variation
+			var wave_freq = 1.5 + rng.randf() * 0.5
+			var wave_offset = sin(t * PI * wave_freq) * TREELINE_WAVINESS * rng.randf_range(0.3, 1.0)
+			var point = base_pos + perp * wave_offset
+			points.append(point)
+
+		if points.size() >= 2:
+			var center = start + dir * (length / 2)
+			return {
+				"points": points,
+				"start": start,
+				"end": points[points.size() - 1],
+				"length": length,
+				"center": center,
+				"is_large": is_large
+			}
+
+	return {}
+
+func get_trees_on_treeline(treeline: Dictionary, treeline_index: int, chunk_key: String) -> Array:
+	"""Generate deterministic tree positions along a treeline with multiple rows"""
+	var trees = []
+	var points = treeline.points
+
+	if points.size() < 2:
+		return trees
+
+	# Use deterministic RNG seeded by treeline identity (not cell)
+	var tree_rng = RandomNumberGenerator.new()
+	tree_rng.seed = hash("treeline_trees_%s_%d" % [chunk_key, treeline_index]) + world_seed
+
+	var is_large = treeline.get("is_large", true)
+	var num_rows = TREELINE_ROWS if is_large else 2  # Large treelines get 3 rows, small get 2
+	var tree_id = 0
+
+	# Walk along the treeline and place trees at regular intervals
+	for i in range(points.size() - 1):
+		var p1 = points[i]
+		var p2 = points[i + 1]
+		var segment_length = p1.distance_to(p2)
+		var segment_dir = (p2 - p1).normalized()
+		var perp = segment_dir.rotated(PI/2)
+
+		var pos_along = 0.0
+		while pos_along < segment_length:
+			var base_pos = p1 + segment_dir * pos_along
+
+			# Density variation - sometimes skip trees (creates gaps)
+			var density_roll = tree_rng.randf()
+			var skip_chance = 0.15  # 15% chance to skip a column
+			if density_roll < skip_chance:
+				pos_along += TREELINE_TREE_SPACING
+				continue
+
+			# Place multiple rows of trees perpendicular to the line
+			for row in range(num_rows):
+				# Calculate row offset from center line
+				var row_offset = (row - (num_rows - 1) / 2.0) * TREELINE_ROW_SPACING
+
+				# Add some randomness to row position
+				row_offset += tree_rng.randf_range(-20, 20)
+
+				var tree_pos = base_pos + perp * row_offset
+
+				# Add jitter along the line direction too
+				tree_pos += segment_dir * tree_rng.randf_range(-25, 25)
+
+				# Small additional random jitter
+				tree_pos.x += tree_rng.randf_range(-10, 10)
+				tree_pos.y += tree_rng.randf_range(-10, 10)
+
+				# Sometimes skip individual trees in a row for variation
+				if tree_rng.randf() < 0.1:  # 10% skip
+					continue
+
+				trees.append({
+					"pos": tree_pos,
+					"treeline_id": treeline_index,
+					"tree_idx": tree_id
+				})
+				tree_id += 1
+
+			# Vary spacing along the line
+			pos_along += TREELINE_TREE_SPACING + tree_rng.randf_range(-15, 25)
+
+	return trees
+
+func get_nearest_treeline_distance(pos: Vector2, chunk_key: String) -> float:
+	"""Get distance to nearest treeline"""
+	var treelines = get_treelines_for_chunk(chunk_key)
+	var min_dist = INF
+
+	for treeline in treelines:
+		var points = treeline.points
+		for i in range(points.size() - 1):
+			var dist = _point_to_segment_distance(pos, points[i], points[i + 1])
+			min_dist = min(min_dist, dist)
+
+	return min_dist
+
+func _point_to_segment_distance(point: Vector2, seg_start: Vector2, seg_end: Vector2) -> float:
+	"""Calculate distance from point to line segment"""
+	var seg = seg_end - seg_start
+	var seg_len_sq = seg.length_squared()
+
+	if seg_len_sq < 0.001:
+		return point.distance_to(seg_start)
+
+	var t = clamp((point - seg_start).dot(seg) / seg_len_sq, 0.0, 1.0)
+	var projection = seg_start + t * seg
+	return point.distance_to(projection)
+
 func generate_prop_list(cell_key: String) -> Array:
 	"""Generate deterministic prop list for a cell"""
 	var props = []
@@ -137,26 +350,63 @@ func generate_prop_list(cell_key: String) -> Array:
 				"rng_offset": rng.randi()
 			})
 
-	# Trees (lootable)
+	# Trees (lootable) - treeline system creates dense barriers
+	var treelines = get_treelines_for_chunk(chunk_key)
+	var tree_index = 0
+	var tree_positions_in_cell = []  # Track tree positions to avoid rock overlap
+
+	# Add trees from treelines that pass through or near this cell
+	for tl_idx in range(treelines.size()):
+		var treeline = treelines[tl_idx]
+
+		# Get all tree positions on this treeline (deterministic based on treeline, not cell)
+		var treeline_trees = get_trees_on_treeline(treeline, tl_idx, chunk_key)
+
+		for tree_data in treeline_trees:
+			var tree_pos = tree_data.pos
+
+			# Only add trees that are within this cell's bounds
+			if bounds.has_point(tree_pos):
+				# Use globally unique tree_id based on treeline + tree index
+				var tree_id = "%s:tl%d:t%d" % [chunk_key, tl_idx, tree_data.tree_idx]
+
+				if _is_valid_position(tree_pos) and not streaming_manager.is_harvested(tree_id):
+					props.append({
+						"type": "tree",
+						"pos": tree_pos,
+						"cell_key": cell_key,
+						"chunk_key": chunk_key,
+						"index": tree_index,
+						"tree_id": tree_id,
+						"rng_offset": rng.randi()
+					})
+					tree_positions_in_cell.append(tree_pos)
+					tree_index += 1
+
+	# Add a few scattered trees outside of treelines
 	for i in range(TREES_PER_CELL):
 		var pos = _random_position_in_bounds(bounds, rng)
-		var tree_id = "%s:tree:%d" % [cell_key, i]
-		if _is_valid_position(pos) and not streaming_manager.is_harvested(tree_id):
+		var tree_id = "%s:scatter:%d" % [cell_key, i]
+
+		# Only add if not too close to a treeline (don't duplicate)
+		var dist_to_treeline = get_nearest_treeline_distance(pos, chunk_key)
+		if dist_to_treeline > 150 and _is_valid_position(pos) and not streaming_manager.is_harvested(tree_id):
 			props.append({
 				"type": "tree",
 				"pos": pos,
 				"cell_key": cell_key,
 				"chunk_key": chunk_key,
-				"index": i,
+				"index": tree_index + i,
 				"tree_id": tree_id,
 				"rng_offset": rng.randi()
 			})
+			tree_positions_in_cell.append(pos)
 
-	# Large rocks (lootable)
+	# Large rocks (lootable) - check against tree positions
 	for i in range(ROCKS_LARGE_PER_CELL):
 		var pos = _random_position_in_bounds(bounds, rng)
 		var rock_id = "%s:rock_large:%d" % [cell_key, i]
-		if _is_valid_position(pos) and not streaming_manager.is_harvested(rock_id):
+		if _is_valid_position(pos) and not streaming_manager.is_harvested(rock_id) and not _is_too_close_to_trees(pos, tree_positions_in_cell, 120.0):
 			props.append({
 				"type": "rock_large",
 				"pos": pos,
@@ -167,10 +417,10 @@ func generate_prop_list(cell_key: String) -> Array:
 				"rng_offset": rng.randi()
 			})
 
-	# Medium rocks (decorative - allowed on path)
+	# Medium rocks (decorative - allowed on path) - check against trees
 	for i in range(ROCKS_MEDIUM_PER_CELL):
 		var pos = _random_position_in_bounds(bounds, rng)
-		if _is_valid_position(pos, true):
+		if _is_valid_position(pos, true) and not _is_too_close_to_trees(pos, tree_positions_in_cell, 80.0):
 			props.append({
 				"type": "rock_medium",
 				"pos": pos,
@@ -179,10 +429,10 @@ func generate_prop_list(cell_key: String) -> Array:
 				"rng_offset": rng.randi()
 			})
 
-	# Small rocks (decorative - allowed on path)
+	# Small rocks (decorative - allowed on path) - check against trees
 	for i in range(ROCKS_SMALL_PER_CELL):
 		var pos = _random_position_in_bounds(bounds, rng)
-		if _is_valid_position(pos, true):
+		if _is_valid_position(pos, true) and not _is_too_close_to_trees(pos, tree_positions_in_cell, 50.0):
 			props.append({
 				"type": "rock_small",
 				"pos": pos,
@@ -275,6 +525,13 @@ func _is_on_path(pos: Vector2) -> bool:
 	# Main path runs along Y=0
 	return abs(pos.y) < PATH_WIDTH
 
+func _is_too_close_to_trees(pos: Vector2, tree_positions: Array, min_distance: float) -> bool:
+	"""Check if position is too close to any tree position"""
+	for tree_pos in tree_positions:
+		if pos.distance_to(tree_pos) < min_distance:
+			return true
+	return false
+
 func create_prop(prop_def: Dictionary, container: Node2D) -> void:
 	"""Create a single prop from definition"""
 	var prop_type = prop_def.type
@@ -299,16 +556,26 @@ func _create_prop_via_chunk_system(prop_def: Dictionary, container: Node2D, rng:
 	match prop_type:
 		"tree":
 			var tree_id = prop_def.tree_id
-			# Determine tree type
-			var roll = rng.randf()
-			var tree_type: String
-			if roll < 0.6:
-				tree_type = "dead_tree"
-			elif roll < 0.9:
-				tree_type = "pine_tree"
+			# Zone-based tree selection
+			var zone = chunk_prop_system.get_zone_for_chunk(chunk_key)
+
+			if zone == "zone1":
+				# Zone 1: Only dead trees with new LPC variants
+				var all_dead_textures = chunk_prop_system.DEAD_TREE_TEXTURES.large + chunk_prop_system.DEAD_TREE_TEXTURES.medium + chunk_prop_system.DEAD_TREE_TEXTURES.small
+				var texture_path = all_dead_textures[rng.randi() % all_dead_textures.size()]
+				var tree_scale_range = Vector2(1.35, 2.1)  # Trees tower over player (25% smaller than before)
+				chunk_prop_system.create_grove_tree(pos, texture_path, tree_scale_range, container, rng, tree_id)
 			else:
-				tree_type = "autumn_tree"
-			chunk_prop_system.create_tree(pos, tree_type, container, rng, tree_id)
+				# Zone 2+: Mix of tree types (60% dead, 30% pine, 10% autumn)
+				var roll = rng.randf()
+				var tree_type: String
+				if roll < 0.6:
+					tree_type = "dead_tree"
+				elif roll < 0.9:
+					tree_type = "pine_tree"
+				else:
+					tree_type = "autumn_tree"
+				chunk_prop_system.create_tree(pos, tree_type, container, rng, tree_id)
 			streaming_manager.register_harvestable(tree_id, container.get_child(container.get_child_count() - 1) if container.get_child_count() > 0 else null)
 
 		"rock_large":

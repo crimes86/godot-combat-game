@@ -88,6 +88,37 @@ Commands:
     engage <enemy_id>       - Smart engage: approach enemy, check for adds
     loot_phase              - Safely loot all nearby corpses/bones/items
 
+    HUMAN-LIKE LOOTING (NEW!):
+    human_loot              - Full human-like loot sequence:
+                              1. Walk to nearest corpse
+                              2. Press F to open LootUI
+                              3. Press F again to Take All
+                              4. Wait for notifications
+    walk_to_corpse          - Walk to nearest corpse (no looting)
+    open_loot_ui            - Press F to open loot UI (must be near corpse)
+    take_all_loot           - Press F to take all (LootUI must be open)
+    loot_aware [on|off]     - Toggle loot-aware combat mode
+
+    BEHAVIOR TREE AI (60fps reactive):
+    bt_enable               - Enable BT AI (takes control)
+    bt_disable              - Disable BT AI (release control)
+    bt_status               - Get current BT state and last tick result
+    bt_events               - Get pending events for Claude
+    bt_pause [on|off]       - Pause/unpause BT without disabling
+    bt_goal <goal> [pri]    - Set goal: idle, gear_up, combat, loot_corpse,
+                              flee_to_campfire, heal_at_campfire, quest_grind
+                              Priority: 0=critical, 1=reactive, 2=tactical, 3=strategic
+    
+    BT Convenience commands:
+    bt_gear_up              - Auto gear up (buy + equip basics)
+    bt_grind                - Quest grind loop (combat + loot)
+    bt_combat               - Enter combat mode
+    bt_heal                 - Flee to campfire for healing
+    
+    BT Performance Analysis:
+    bt_metrics              - Get raw performance metrics
+    bt_analyze              - Get analysis with improvement suggestions
+
 Examples:
     python mcp_control.py ping
     python mcp_control.py take_control
@@ -366,6 +397,70 @@ def main():
     # Loot phase - safely loot all nearby corpses/bones/items
     elif command == "loot_phase":
         cmd = {"action": "loot_phase"}
+
+    # Human-like looting commands
+    elif command == "human_loot":
+        cmd = {"action": "human_loot"}
+
+    elif command == "walk_to_corpse":
+        cmd = {"action": "walk_to_corpse"}
+
+    elif command == "open_loot_ui":
+        cmd = {"action": "open_loot_ui"}
+
+    elif command == "take_all_loot":
+        cmd = {"action": "take_all_loot"}
+
+    elif command == "loot_aware":
+        enabled = True
+        if len(args) >= 1:
+            enabled = args[0].lower() in ("true", "1", "on", "yes")
+        cmd = {"action": "loot_aware_combat", "enabled": enabled}
+
+    # Behavior Tree AI commands
+    elif command == "bt_enable":
+        cmd = {"action": "bt_enable"}
+
+    elif command == "bt_disable":
+        cmd = {"action": "bt_disable"}
+
+    elif command == "bt_status":
+        cmd = {"action": "bt_status"}
+
+    elif command == "bt_events":
+        cmd = {"action": "bt_events"}
+
+    elif command == "bt_pause":
+        paused = True
+        if len(args) >= 1:
+            paused = args[0].lower() in ("true", "1", "on", "yes")
+        cmd = {"action": "bt_pause", "paused": paused}
+
+    elif command == "bt_goal":
+        if len(args) < 1:
+            print("Usage: bt_goal <goal> [priority]  (goals: idle, gear_up, combat, loot_corpse, quest_grind)")
+            sys.exit(1)
+        goal = args[0]
+        priority = int(args[1]) if len(args) > 1 else 3
+        cmd = {"action": "bt_goal", "goal": goal, "priority": priority}
+
+    elif command == "bt_gear_up":
+        cmd = {"action": "bt_gear_up"}
+
+    elif command == "bt_grind":
+        cmd = {"action": "bt_grind"}
+
+    elif command == "bt_combat":
+        cmd = {"action": "bt_combat"}
+
+    elif command == "bt_heal":
+        cmd = {"action": "bt_heal"}
+
+    elif command == "bt_metrics":
+        cmd = {"action": "bt_metrics"}
+
+    elif command == "bt_analyze":
+        cmd = {"action": "bt_analyze"}
 
     else:
         print(f"Unknown command: {command}")

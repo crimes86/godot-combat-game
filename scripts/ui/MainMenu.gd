@@ -289,6 +289,10 @@ func _ready():
 				await get_tree().create_timer(0.3).timeout
 				_on_ashbane_auth_failed(pending_error)
 
+func _process(delta: float) -> void:
+	_process_tracer(delta)
+	_process_embers(delta)
+
 func _on_button_hover():
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
@@ -317,6 +321,12 @@ func _apply_cyberpunk_theme():
 	# Style bottom buttons
 	_style_bottom_buttons()
 
+	# Custom dark titlebar (borderless window with controls)
+	_build_custom_titlebar()
+
+	# Server status indicator in bottom-left
+	_build_server_status()
+
 func _create_theme_background():
 	"""Create the dark atmospheric background for the entire menu"""
 	var bg = ColorRect.new()
@@ -326,6 +336,135 @@ func _create_theme_background():
 	bg.z_index = -10  # Behind everything
 	add_child(bg)
 	move_child(bg, 0)
+
+	# Add radial gradient overlay (warmer in center)
+	_create_gradient_overlay()
+
+	# Add rising ember particle effect
+	_create_ember_particles()
+
+	# Add vignette effect (darkens edges)
+	_create_vignette()
+
+func _create_gradient_overlay():
+	"""Create a subtle radial gradient - warmer in center, darker at edges"""
+	var gradient_rect = ColorRect.new()
+	gradient_rect.name = "GradientOverlay"
+	gradient_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	gradient_rect.z_index = -9
+	gradient_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Create shader for radial gradient
+	var shader = Shader.new()
+	shader.code = """
+shader_type canvas_item;
+
+void fragment() {
+	vec2 center = vec2(0.5, 0.5);
+	vec2 uv = UV;
+	float dist = distance(uv, center);
+
+	// Warm center glow (very subtle amber)
+	vec3 warm_color = vec3(0.12, 0.08, 0.05);
+	vec3 edge_color = vec3(0.02, 0.02, 0.025);
+
+	// Smooth falloff from center
+	float gradient = smoothstep(0.0, 0.7, dist);
+	vec3 final_color = mix(warm_color, edge_color, gradient);
+
+	COLOR = vec4(final_color, 0.6);
+}
+"""
+	var material = ShaderMaterial.new()
+	material.shader = shader
+	gradient_rect.material = material
+
+	add_child(gradient_rect)
+
+func _add_card_glow(parent: Control) -> void:
+	"""Add warm ambient glow behind the card panel"""
+	var glow = ColorRect.new()
+	glow.name = "CardGlow"
+	glow.set_anchors_preset(Control.PRESET_CENTER)
+	# Larger than card for glow spread
+	glow.offset_left = -400
+	glow.offset_top = -340
+	glow.offset_right = 400
+	glow.offset_bottom = 340
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var shader = Shader.new()
+	shader.code = """
+shader_type canvas_item;
+
+uniform float pulse : hint_range(0.0, 1.0) = 0.5;
+
+void fragment() {
+	vec2 center = vec2(0.5, 0.5);
+	float dist = distance(UV, center);
+
+	// Soft radial glow
+	float glow = 1.0 - smoothstep(0.0, 0.5, dist);
+	glow = pow(glow, 1.8);
+
+	// Warm amber/orange color
+	vec3 glow_color = vec3(1.0, 0.5, 0.15);
+
+	// Subtle pulse
+	float alpha = glow * (0.12 + pulse * 0.06);
+
+	COLOR = vec4(glow_color, alpha);
+}
+"""
+	var material = ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("pulse", 0.5)
+	glow.material = material
+
+	# Store for animation
+	_card_glow_material = material
+
+	parent.add_child(glow)
+
+func _create_vignette():
+	"""Create vignette effect that darkens screen edges"""
+	var vignette = ColorRect.new()
+	vignette.name = "Vignette"
+	vignette.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vignette.z_index = 50  # Above most things but below UI
+	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var shader = Shader.new()
+	shader.code = """
+shader_type canvas_item;
+
+uniform float intensity : hint_range(0.0, 1.0) = 0.4;
+uniform float softness : hint_range(0.0, 1.0) = 0.5;
+
+void fragment() {
+	vec2 uv = UV;
+	vec2 center = vec2(0.5, 0.5);
+
+	// Distance from center, adjusted for aspect ratio
+	float dist = distance(uv, center);
+
+	// Create smooth vignette falloff
+	float vignette = smoothstep(0.2, 0.2 + softness, dist);
+	vignette = pow(vignette, 1.5);  // Stronger at edges
+
+	// Dark edges with slight warm tint
+	vec3 vignette_color = vec3(0.0, 0.0, 0.02);
+
+	COLOR = vec4(vignette_color, vignette * intensity);
+}
+"""
+	var material = ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("intensity", 0.5)
+	material.set_shader_parameter("softness", 0.45)
+	vignette.material = material
+
+	add_child(vignette)
 
 func _style_menu_panel():
 	"""Style the main menu panel with cyberpunk aesthetic"""
@@ -1028,6 +1167,9 @@ var ashbane_skip_button: Button = null
 var ashbane_logout_button: Button = null
 var ashbane_divider_container: Control = null
 var ashbane_back_button: Button = null
+var _tracer_border: ColorRect = null
+var _tracer_segments: Array = []
+var _tracer_tween: Tween = null
 var _ashbane_initialized: bool = false
 var _connecting_dots_timer: Timer = null
 var _connecting_provider_label: String = ""
@@ -1064,87 +1206,142 @@ func _create_ashbane_panel():
 	bg.color = ASHBANE_BG_DARK
 	ashbane_panel.add_child(bg)
 
-	# Main card panel with glow border
+	# Main card panel - larger, more spacious
 	var card = Panel.new()
 	card.name = "AshbaneCard"
 	card.set_anchors_preset(Control.PRESET_CENTER)
-	card.offset_left = -280
+	card.offset_left = -320
 	card.offset_top = -260
-	card.offset_right = 280
+	card.offset_right = 320
 	card.offset_bottom = 260
 
-	# Create cyberpunk panel style
+	# Create clean panel style - no visible border (tracer will be the border)
 	var card_style = StyleBoxFlat.new()
-	card_style.bg_color = ASHBANE_BG_PANEL
-	card_style.border_width_left = 2
-	card_style.border_width_right = 2
-	card_style.border_width_top = 2
-	card_style.border_width_bottom = 2
-	card_style.border_color = ASHBANE_BORDER_GLOW
-	card_style.corner_radius_top_left = 4
-	card_style.corner_radius_top_right = 4
-	card_style.corner_radius_bottom_left = 4
-	card_style.corner_radius_bottom_right = 4
-	card_style.shadow_size = 20
-	card_style.shadow_color = Color(0.4, 0.1, 0.05, 0.3)  # Crimson shadow
+	card_style.bg_color = Color(0.04, 0.04, 0.05, 0.95)
+	card_style.corner_radius_top_left = 8
+	card_style.corner_radius_top_right = 8
+	card_style.corner_radius_bottom_left = 8
+	card_style.corner_radius_bottom_right = 8
+	card_style.shadow_size = 50
+	card_style.shadow_color = Color(0, 0, 0, 0.7)
 	card.add_theme_stylebox_override("panel", card_style)
+
+	# Add warm ambient glow behind the card
+	_add_card_glow(ashbane_panel)
+
 	ashbane_panel.add_child(card)
 
-	# Add corner decorations
-	_add_corner_decorations(card)
+	# Add animated tracer border
+	_add_tracer_border(card)
 
-	# Create content container
+	# Create content container with generous padding
 	var vbox = VBoxContainer.new()
 	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vbox.offset_left = 40
-	vbox.offset_top = 30
-	vbox.offset_right = -40
-	vbox.offset_bottom = -30
+	vbox.offset_left = 50
+	vbox.offset_top = 35
+	vbox.offset_right = -50
+	vbox.offset_bottom = -35
 	vbox.add_theme_constant_override("separation", 16)
 	card.add_child(vbox)
 
-	# ASHBANE logo - custom drawn M-ashbane with trophy + text
+	# Top spacer for vertical centering
+	var top_spacer = Control.new()
+	top_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	top_spacer.size_flags_stretch_ratio = 0.2
+	vbox.add_child(top_spacer)
+
+	# ASHBANE logo section - prominent game branding
 	var logo_section = VBoxContainer.new()
 	logo_section.add_theme_constant_override("separation", 4)
 	vbox.add_child(logo_section)
 
-	# Custom logo icon (M-ashbane with trophy)
+	# Large logo using 128px texture with pulsing glow
 	var logo_icon_container = CenterContainer.new()
 	logo_section.add_child(logo_icon_container)
-	var logo_icon = _create_ashbane_logo_icon()
-	logo_icon_container.add_child(logo_icon)
 
-	# "ASHBANE" text under the icon
+	# Container for logo + glow (allows glow to be behind)
+	var logo_wrapper = Control.new()
+	logo_wrapper.custom_minimum_size = Vector2(128, 128)
+	logo_icon_container.add_child(logo_wrapper)
+
+	# Pulsing glow behind the logo
+	var logo_glow = ColorRect.new()
+	logo_glow.name = "LogoGlow"
+	logo_glow.size = Vector2(180, 180)
+	logo_glow.position = Vector2(-26, -26)  # Center behind 128px logo
+	logo_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	logo_glow.z_index = -1
+
+	# Glow shader for soft radial effect
+	var glow_shader = Shader.new()
+	glow_shader.code = """
+shader_type canvas_item;
+
+uniform float pulse : hint_range(0.0, 1.0) = 0.5;
+
+void fragment() {
+	vec2 center = vec2(0.5, 0.5);
+	float dist = distance(UV, center);
+
+	// Soft radial glow
+	float glow = 1.0 - smoothstep(0.0, 0.5, dist);
+	glow = pow(glow, 2.0);
+
+	// Warm orange/amber color
+	vec3 glow_color = vec3(1.0, 0.6, 0.2);
+
+	// Pulse modulation
+	float alpha = glow * (0.15 + pulse * 0.2);
+
+	COLOR = vec4(glow_color, alpha);
+}
+"""
+	var glow_material = ShaderMaterial.new()
+	glow_material.shader = glow_shader
+	glow_material.set_shader_parameter("pulse", 0.5)
+	logo_glow.material = glow_material
+	logo_wrapper.add_child(logo_glow)
+
+	# Store reference for animation
+	_logo_glow_material = glow_material
+
+	# Start pulsing animation
+	_start_logo_pulse()
+
+	# The actual logo icon
+	var logo_icon = TextureRect.new()
+	logo_icon.name = "LogoIcon"
+	var logo_path = "res://assets/ui/logo/ashbane_tree_128.png"
+	if ResourceLoader.exists(logo_path):
+		logo_icon.texture = load(logo_path)
+	logo_icon.custom_minimum_size = Vector2(128, 128)
+	logo_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	logo_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	logo_wrapper.add_child(logo_icon)
+
+	# "ASHBANE" title - big and bold
 	var logo_text = Label.new()
 	logo_text.text = "A S H B A N E"
 	logo_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	logo_text.add_theme_font_size_override("font_size", 18)
-	logo_text.add_theme_color_override("font_color", ASHBANE_ACCENT_PRIMARY)
+	logo_text.add_theme_font_size_override("font_size", 42)
+	logo_text.add_theme_color_override("font_color", Color(0.92, 0.88, 0.82, 1.0))
 	logo_section.add_child(logo_text)
 
-	# Decorative line under ASHBANE
+	# Tagline - game-focused
+	var tagline = Label.new()
+	tagline.text = "Survive the Dreadland"
+	tagline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tagline.add_theme_font_size_override("font_size", 18)
+	tagline.add_theme_color_override("font_color", Color(0.55, 0.52, 0.48, 0.9))
+	logo_section.add_child(tagline)
+
+	# Decorative line (minimal spacing)
 	var line_container = CenterContainer.new()
 	logo_section.add_child(line_container)
 	var accent_line = ColorRect.new()
-	accent_line.color = ASHBANE_ACCENT_PRIMARY
-	accent_line.custom_minimum_size = Vector2(100, 2)
+	accent_line.color = Color(0.5, 0.38, 0.25, 0.5)
+	accent_line.custom_minimum_size = Vector2(200, 1)
 	line_container.add_child(accent_line)
-
-	# "Authenticate via" title
-	var title = Label.new()
-	title.text = "LINK YOUR GAMING LEGACY"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 24)
-	title.add_theme_color_override("font_color", ASHBANE_TEXT_PRIMARY)
-	vbox.add_child(title)
-
-	# Tagline under title
-	var tagline = Label.new()
-	tagline.text = "Your achievements become your appearance.\nA decade of gaming? Look like a legend."
-	tagline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tagline.add_theme_font_size_override("font_size", 14)
-	tagline.add_theme_color_override("font_color", Color(0.6, 0.62, 0.65, 0.9))
-	vbox.add_child(tagline)
 
 	# Status label (shows auth progress)
 	ashbane_status_label = Label.new()
@@ -1156,13 +1353,13 @@ func _create_ashbane_panel():
 	ashbane_status_label.custom_minimum_size = Vector2(0, 20)
 	vbox.add_child(ashbane_status_label)
 
-	# Single Login button (provider selection happens in browser after beta key)
+	# Single Login button - styled as primary action
 	ashbane_login_button = Button.new()
 	ashbane_login_button.name = "AshbaneLoginButton"
 	ashbane_login_button.text = "Login"
-	ashbane_login_button.custom_minimum_size = Vector2(200, 50)
+	ashbane_login_button.custom_minimum_size = Vector2(260, 52)
 	ashbane_login_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_style_ashbane_button(ashbane_login_button, ASHBANE_ACCENT_CYAN, true)
+	_style_ashbane_button(ashbane_login_button, Color(0.35, 0.55, 0.4), true)  # Warm green
 	ashbane_login_button.pressed.connect(_on_ashbane_login_pressed)
 	ashbane_login_button.mouse_entered.connect(_on_button_hover)
 	vbox.add_child(ashbane_login_button)
@@ -1176,34 +1373,34 @@ func _create_ashbane_panel():
 
 	# Use Control with fixed size for the lines to prevent expansion
 	var left_line_container = Control.new()
-	left_line_container.custom_minimum_size = Vector2(80, 1)
+	left_line_container.custom_minimum_size = Vector2(100, 1)
 	left_line_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	ashbane_divider_container.add_child(left_line_container)
 	var left_line = ColorRect.new()
-	left_line.color = Color(0.3, 0.32, 0.35, 0.6)
+	left_line.color = Color(0.3, 0.28, 0.25, 0.35)
 	left_line.set_anchors_preset(Control.PRESET_FULL_RECT)
 	left_line_container.add_child(left_line)
 
 	var or_label = Label.new()
 	or_label.text = "or"
 	or_label.add_theme_font_size_override("font_size", 14)
-	or_label.add_theme_color_override("font_color", ASHBANE_TEXT_SECONDARY)
+	or_label.add_theme_color_override("font_color", Color(0.5, 0.48, 0.45, 0.6))
 	ashbane_divider_container.add_child(or_label)
 
 	var right_line_container = Control.new()
-	right_line_container.custom_minimum_size = Vector2(80, 1)
+	right_line_container.custom_minimum_size = Vector2(100, 1)
 	right_line_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	ashbane_divider_container.add_child(right_line_container)
 	var right_line = ColorRect.new()
-	right_line.color = Color(0.3, 0.32, 0.35, 0.6)
+	right_line.color = Color(0.3, 0.28, 0.25, 0.35)
 	right_line.set_anchors_preset(Control.PRESET_FULL_RECT)
 	right_line_container.add_child(right_line)
 
-	# Guest button - styled more prominently
+	# Guest button - secondary action
 	ashbane_skip_button = Button.new()
 	ashbane_skip_button.name = "AshbaneSkipButton"
 	ashbane_skip_button.text = "Continue as Guest"
-	ashbane_skip_button.custom_minimum_size = Vector2(200, 44)
+	ashbane_skip_button.custom_minimum_size = Vector2(260, 48)
 	ashbane_skip_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_style_guest_button(ashbane_skip_button)
 	ashbane_skip_button.pressed.connect(_on_ashbane_skip_pressed)
@@ -1214,7 +1411,7 @@ func _create_ashbane_panel():
 	ashbane_logout_button = Button.new()
 	ashbane_logout_button.name = "AshbaneLogoutButton"
 	ashbane_logout_button.text = "Logout"
-	ashbane_logout_button.custom_minimum_size = Vector2(80, 28)
+	ashbane_logout_button.custom_minimum_size = Vector2(100, 32)
 	ashbane_logout_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	ashbane_logout_button.visible = false  # Hidden until logged in
 	_style_logout_button(ashbane_logout_button)
@@ -1222,25 +1419,39 @@ func _create_ashbane_panel():
 	ashbane_logout_button.mouse_entered.connect(_on_button_hover)
 	vbox.add_child(ashbane_logout_button)
 
-	# Exit button - always visible, quit the game
+	# Bottom spacer for vertical balance (larger to push buttons up)
+	var bottom_spacer = Control.new()
+	bottom_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	bottom_spacer.size_flags_stretch_ratio = 0.8
+	vbox.add_child(bottom_spacer)
+
+	# Exit button - positioned BELOW the card (not inside it)
 	var exit_button = Button.new()
 	exit_button.name = "ExitButton"
 	exit_button.text = "Exit"
 	exit_button.custom_minimum_size = Vector2(80, 28)
-	exit_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_style_exit_button(exit_button)
 	exit_button.pressed.connect(_on_exit_pressed)
 	exit_button.mouse_entered.connect(_on_button_hover)
-	vbox.add_child(exit_button)
+
+	# Position exit button below the card
+	exit_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	exit_button.anchor_top = 0.5
+	exit_button.anchor_bottom = 0.5
+	exit_button.offset_top = 280  # Below the card (card bottom is at 260)
+	exit_button.offset_bottom = 308
+	exit_button.offset_left = -40
+	exit_button.offset_right = 40
+	ashbane_panel.add_child(exit_button)
 
 	# Remove the old link button reference (no longer used in simplified UI)
 	ashbane_link_button = null
 
 func _add_corner_decorations(parent: Control):
-	"""Add medieval corner bracket decorations - Ashbane theme"""
-	var corner_size = 20
-	var corner_thickness = 2
-	var corner_color = ASHBANE_ACCENT_PRIMARY  # Crimson corners
+	"""Add subtle corner bracket decorations"""
+	var corner_size = 24
+	var corner_thickness = 1
+	var corner_color = Color(0.5, 0.42, 0.35, 0.4)  # Subtle warm accent
 
 	# Top-left corner
 	var tl_h = ColorRect.new()
@@ -1299,6 +1510,632 @@ func _add_corner_decorations(parent: Control):
 	br_v.size = Vector2(corner_thickness, corner_size)
 	br_v.position = Vector2(-corner_thickness, -corner_size)
 	parent.add_child(br_v)
+
+func _add_tracer_border(card: Control) -> void:
+	"""Add animated orange tracer border - comet-like streak shooting around"""
+	# Create a container for the tracer
+	var tracer_container = Control.new()
+	tracer_container.name = "TracerContainer"
+	tracer_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tracer_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tracer_container.z_index = 100
+	card.add_child(tracer_container)
+
+	# The tracer head (bright point)
+	var tracer = ColorRect.new()
+	tracer.name = "TracerHead"
+	tracer.size = Vector2(8, 4)
+	tracer.color = Color(1.0, 0.8, 0.4, 1.0)  # Bright yellow-orange
+	tracer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tracer_container.add_child(tracer)
+
+	# Create trail segments (fading behind the head)
+	_tracer_segments = []
+	var trail_colors = [
+		Color(1.0, 0.6, 0.2, 0.9),
+		Color(1.0, 0.5, 0.15, 0.7),
+		Color(1.0, 0.4, 0.1, 0.5),
+		Color(0.9, 0.35, 0.1, 0.35),
+		Color(0.8, 0.3, 0.1, 0.2),
+		Color(0.7, 0.25, 0.1, 0.1),
+	]
+	for i in range(trail_colors.size()):
+		var segment = ColorRect.new()
+		segment.name = "Trail%d" % i
+		segment.size = Vector2(12 + i * 4, 4)  # Trail gets wider as it fades
+		segment.color = trail_colors[i]
+		segment.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		segment.z_index = -(i + 1)
+		tracer_container.add_child(segment)
+		_tracer_segments.append(segment)
+
+	_tracer_border = tracer
+
+	# Start animation after layout is ready
+	get_tree().create_timer(0.1).timeout.connect(func():
+		_start_tracer_animation(card)
+	)
+
+func _create_border_rect(container: Control, color: Color, width: float) -> void:
+	"""Create the four sides of a border"""
+	# Top
+	var top = ColorRect.new()
+	top.color = color
+	top.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	top.custom_minimum_size = Vector2(0, width)
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.add_child(top)
+
+	# Bottom
+	var bottom = ColorRect.new()
+	bottom.color = color
+	bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	bottom.custom_minimum_size = Vector2(0, width)
+	bottom.offset_top = -width
+	bottom.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.add_child(bottom)
+
+	# Left
+	var left = ColorRect.new()
+	left.color = color
+	left.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	left.custom_minimum_size = Vector2(width, 0)
+	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.add_child(left)
+
+	# Right
+	var right = ColorRect.new()
+	right.color = color
+	right.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
+	right.custom_minimum_size = Vector2(width, 0)
+	right.offset_left = -width
+	right.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.add_child(right)
+
+var _tracer_card: Control = null
+var _tracer_progress: float = 0.0  # 0.0 to 1.0 around perimeter
+var _tracer_history: Array = []  # Position history for trail
+var _tracer_active: bool = false
+
+# Rising ember particles (foreground - small, fast)
+var _ember_container: Control = null
+var _embers: Array = []  # Array of {node, velocity, lifetime, max_lifetime}
+var _ember_spawn_timer: float = 0.0
+
+# Background ember particles (larger, slower, for depth)
+var _bg_ember_container: Control = null
+var _bg_embers: Array = []
+var _bg_ember_spawn_timer: float = 0.0
+
+# Logo glow animation
+var _logo_glow_material: ShaderMaterial = null
+var _logo_pulse_tween: Tween = null
+
+# Card glow animation
+var _card_glow_material: ShaderMaterial = null
+
+# Custom titlebar
+var _titlebar: Control = null
+var _dragging_window: bool = false
+var _drag_start_pos: Vector2i = Vector2i.ZERO
+
+# Server status
+var _server_status_dot: Label = null
+var _server_status_label: Label = null
+var _server_check_timer: Timer = null
+
+func _start_logo_pulse() -> void:
+	"""Start the pulsing glow animation on the logo"""
+	if not _logo_glow_material:
+		return
+
+	if _logo_pulse_tween:
+		_logo_pulse_tween.kill()
+
+	_logo_pulse_tween = create_tween()
+	_logo_pulse_tween.set_loops()
+
+	# Pulse from dim to bright and back (4 second cycle)
+	_logo_pulse_tween.tween_method(_set_logo_pulse, 0.0, 1.0, 2.0).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	_logo_pulse_tween.tween_method(_set_logo_pulse, 1.0, 0.0, 2.0).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+func _set_logo_pulse(value: float) -> void:
+	"""Set the pulse shader parameter for logo and card glow"""
+	if _logo_glow_material:
+		_logo_glow_material.set_shader_parameter("pulse", value)
+	if _card_glow_material:
+		_card_glow_material.set_shader_parameter("pulse", value)
+
+func _start_tracer_animation(card: Control) -> void:
+	"""Start the tracer animation using _process for smooth trail"""
+	if not is_instance_valid(_tracer_border):
+		return
+
+	_tracer_card = card
+	_tracer_progress = 0.0
+	_tracer_history = []
+	_tracer_active = true
+
+	# Initialize history with starting position
+	for i in range(30):
+		_tracer_history.append(Vector2(0, -2))
+
+func _process_tracer(delta: float) -> void:
+	"""Update tracer position and trail each frame"""
+	if not _tracer_active or not is_instance_valid(_tracer_border) or not is_instance_valid(_tracer_card):
+		return
+
+	var w = _tracer_card.size.x
+	var h = _tracer_card.size.y
+	if w <= 0 or h <= 0:
+		return
+
+	var perimeter = 2 * w + 2 * h
+
+	# Variable speed - faster on long edges, slight slowdown at corners
+	var base_speed = 280.0
+	var corner_zones = [0.0, w/perimeter, (w+h)/perimeter, (2*w+h)/perimeter, 1.0]
+
+	# Check if near a corner (within 5% of perimeter)
+	var near_corner = false
+	for cz in corner_zones:
+		if abs(_tracer_progress - cz) < 0.03:
+			near_corner = true
+			break
+
+	var speed = base_speed * (0.7 if near_corner else 1.0)
+
+	# Update progress
+	_tracer_progress += (speed / perimeter) * delta
+	if _tracer_progress >= 1.0:
+		_tracer_progress -= 1.0
+
+	# Calculate position on perimeter
+	var pos = _get_perimeter_position(_tracer_progress, w, h)
+	var direction = _get_tracer_direction(_tracer_progress, w, h)
+
+	# Update head position and orientation
+	_tracer_border.position = pos
+	if direction.x > 0.5:  # Moving right
+		_tracer_border.size = Vector2(8, 3)
+	elif direction.x < -0.5:  # Moving left
+		_tracer_border.size = Vector2(8, 3)
+	elif direction.y > 0.5:  # Moving down
+		_tracer_border.size = Vector2(3, 8)
+	else:  # Moving up
+		_tracer_border.size = Vector2(3, 8)
+
+	# Add current position to history
+	_tracer_history.push_front(pos)
+	if _tracer_history.size() > 30:
+		_tracer_history.pop_back()
+
+	# Update trail segments
+	for i in range(_tracer_segments.size()):
+		var segment = _tracer_segments[i]
+		var history_idx = (i + 1) * 4  # Sample every 4th position
+		if history_idx < _tracer_history.size():
+			var seg_pos = _tracer_history[history_idx]
+			segment.position = seg_pos
+
+			# Orient segment based on movement direction
+			if history_idx + 1 < _tracer_history.size():
+				var prev_pos = _tracer_history[history_idx + 1]
+				var seg_dir = (seg_pos - prev_pos).normalized()
+				if abs(seg_dir.x) > abs(seg_dir.y):
+					segment.size = Vector2(12 + i * 3, 3)
+				else:
+					segment.size = Vector2(3, 12 + i * 3)
+
+func _get_perimeter_position(progress: float, w: float, h: float) -> Vector2:
+	"""Get position on perimeter based on progress (0-1)"""
+	var perimeter = 2 * w + 2 * h
+	var dist = progress * perimeter
+
+	if dist < w:
+		# Top edge (left to right)
+		return Vector2(dist, -2)
+	elif dist < w + h:
+		# Right edge (top to bottom)
+		return Vector2(w - 2, dist - w)
+	elif dist < 2 * w + h:
+		# Bottom edge (right to left)
+		return Vector2(w - (dist - w - h), h - 2)
+	else:
+		# Left edge (bottom to top)
+		return Vector2(-2, h - (dist - 2 * w - h))
+
+func _get_tracer_direction(progress: float, w: float, h: float) -> Vector2:
+	"""Get movement direction based on progress"""
+	var perimeter = 2 * w + 2 * h
+	var dist = progress * perimeter
+
+	if dist < w:
+		return Vector2(1, 0)  # Right
+	elif dist < w + h:
+		return Vector2(0, 1)  # Down
+	elif dist < 2 * w + h:
+		return Vector2(-1, 0)  # Left
+	else:
+		return Vector2(0, -1)  # Up
+
+func _create_ember_particles() -> void:
+	"""Create containers for rising ember/spark particles (two layers for depth)"""
+	# Background layer - larger, slower, dimmer embers (far away)
+	_bg_ember_container = Control.new()
+	_bg_ember_container.name = "BackgroundEmbers"
+	_bg_ember_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_bg_ember_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_bg_ember_container.z_index = 5  # In front of background, behind card
+	add_child(_bg_ember_container)
+
+	# Foreground layer - small, fast, bright embers (close)
+	_ember_container = Control.new()
+	_ember_container.name = "EmberParticles"
+	_ember_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_ember_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ember_container.z_index = 10  # Above background embers, still behind main UI
+	add_child(_ember_container)
+
+func _process_embers(delta: float) -> void:
+	"""Update ember particles each frame (both layers)"""
+	var viewport_size = get_viewport().get_visible_rect().size
+
+	# === FOREGROUND EMBERS (small, fast) ===
+	if is_instance_valid(_ember_container):
+		_ember_spawn_timer += delta
+		var spawn_rate = 0.08  # Spawn every ~80ms
+		while _ember_spawn_timer >= spawn_rate:
+			_ember_spawn_timer -= spawn_rate
+			_spawn_ember(viewport_size, false)
+
+		_update_ember_layer(_embers, delta)
+
+	# === BACKGROUND EMBERS (large, slow) ===
+	if is_instance_valid(_bg_ember_container):
+		_bg_ember_spawn_timer += delta
+		var bg_spawn_rate = 0.25  # Spawn slower
+		while _bg_ember_spawn_timer >= bg_spawn_rate:
+			_bg_ember_spawn_timer -= bg_spawn_rate
+			_spawn_ember(viewport_size, true)
+
+		_update_ember_layer(_bg_embers, delta)
+
+func _update_ember_layer(embers: Array, delta: float) -> void:
+	"""Update a single layer of embers"""
+	var embers_to_remove = []
+	for ember_data in embers:
+		var node = ember_data.node
+		if not is_instance_valid(node):
+			embers_to_remove.append(ember_data)
+			continue
+
+		# Update lifetime
+		ember_data.lifetime += delta
+		var life_ratio = ember_data.lifetime / ember_data.max_lifetime
+
+		if life_ratio >= 1.0:
+			embers_to_remove.append(ember_data)
+			node.queue_free()
+			continue
+
+		# Move upward with slight horizontal drift
+		var velocity = ember_data.velocity
+		velocity.x += (randf() - 0.5) * 20 * delta
+		ember_data.velocity = velocity
+		node.position += velocity * delta
+
+		# Fade out and shrink as it ages
+		var fade = 1.0 - life_ratio
+		var color = ember_data.base_color
+		color.a = fade * ember_data.base_alpha
+
+		# Flicker effect
+		var flicker = 0.7 + randf() * 0.3
+		color.a *= flicker
+
+		node.color = color
+
+		# Shrink slightly over time
+		var scale = 1.0 - life_ratio * 0.5
+		node.size = ember_data.base_size * scale
+
+	# Remove dead embers
+	for ember_data in embers_to_remove:
+		embers.erase(ember_data)
+
+func _spawn_ember(viewport_size: Vector2, is_background: bool = false) -> void:
+	"""Spawn a single ember particle"""
+	var ember = ColorRect.new()
+	ember.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Size depends on layer
+	var size: float
+	if is_background:
+		size = randf_range(4, 10)  # Larger for background
+	else:
+		size = randf_range(2, 6)  # Small foreground sparks
+	ember.size = Vector2(size, size)
+
+	# Spawn along bottom of screen, spread across width
+	var x = randf() * viewport_size.x
+	var y = viewport_size.y + 20
+
+	ember.position = Vector2(x, y)
+
+	# Color - mix of orange, yellow, white hot
+	var color_roll = randf()
+	var base_color: Color
+	if color_roll < 0.4:
+		base_color = Color(1.0, 0.5, 0.1, 1.0)  # Orange
+	elif color_roll < 0.7:
+		base_color = Color(1.0, 0.7, 0.2, 1.0)  # Yellow-orange
+	elif color_roll < 0.9:
+		base_color = Color(1.0, 0.9, 0.4, 1.0)  # Bright yellow
+	else:
+		base_color = Color(1.0, 0.95, 0.8, 1.0)  # White hot
+
+	# Ember alpha (background is dimmer)
+	var base_alpha: float
+	if is_background:
+		base_alpha = randf_range(0.3, 0.6)  # Background - more visible
+	else:
+		base_alpha = randf_range(0.6, 1.0)  # Foreground - bright
+	base_color.a = base_alpha
+	ember.color = base_color
+
+	# Add to appropriate container
+	var container = _bg_ember_container if is_background else _ember_container
+	var embers_array = _bg_embers if is_background else _embers
+
+	if is_instance_valid(container):
+		container.add_child(ember)
+
+	# Velocity - background is slower
+	var velocity: Vector2
+	if is_background:
+		velocity = Vector2(
+			randf_range(-15, 15),
+			randf_range(-40, -70)  # Slower upward
+		)
+	else:
+		velocity = Vector2(
+			randf_range(-30, 30),
+			randf_range(-80, -150)
+		)
+
+	# Lifetime - background lives longer
+	var max_life = randf_range(8.0, 16.0) if is_background else randf_range(4.0, 10.0)
+
+	var ember_data = {
+		"node": ember,
+		"velocity": velocity,
+		"lifetime": 0.0,
+		"max_lifetime": max_life,
+		"base_color": base_color,
+		"base_alpha": base_alpha,
+		"base_size": Vector2(size, size)
+	}
+	embers_array.append(ember_data)
+
+	# Limit total embers for performance
+	var max_count = 40 if is_background else 80
+	if embers_array.size() > max_count:
+		var oldest = embers_array[0]
+		if is_instance_valid(oldest.node):
+			oldest.node.queue_free()
+		embers_array.remove_at(0)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CUSTOM TITLEBAR (Borderless Window)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func _build_custom_titlebar() -> void:
+	"""Build custom titlebar with drag area and window controls"""
+	# Make window borderless
+	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, true)
+
+	_titlebar = Control.new()
+	_titlebar.name = "CustomTitlebar"
+	_titlebar.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_titlebar.custom_minimum_size = Vector2(0, 32)
+	_titlebar.offset_bottom = 32
+	_titlebar.z_index = 200  # Above everything
+	add_child(_titlebar)
+
+	# Background
+	var bg = ColorRect.new()
+	bg.color = Color(0.03, 0.03, 0.04, 1.0)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_titlebar.add_child(bg)
+
+	# Bottom border
+	var border = ColorRect.new()
+	border.color = Color(0.15, 0.12, 0.1, 1.0)  # Warm accent
+	border.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	border.custom_minimum_size = Vector2(0, 1)
+	border.offset_top = -1
+	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_titlebar.add_child(border)
+
+	# Drag area (covers most of titlebar)
+	var drag_area = Control.new()
+	drag_area.name = "DragArea"
+	drag_area.set_anchors_preset(Control.PRESET_FULL_RECT)
+	drag_area.anchor_right = 0.85
+	drag_area.mouse_filter = Control.MOUSE_FILTER_STOP
+	drag_area.gui_input.connect(_on_titlebar_drag_input)
+	_titlebar.add_child(drag_area)
+
+	# Window title
+	var title = Label.new()
+	title.text = "Ashbane"
+	title.add_theme_font_size_override("font_size", 14)
+	title.add_theme_color_override("font_color", Color(0.5, 0.48, 0.45))
+	title.position = Vector2(12, 7)
+	drag_area.add_child(title)
+
+	# Window control buttons (right side)
+	var button_container = HBoxContainer.new()
+	button_container.name = "WindowButtons"
+	button_container.z_index = 20
+	button_container.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	button_container.offset_left = -150
+	button_container.offset_right = 0
+	button_container.offset_top = 0
+	button_container.offset_bottom = 32
+	button_container.alignment = BoxContainer.ALIGNMENT_END
+	button_container.add_theme_constant_override("separation", 0)
+	_titlebar.add_child(button_container)
+
+	var empty_style = StyleBoxEmpty.new()
+	var hover_style = StyleBoxFlat.new()
+	hover_style.bg_color = Color(0.2, 0.2, 0.22, 0.5)
+	var close_hover_style = StyleBoxFlat.new()
+	close_hover_style.bg_color = Color(0.8, 0.2, 0.2, 0.6)
+
+	# Minimize button
+	var minimize_btn = Button.new()
+	minimize_btn.text = "─"
+	minimize_btn.custom_minimum_size = Vector2(46, 32)
+	minimize_btn.flat = true
+	minimize_btn.focus_mode = Control.FOCUS_NONE
+	minimize_btn.add_theme_font_size_override("font_size", 14)
+	minimize_btn.add_theme_color_override("font_color", Color(0.6, 0.58, 0.55))
+	minimize_btn.add_theme_stylebox_override("normal", empty_style)
+	minimize_btn.add_theme_stylebox_override("hover", hover_style)
+	minimize_btn.add_theme_stylebox_override("pressed", hover_style)
+	minimize_btn.add_theme_stylebox_override("focus", empty_style)
+	minimize_btn.pressed.connect(_on_minimize_pressed)
+	button_container.add_child(minimize_btn)
+
+	# Maximize button
+	var maximize_btn = Button.new()
+	maximize_btn.text = "☐"
+	maximize_btn.custom_minimum_size = Vector2(46, 32)
+	maximize_btn.flat = true
+	maximize_btn.focus_mode = Control.FOCUS_NONE
+	maximize_btn.add_theme_font_size_override("font_size", 14)
+	maximize_btn.add_theme_color_override("font_color", Color(0.6, 0.58, 0.55))
+	maximize_btn.add_theme_stylebox_override("normal", empty_style)
+	maximize_btn.add_theme_stylebox_override("hover", hover_style)
+	maximize_btn.add_theme_stylebox_override("pressed", hover_style)
+	maximize_btn.add_theme_stylebox_override("focus", empty_style)
+	maximize_btn.pressed.connect(_on_maximize_pressed)
+	button_container.add_child(maximize_btn)
+
+	# Close button
+	var close_btn = Button.new()
+	close_btn.text = "✕"
+	close_btn.custom_minimum_size = Vector2(46, 32)
+	close_btn.flat = true
+	close_btn.focus_mode = Control.FOCUS_NONE
+	close_btn.add_theme_font_size_override("font_size", 14)
+	close_btn.add_theme_color_override("font_color", Color(0.6, 0.58, 0.55))
+	close_btn.add_theme_stylebox_override("normal", empty_style)
+	close_btn.add_theme_stylebox_override("hover", close_hover_style)
+	close_btn.add_theme_stylebox_override("pressed", close_hover_style)
+	close_btn.add_theme_stylebox_override("focus", empty_style)
+	close_btn.pressed.connect(_on_close_pressed)
+	button_container.add_child(close_btn)
+
+func _on_titlebar_drag_input(event: InputEvent) -> void:
+	"""Handle window dragging from titlebar"""
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				_dragging_window = true
+				_drag_start_pos = DisplayServer.mouse_get_position() - DisplayServer.window_get_position()
+			else:
+				_dragging_window = false
+	elif event is InputEventMouseMotion and _dragging_window:
+		var new_pos = DisplayServer.mouse_get_position() - _drag_start_pos
+		DisplayServer.window_set_position(new_pos)
+
+func _on_minimize_pressed() -> void:
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_MINIMIZED)
+
+func _on_maximize_pressed() -> void:
+	if DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_MAXIMIZED:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_MAXIMIZED)
+
+func _on_close_pressed() -> void:
+	get_tree().quit()
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SERVER STATUS INDICATOR
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func _build_server_status() -> void:
+	"""Build server status indicator in bottom-left of screen"""
+	var status_container = HBoxContainer.new()
+	status_container.name = "ServerStatus"
+	status_container.add_theme_constant_override("separation", 6)
+	status_container.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	status_container.offset_left = 16
+	status_container.offset_bottom = -12
+	status_container.offset_top = -32
+	status_container.z_index = 100
+	add_child(status_container)
+
+	# Status dot
+	_server_status_dot = Label.new()
+	_server_status_dot.text = "●"
+	_server_status_dot.add_theme_font_size_override("font_size", 12)
+	_server_status_dot.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+	status_container.add_child(_server_status_dot)
+
+	# Status text
+	_server_status_label = Label.new()
+	_server_status_label.text = "Checking..."
+	_server_status_label.add_theme_font_size_override("font_size", 12)
+	_server_status_label.add_theme_color_override("font_color", Color(0.6, 0.58, 0.55))
+	status_container.add_child(_server_status_label)
+
+	# Start checking
+	_start_server_status_check()
+
+func _start_server_status_check() -> void:
+	"""Start periodic server status checking"""
+	_check_server_status()
+
+	_server_check_timer = Timer.new()
+	_server_check_timer.wait_time = 30.0
+	_server_check_timer.autostart = true
+	_server_check_timer.timeout.connect(_check_server_status)
+	add_child(_server_check_timer)
+
+func _check_server_status() -> void:
+	"""Check if game server is reachable"""
+	var http = HTTPRequest.new()
+	add_child(http)
+	http.request_completed.connect(_on_server_status_response.bind(http))
+	var err = http.request("https://api.ashbane.net/health", [], HTTPClient.METHOD_GET)
+	if err != OK:
+		_update_server_status(false, "Server Offline")
+
+func _on_server_status_response(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray, http: HTTPRequest) -> void:
+	"""Handle server status check response"""
+	http.queue_free()
+	if result == HTTPRequest.RESULT_SUCCESS and response_code == 200:
+		_update_server_status(true, "Server Online")
+	else:
+		_update_server_status(false, "Server Offline")
+
+func _update_server_status(online: bool, text: String) -> void:
+	"""Update the server status indicator"""
+	if not _server_status_label or not _server_status_dot:
+		return
+
+	_server_status_label.text = text
+
+	if online:
+		_server_status_dot.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4))  # Green
+	else:
+		_server_status_dot.add_theme_color_override("font_color", Color(0.9, 0.3, 0.3))  # Red
 
 # Provider icon configuration
 # Using cdn.simpleicons.org with white color for tinting
@@ -1698,42 +2535,9 @@ func _create_ashbane_logo_icon() -> Control:
 	tree_icon.custom_minimum_size = Vector2(64, 64)
 	tree_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	tree_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	tree_icon.modulate.a = 0  # Start invisible for fade-in
 	container.add_child(tree_icon)
 
-	# Start animation after a short delay
-	_animate_tree_logo.call_deferred(tree_icon)
-
 	return container
-
-var _logo_pulse_tween: Tween = null
-
-func _animate_tree_logo(tree_icon: TextureRect):
-	"""Animate the tree logo: fade in, then continuous orange pulse"""
-	await get_tree().create_timer(0.3).timeout
-
-	# Phase 1: Fade in
-	var intro_tween = create_tween()
-	intro_tween.tween_property(tree_icon, "modulate:a", 1.0, 0.5).set_ease(Tween.EASE_OUT)
-	await intro_tween.finished
-
-	# Phase 2: Continuous orange pulsing glow
-	_start_logo_pulse(tree_icon)
-
-func _start_logo_pulse(tree_icon: TextureRect):
-	"""Start the continuous orange pulse animation on the tree logo"""
-	if _logo_pulse_tween and _logo_pulse_tween.is_valid():
-		_logo_pulse_tween.kill()
-
-	_logo_pulse_tween = create_tween()
-	_logo_pulse_tween.set_loops()  # Infinite loop
-
-	# Pulse to orange glow
-	var orange_glow = Color(1.4, 0.8, 0.4, 1.0)  # Warm orange tint
-	var normal = Color(1.0, 1.0, 1.0, 1.0)
-
-	_logo_pulse_tween.tween_property(tree_icon, "modulate", orange_glow, 1.2).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
-	_logo_pulse_tween.tween_property(tree_icon, "modulate", normal, 1.2).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 
 func _style_logout_button(button: Button):
 	"""Style the small logout button"""
@@ -1849,7 +2653,7 @@ func _style_guest_button(button: Button):
 	button.add_theme_color_override("font_hover_color", ASHBANE_TEXT_PRIMARY)
 
 func _style_ashbane_button(button: Button, accent_color: Color, prominent: bool):
-	"""Apply Ashbane cyberpunk style to a button"""
+	"""Apply Ashbane cyberpunk style to a button with hover glow"""
 	var style_normal = StyleBoxFlat.new()
 	style_normal.bg_color = Color(0.08, 0.1, 0.12, 0.9) if prominent else Color(0.05, 0.06, 0.08, 0.7)
 	style_normal.border_width_left = 2 if prominent else 1
@@ -1865,12 +2669,25 @@ func _style_ashbane_button(button: Button, accent_color: Color, prominent: bool)
 		style_normal.shadow_size = 8
 		style_normal.shadow_color = Color(accent_color.r, accent_color.g, accent_color.b, 0.3)
 
+	# Enhanced hover style with glow effect
 	var style_hover = style_normal.duplicate()
-	style_hover.bg_color = Color(0.1, 0.15, 0.18, 0.95) if prominent else Color(0.08, 0.1, 0.12, 0.8)
-	style_hover.border_color = Color(accent_color.r * 1.2, accent_color.g * 1.2, accent_color.b * 1.2, 1.0)
+	style_hover.bg_color = Color(0.12, 0.17, 0.2, 0.98) if prominent else Color(0.1, 0.12, 0.15, 0.85)
+	# Brighter border on hover
+	var hover_border = Color(
+		min(accent_color.r * 1.4, 1.0),
+		min(accent_color.g * 1.4, 1.0),
+		min(accent_color.b * 1.4, 1.0),
+		1.0
+	)
+	style_hover.border_color = hover_border
+	# Add warm orange glow on hover
+	style_hover.shadow_size = 20 if prominent else 12
+	style_hover.shadow_color = Color(1.0, 0.6, 0.2, 0.4) if prominent else Color(1.0, 0.6, 0.2, 0.25)
 
 	var style_pressed = style_normal.duplicate()
 	style_pressed.bg_color = Color(0.05, 0.08, 0.1, 0.95)
+	style_pressed.shadow_size = 4
+	style_pressed.shadow_color = Color(1.0, 0.5, 0.15, 0.3)
 
 	button.add_theme_stylebox_override("normal", style_normal)
 	button.add_theme_stylebox_override("hover", style_hover)

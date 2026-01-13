@@ -20,11 +20,12 @@ func _ready() -> void:
 	visible = false  # Hidden by default, toggle with F3
 
 	label = Label.new()
-	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_font_size_override("font_size", 12)  # Smaller font for better fit
 	label.add_theme_color_override("font_color", Color.WHITE)
 	label.add_theme_color_override("font_outline_color", Color.BLACK)
-	label.add_theme_constant_override("outline_size", 3)
+	label.add_theme_constant_override("outline_size", 2)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	add_child(label)
 
 	# Connect to Constants debug signal
@@ -109,53 +110,47 @@ func update_profile() -> void:
 	# Get cursor/player position info
 	var cursor_info = get_cursor_debug_info()
 
-	label.text = """FPS: %d (%.1f ms/frame) | Scene: %s
-━━━━━━━━━━━━━━━━━━━━━━
-TIME: %s
+	# Build compact debug display
+	label.text = """[F3] %d FPS (%.1fms) | %s | %.1fMB
+─────────────────────────
+%s | %s
 %s
-━━━━━━━━━━━━━━━━━━━━━━
-SCENE TOTALS:
-  Nodes: %d
-  Sprites: %d
-  Polygons: %d
-  Particles: %d
-  Lights: %d
-━━━━━━━━━━━━━━━━━━━━━━
-PROPS (all chunks):
+─────────────────────────
+SCENE: %d nodes, %d sprites, %d polys
+       %d particles, %d lights
+─────────────────────────
+PROPS:
 %s
-━━━━━━━━━━━━━━━━━━━━━━
-SYSTEMS:
-%s
-━━━━━━━━━━━━━━━━━━━━━━
-CHUNKS:
-%s
-━━━━━━━━━━━━━━━━━━━━━━
+─────────────────────────
 ENEMIES:
 %s
-━━━━━━━━━━━━━━━━━━━━━━
+─────────────────────────
+CHUNKS:
+%s
+─────────────────────────
 WOLF PACKS:
 %s
-━━━━━━━━━━━━━━━━━━━━━━
-MEMORY: %.1f MB
-Press F3 to toggle | F4 advance time
+─────────────────────────
+SYSTEMS:
+%s
 """ % [
-		fps, frame_time_ms, get_scene_name(),
-		time_info,
+		fps, frame_time_ms, get_scene_name(), static_mem,
+		time_info, "F4=time",
 		cursor_info,
 		total_nodes, sprite_count, polygon_count, particle_count, light_count,
 		prop_info,
-		system_info,
-		chunk_info,
 		chunk_enemy_info,
+		chunk_info,
 		wolf_pack_info,
-		static_mem
+		system_info
 	]
 
-	# Position label on right side of screen
+	# Position label on right side of screen with proper bounds
 	var viewport = get_viewport()
 	if viewport:
 		var viewport_size = viewport.get_visible_rect().size
-		label.position = Vector2(viewport_size.x - 320, 10)
+		# Use narrower width for compact display
+		label.position = Vector2(viewport_size.x - 280, 5)
 
 func get_scene_name() -> String:
 	"""Get current scene name"""
@@ -163,46 +158,24 @@ func get_scene_name() -> String:
 	return current.name if current else "Unknown"
 
 func get_cursor_debug_info() -> String:
-	"""Get cursor and player position info"""
-	var mouse_screen = get_viewport().get_mouse_position()
-	var mouse_world = Vector2.ZERO
+	"""Get cursor and player position info (compact)"""
 	var player_pos = Vector2.ZERO
-	var chunk_x = 0
-	var chunk_y = 0
 
-	# Find camera to convert screen to world coords
-	var camera = get_viewport().get_camera_2d()
-	if camera:
-		mouse_world = camera.get_global_mouse_position()
-	else:
-		var player = get_tree().get_first_node_in_group("player")
-		if player:
-			var player_camera = player.get_node_or_null("Camera2D")
-			if player_camera:
-				mouse_world = player_camera.get_global_mouse_position()
-
-	# Get player position
 	var player = get_tree().get_first_node_in_group("player")
 	if player:
 		player_pos = player.global_position
-		chunk_x = int(floor(player_pos.x / Constants.CHUNK_SIZE))
-		chunk_y = int(floor(player_pos.y / Constants.CHUNK_SIZE))
 
-	return "Player: (%.0f, %.0f) Chunk: (%d, %d)\nCursor: (%.0f, %.0f) Screen: (%.0f, %.0f)" % [
-		player_pos.x, player_pos.y, chunk_x, chunk_y,
-		mouse_world.x, mouse_world.y, mouse_screen.x, mouse_screen.y
-	]
+	return "Pos: (%.0f, %.0f)" % [player_pos.x, player_pos.y]
 
 func get_system_node_breakdown() -> String:
-	"""Get node counts per major system"""
+	"""Get node counts per major system (compact)"""
 	var game_world = find_game_world()
 	if not game_world:
 		return "  GameWorld not found"
 
 	var info = ""
-	var accounted_total = 0
 
-	# Collect ALL children with their node counts, sorted by size
+	# Collect children with their node counts, sorted by size
 	var child_counts: Array = []
 	for child in game_world.get_children():
 		var child_count = count_nodes_recursive(child)
@@ -217,53 +190,24 @@ func get_system_node_breakdown() -> String:
 	# Sort by count descending
 	child_counts.sort_custom(func(a, b): return a.count > b.count)
 
-	# Show top 12 largest children
+	# Show top 6 largest children only
 	var shown = 0
 	for data in child_counts:
-		if shown >= 12:
+		if shown >= 6:
 			break
-		if data.count >= 10:  # Only show if 10+ nodes
+		if data.count >= 20:  # Only show if 20+ nodes
 			var display_name = data.name
-			if display_name.length() > 14:
-				display_name = display_name.substr(0, 14)
+			if display_name.length() > 12:
+				display_name = display_name.substr(0, 12)
 			info += "  %s: %d\n" % [display_name, data.count]
-			accounted_total += data.count
 			shown += 1
-
-	# Count remaining small children
-	var remaining_count = 0
-	for i in range(shown, child_counts.size()):
-		remaining_count += child_counts[i].count
-	if remaining_count > 0:
-		info += "  (other x%d): %d\n" % [child_counts.size() - shown, remaining_count]
-		accounted_total += remaining_count
 
 	# Enemies (spawned directly under GameWorld)
 	var enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
 	var enemy_nodes = 0
 	for enemy in enemies:
 		enemy_nodes += count_nodes_recursive(enemy)
-	info += "  Enemies(%d): %d\n" % [enemies.size(), enemy_nodes]
-	accounted_total += enemy_nodes
-
-	# Player (may be child of GameWorld in multiplayer)
-	var player = get_tree().get_first_node_in_group("player")
-	if player:
-		var player_count = count_nodes_recursive(player)
-		# Only add if not already counted as GameWorld child
-		if player.get_parent() != game_world:
-			info += "  Player: %d\n" % player_count
-			accounted_total += player_count
-
-	# Calculate totals
-	var root = get_tree().root
-	var total_nodes = count_nodes_recursive(root)
-	var game_world_total = count_nodes_recursive(game_world)
-	var outside_gw = total_nodes - game_world_total
-
-	info += "  ─────────────\n"
-	info += "  GW Total: %d\n" % game_world_total
-	info += "  Outside GW: %d\n" % outside_gw
+	info += "  Enemies(%d): %d nodes" % [enemies.size(), enemy_nodes]
 
 	return info
 
@@ -282,43 +226,14 @@ func get_all_nodes_of_type(node: Node, type) -> Array:
 	return result
 
 func get_chunk_debug_info() -> String:
-	"""Get chunk system debug information"""
+	"""Get chunk system debug information (compact)"""
 	var player = get_tree().get_first_node_in_group("player")
 	if not player:
-		return "  No player found"
-
-	# Find GameWorld first, then get ChunkBasedPropSystem
-	var chunk_system = null
-
-	# GameWorld should be in the main scene
-	var root = get_tree().root
-	for child in root.get_children():
-		var game_world = child.get_node_or_null("GameWorld")
-		if game_world:
-			chunk_system = game_world.get_node_or_null("ChunkBasedPropSystem")
-			if chunk_system:
-				break
-
-	if not chunk_system:
-		# Try accessing through the game_world variable if it has chunk_prop_system
-		for child in root.get_children():
-			var game_world = child.get_node_or_null("GameWorld")
-			if not game_world:
-				# Maybe GameWorld IS the child
-				if child.name == "GameWorld":
-					game_world = child
-
-			if game_world and game_world.has_method("get") and game_world.get("chunk_prop_system"):
-				chunk_system = game_world.chunk_prop_system
-				break
-
-	if not chunk_system:
-		return "  Chunk system not found (searched all paths)"
+		return "  No player"
 
 	var CHUNK_SIZE = Constants.CHUNK_SIZE
 	var player_pos = player.global_position
 	var chunk_x = int(floor(player_pos.x / CHUNK_SIZE))
-	var chunk_key = "%d" % chunk_x
 
 	# Calculate distances to chunk edges
 	var chunk_origin_x = chunk_x * CHUNK_SIZE
@@ -326,53 +241,67 @@ func get_chunk_debug_info() -> String:
 	var dist_to_west = player_pos.x - chunk_origin_x
 	var dist_to_east = chunk_end_x - player_pos.x
 
-	# Check loaded chunks
-	var loaded_chunks = []
-	if chunk_system.has_method("get") and chunk_system.get("loaded_chunks"):
-		loaded_chunks = chunk_system.loaded_chunks.keys()
+	var warn_west = " !" if dist_to_west < 1000 else ""
+	var warn_east = " !" if dist_to_east < 1000 else ""
 
-	var info = "  Current: [%s] X=%.0f\n" % [chunk_key, player_pos.x]
-	info += "  West Edge: %.0fpx %s\n" % [dist_to_west, "⚠️" if dist_to_west < 1000 else ""]
-	info += "  East Edge: %.0fpx %s\n" % [dist_to_east, "⚠️" if dist_to_east < 1000 else ""]
-	info += "  Loaded: %s" % str(loaded_chunks)
+	var info = "  Chunk [%d] W:%.0f%s E:%.0f%s" % [chunk_x, dist_to_west, warn_west, dist_to_east, warn_east]
 
 	return info
 
 func get_chunk_enemy_info() -> String:
-	"""Get enemy count per chunk from spawn manager with LOD stats"""
-	# Find spawn manager
+	"""Get enemy count per chunk from spawn manager with LOD stats (compact)"""
 	var game_world = find_game_world()
 	if not game_world:
-		return "  No GameWorld found"
+		return "  No GameWorld"
 
-	var spawn_manager = game_world.get_node_or_null("ChunkAwareSpawnManager")
+	# Try multiple ways to find spawn_manager
+	var spawn_manager = null
+
+	# Method 1: Property access
+	if "spawn_manager" in game_world:
+		spawn_manager = game_world.spawn_manager
+
+	# Method 2: Child node
 	if not spawn_manager:
-		return "  No SpawnManager found"
+		spawn_manager = game_world.get_node_or_null("ChunkAwareSpawnManager")
 
-	# Get stats from spawn manager
+	# Method 3: Search all children
+	if not spawn_manager:
+		for child in game_world.get_children():
+			if child.get_class() == "Node" and child.name == "ChunkAwareSpawnManager":
+				spawn_manager = child
+				break
+			if child.has_method("get_stats"):
+				spawn_manager = child
+				break
+
+	if not spawn_manager:
+		# Just show enemy count from group instead
+		var enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
+		var lod_stats = get_enemy_lod_stats()
+		return "  Total: %d | LOD: %d/%d/%d" % [enemies.size(), lod_stats.lod_0, lod_stats.lod_1, lod_stats.lod_2]
+
 	if not spawn_manager.has_method("get_stats"):
-		return "  SpawnManager missing get_stats()"
+		var enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
+		return "  Total: %d (no stats)" % enemies.size()
 
 	var stats = spawn_manager.get_stats()
-	var info = ""
 
-	# Sort chunk keys for consistent display
+	# Compact chunk display on one line
 	var chunk_keys = stats.enemies_per_chunk.keys()
 	chunk_keys.sort()
 
+	var chunk_parts = []
 	for chunk_key in chunk_keys:
 		var count = stats.enemies_per_chunk[chunk_key]
-		var target = spawn_manager.ENEMIES_PER_CHUNK if "ENEMIES_PER_CHUNK" in spawn_manager else 60
-		info += "  [%s]: %d/%d\n" % [chunk_key, count, target]
+		chunk_parts.append("[%s]:%d" % [chunk_key, count])
 
-	if info.is_empty():
-		info = "  No chunks loaded"
-	else:
-		info += "  Total: %d enemies\n" % stats.total_enemies
+	var info = "  " + " ".join(chunk_parts) + "\n" if chunk_parts.size() > 0 else "  No chunks\n"
+	info += "  Total: %d | " % stats.total_enemies
 
-		# Add LOD stats
-		var lod_stats = get_enemy_lod_stats()
-		info += "  LOD: %d full, %d reduced, %d minimal" % [lod_stats.lod_0, lod_stats.lod_1, lod_stats.lod_2]
+	# Add LOD stats on same line
+	var lod_stats = get_enemy_lod_stats()
+	info += "LOD: %d/%d/%d" % [lod_stats.lod_0, lod_stats.lod_1, lod_stats.lod_2]
 
 	return info
 
@@ -676,24 +605,39 @@ func get_time_debug_info() -> String:
 	return "%s (%s) | Brightness: %.0f%%" % [time_str, period, brightness * 100]
 
 func get_prop_stats_info() -> String:
-	"""Get prop statistics from ChunkBasedPropSystem"""
+	"""Get prop statistics from CellStreamingManager (if active) or ChunkBasedPropSystem"""
 	var game_world = find_game_world()
 	if not game_world:
 		return "  GameWorld not found"
 
+	var stats: Dictionary
+
+	# Check for cell streaming manager first (smoother prop loading)
+	var cell_streaming = game_world.get("cell_streaming_manager")
+	if cell_streaming and is_instance_valid(cell_streaming) and cell_streaming.has_method("get_prop_stats"):
+		stats = cell_streaming.get_prop_stats()
+		var info = "  Trees: %d (%d nodes)\n" % [stats.trees, stats.tree_nodes]
+		info += "  Rocks: %dL %dM %dS (%d nodes)\n" % [
+			stats.rocks_large, stats.rocks_medium, stats.rocks_small, stats.rock_nodes
+		]
+		info += "  Lava: %d | Bones: %d | Other: %d\n" % [stats.lava_pools, stats.bones, stats.other]
+		info += "  Cells: %d loaded, %d cached\n" % [stats.cells_loaded, stats.cells_cached]
+		info += "  Total: %d props, %d nodes" % [stats.total_props, stats.total_nodes]
+		return info
+
+	# Fall back to chunk-based system
 	var chunk_system = game_world.get_node_or_null("ChunkBasedPropSystem")
 	if not chunk_system:
-		# Try property access
 		if game_world.get("chunk_prop_system"):
 			chunk_system = game_world.chunk_prop_system
 
 	if not chunk_system or not chunk_system.has_method("get_prop_stats"):
 		return "  PropSystem not found"
 
-	var stats = chunk_system.get_prop_stats()
+	stats = chunk_system.get_prop_stats()
 
 	var info = "  Trees: %d (%d nodes)\n" % [stats.trees, stats.tree_nodes]
-	info += "  Rocks: %d L, %d M, %d S (%d nodes)\n" % [
+	info += "  Rocks: %dL %dM %dS (%d nodes)\n" % [
 		stats.rocks_large, stats.rocks_medium, stats.rocks_small, stats.rock_nodes
 	]
 	info += "  Lava: %d | Bones: %d | Other: %d\n" % [stats.lava_pools, stats.bones, stats.other]
@@ -721,81 +665,24 @@ func refresh_enemy_debug() -> void:
 
 
 func get_wolf_pack_info() -> String:
-	"""Get wolf pack patrol/roaming debug info"""
+	"""Get wolf pack patrol/roaming debug info (compact)"""
 	var wolves = get_tree().get_nodes_in_group("wolves")
 	if wolves.is_empty():
 		return "  No wolves"
 
-	# Find pack alphas and their states
-	var packs: Dictionary = {}  # pack_id -> {alpha: Wolf, members: int, roaming: bool, state: String}
-
+	# Count pack alphas
+	var packs: Dictionary = {}
 	for wolf in wolves:
 		if not is_instance_valid(wolf):
 			continue
-
 		var pack_id = wolf.get("pack_id")
 		if not pack_id:
 			continue
-
 		if not packs.has(pack_id):
-			packs[pack_id] = {
-				"alpha": null,
-				"members": 0,
-				"roaming": false,
-				"state": "idle",
-				"target": Vector2.ZERO,
-				"speed": 0.0,
-				"is_howling": false
-			}
+			packs[pack_id] = 0
+		packs[pack_id] += 1
 
-		packs[pack_id].members += 1
-
-		if wolf.get("pack_alpha"):
-			packs[pack_id].alpha = wolf
-			packs[pack_id].roaming = false  # Simplified - no more roaming
-			var is_moving = wolf.get("_pack_is_moving")
-			packs[pack_id].state = "moving" if is_moving else "idle"
-			packs[pack_id].target = Vector2.ZERO
-			packs[pack_id].speed = 100.0 if is_moving else 0.0
-			var howling = wolf.get("_is_howling")
-			packs[pack_id].is_howling = howling if howling != null else false
-
-	var total_packs = packs.size()
-	var roaming_packs = 0
-	var patrolling_now = 0
-
-	for pack_data in packs.values():
-		if pack_data.roaming:
-			roaming_packs += 1
-		if pack_data.state == "patrolling":
-			patrolling_now += 1
-
-	var info = "  Total: %d packs (%d wolves)\n" % [total_packs, wolves.size()]
-	info += "  Roaming: %d | Patrolling: %d\n" % [roaming_packs, patrolling_now]
-
-	# Show details for roaming packs
-	if roaming_packs > 0:
-		info += "  ─────────────\n"
-		for pack_id in packs:
-			var pack_data = packs[pack_id]
-			if not pack_data.roaming:
-				continue
-
-			var state_icon = ""
-			match pack_data.state:
-				"resting": state_icon = "💤"
-				"patrolling": state_icon = "🏃" if pack_data.speed > 120 else "🚶"
-				"arriving": state_icon = "🏕️"
-
-			var howl_icon = "🐺" if pack_data.is_howling else ""
-
-			if pack_data.state == "patrolling" and pack_data.alpha:
-				var dist = pack_data.alpha.global_position.distance_to(pack_data.target)
-				info += "  %s %s%.0fpx %s\n" % [state_icon, pack_id.substr(0, 8), dist, howl_icon]
-			else:
-				info += "  %s %s %s\n" % [state_icon, pack_id.substr(0, 8), howl_icon]
-
-	return info
+	return "  %d packs, %d wolves" % [packs.size(), wolves.size()]
 
 
 func draw_wolf_pack_patrol_paths() -> void:

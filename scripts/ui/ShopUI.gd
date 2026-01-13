@@ -757,10 +757,11 @@ func purchase_weapon(index: int) -> void:
 
 	var weapon: Weapon = vendor.weapons_for_sale[index]
 
+	var price = vendor.get_weapon_price_data(index)
+
 	# Check if user is authenticated - use backend for secure purchase
 	if AshbaneAuth and AshbaneAuth.is_authenticated:
 		var item_id = vendor.get_weapon_id(index)
-		var price = vendor.get_weapon_price_data(index)
 		_pending_purchase = {
 			"type": "weapon",
 			"index": index,
@@ -773,8 +774,34 @@ func purchase_weapon(index: int) -> void:
 		AshbaneAuth.purchase_from_vendor(item_id, "weapons", 1)
 		return
 
-	# Guest: require login to purchase (prevents client-side cheating)
-	_show_login_required_message()
+	# Guest: allow local purchase with gold from drops (doesn't persist)
+	if not CharacterStats.can_afford(price):
+		show_message("Not enough gold!", Color.RED)
+		return
+
+	if CharacterStats.spend_gold(price):
+		# Add weapon to inventory
+		var rarity_str = Weapon.Rarity.keys()[weapon.rarity] if weapon.rarity < Weapon.Rarity.size() else "COMMON"
+		var weapon_data = {
+			"name": weapon.weapon_name,
+			"type": "weapon",
+			"weapon_type": weapon.weapon_type,
+			"slot": "mainhand",
+			"rarity": rarity_str,
+			"damage": weapon.base_damage,
+			"value": int(price * 0.5)
+		}
+		InventorySystem.add_item(weapon_data)
+		_show_purchase_notification("+ " + weapon.weapon_name, rarity_str)
+		item_purchased.emit(weapon.weapon_name, price)
+
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -12.0)
+			sound_manager.play_sound_2d(sound_manager.SoundType.ITEM_PICKUP, -10.0)
+
+		update_gold_display()
+		populate_sell_items()
 
 func purchase_armor(index: int) -> void:
 	"""Attempt to purchase armor"""
@@ -810,8 +837,24 @@ func purchase_armor(index: int) -> void:
 		AshbaneAuth.purchase_from_vendor(item_id, "armor", 1)
 		return
 
-	# Guest: require login to purchase (prevents client-side cheating)
-	_show_login_required_message()
+	# Guest: allow local purchase with gold from drops (doesn't persist)
+	if not CharacterStats.can_afford(price):
+		show_message("Not enough gold!", Color.RED)
+		return
+
+	if CharacterStats.spend_gold(price):
+		# Add armor to inventory
+		InventorySystem.add_item(armor_data)
+		_show_purchase_notification("+ " + armor_name, armor_rarity)
+		item_purchased.emit(armor_name, price)
+
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -12.0)
+			sound_manager.play_sound_2d(sound_manager.SoundType.ITEM_PICKUP, -10.0)
+
+		update_gold_display()
+		populate_sell_items()
 
 func purchase_tool(index: int) -> void:
 	"""Attempt to purchase a tool"""
@@ -831,18 +874,10 @@ func purchase_tool(index: int) -> void:
 	var tool_type = tool_data.get("tool_type", tool_data.get("type", "tool"))
 	var tool_rarity = tool_data.get("rarity", "COMMON")
 
-	# Check if user is authenticated - use backend for secure purchase
-	if AshbaneAuth and AshbaneAuth.is_authenticated:
-		# NOTE: Tools are hardcoded in Vendor.gd, not in backend catalog (no shop_tools.json)
-		# For now, allow local purchase for authenticated users since tools are free
-		# TODO: Add shop_tools.json to backend when paid tools are added
-		pass
-	else:
-		# Guest: require login to purchase (prevents client-side cheating)
-		_show_login_required_message()
-		return
+	# NOTE: Tools are handled locally for both authenticated and guest users
+	# (Tools are free starter items, not in backend catalog)
 
-	# Local purchase for tools (authenticated users only, tools are free)
+	# Local purchase for tools
 	# Check gold (skip check if item is free)
 	if price > 0 and not CharacterStats.can_afford(price):
 		show_message("Not enough gold!", Color.RED)
@@ -1388,6 +1423,11 @@ var _pending_sell_slot: int = -1  # Track slot for forged item sell confirmation
 
 func sell_item(slot: int) -> void:
 	"""Sell an item from inventory (entire stack if stackable)"""
+	# Guests cannot sell items
+	if not AshbaneAuth or not AshbaneAuth.is_authenticated:
+		show_message("Login required to sell items!", Color(1.0, 0.7, 0.3))
+		return
+
 	if slot < 0 or slot >= InventorySystem.inventory_items.size():
 		return
 

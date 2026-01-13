@@ -1501,7 +1501,7 @@ func _build_news_section() -> Control:
 
 	var news_list = VBoxContainer.new()
 	news_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	news_list.add_theme_constant_override("separation", 16)
+	news_list.add_theme_constant_override("separation", 10)  # Tighter spacing for card layout
 	scroll.add_child(news_list)
 
 	# News items - updated Jan 2026
@@ -1512,19 +1512,29 @@ func _build_news_section() -> Control:
 			"content": "Alpha server is up and accepting connections. Jump in and explore!"
 		},
 		{
+			"date": "Jan 11",
+			"title": "Spider Combat Overhaul",
+			"content": "Fixed spider animations, facing directions, and attack mechanics. Spiders now properly lunge and deal damage."
+		},
+		{
+			"date": "Jan 10",
+			"title": "Dead Tree Groves",
+			"content": "New atmospheric dead tree groves added to zone 1. Features LPC-style tree variants and grey stone clusters."
+		},
+		{
+			"date": "Jan 9",
+			"title": "Inventory & Vendor Fixes",
+			"content": "Fixed inventory not saving on logout, vendor items now properly equippable, and resolved duplicate item bugs."
+		},
+		{
+			"date": "Jan 8",
+			"title": "Combat Border Fix",
+			"content": "Red combat border no longer persists after enemies die. Skeleton AI improved with obstacle avoidance."
+		},
+		{
 			"date": "Jan 7",
 			"title": "Itch.io Alpha Release",
 			"content": "Ashbane is now available on itch.io! Download the latest build and join the alpha test."
-		},
-		{
-			"date": "Jan 7",
-			"title": "Tutorial Simplified",
-			"content": "Streamlined new player experience. Talk to the Wanderer to get started with quests."
-		},
-		{
-			"date": "Jan 6",
-			"title": "Multiplayer Sync Fixes",
-			"content": "Fixed enemy animations, death sync, and version compatibility for dedicated servers."
 		},
 		{
 			"date": "Jan 5",
@@ -1540,53 +1550,101 @@ func _build_news_section() -> Control:
 	return center
 
 func _create_news_card(item: Dictionary) -> Control:
-	"""Create a single news card"""
-	var card = VBoxContainer.new()
-	card.add_theme_constant_override("separation", 4)
-
-	# Date - special styling for "LIVE" status
+	"""Create a single news card with polished styling"""
 	var date_text = item.get("date", "")
 	var is_live_status = date_text == "LIVE"
 
+	# Outer panel with styled background
+	var panel = PanelContainer.new()
+	var style = StyleBoxFlat.new()
+
+	if is_live_status:
+		# Special glowing style for LIVE status
+		style.bg_color = Color(0.1, 0.18, 0.12, 0.9)  # Dark green tint
+		style.border_color = Color(0.3, 0.8, 0.4, 0.6)  # Green border
+		style.border_width_left = 2
+		style.border_width_right = 2
+		style.border_width_top = 2
+		style.border_width_bottom = 2
+	else:
+		# Standard card style
+		style.bg_color = Color(0.08, 0.08, 0.1, 0.85)  # Slightly lighter than background
+		style.border_color = Color(0.2, 0.2, 0.25, 0.5)  # Subtle border
+		style.border_width_left = 1
+		style.border_width_right = 1
+		style.border_width_top = 1
+		style.border_width_bottom = 1
+
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_left = 6
+	style.corner_radius_bottom_right = 6
+	style.content_margin_left = 16
+	style.content_margin_right = 16
+	style.content_margin_top = 12
+	style.content_margin_bottom = 12
+	panel.add_theme_stylebox_override("panel", style)
+
+	var card = VBoxContainer.new()
+	card.add_theme_constant_override("separation", 6)
+	panel.add_child(card)
+
+	# Header row with date badge
+	var header_row = HBoxContainer.new()
+	header_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	header_row.add_theme_constant_override("separation", 10)
+	card.add_child(header_row)
+
+	# Date badge
+	var date_badge = PanelContainer.new()
+	var date_style = StyleBoxFlat.new()
+	if is_live_status:
+		date_style.bg_color = Color(0.2, 0.6, 0.3, 0.8)  # Green badge
+	else:
+		date_style.bg_color = Color(0.15, 0.15, 0.2, 0.8)  # Dark badge
+	date_style.corner_radius_top_left = 4
+	date_style.corner_radius_top_right = 4
+	date_style.corner_radius_bottom_left = 4
+	date_style.corner_radius_bottom_right = 4
+	date_style.content_margin_left = 8
+	date_style.content_margin_right = 8
+	date_style.content_margin_top = 2
+	date_style.content_margin_bottom = 2
+	date_badge.add_theme_stylebox_override("panel", date_style)
+	header_row.add_child(date_badge)
+
 	var date_label = Label.new()
 	date_label.text = date_text
-	date_label.add_theme_font_size_override("font_size", 14)
+	date_label.add_theme_font_size_override("font_size", 12)
 	if is_live_status:
-		date_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.4))  # Bright green
+		date_label.add_theme_color_override("font_color", Color(0.9, 1.0, 0.9))  # Bright on green
 	else:
 		date_label.add_theme_color_override("font_color", TEXT_MUTED)
-	date_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	card.add_child(date_label)
+	date_badge.add_child(date_label)
 
-	# Title - green for server status
+	# Title
 	var title_label = Label.new()
 	title_label.text = item.get("title", "")
 	title_label.add_theme_font_override("font", default_font)
-	title_label.add_theme_font_size_override("font_size", 18)
+	title_label.add_theme_font_size_override("font_size", 17)
 	if is_live_status:
-		title_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.4))  # Bright green
+		title_label.add_theme_color_override("font_color", Color(0.5, 1.0, 0.6))  # Bright green
 	else:
 		title_label.add_theme_color_override("font_color", TEXT_PRIMARY)
 	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	card.add_child(title_label)
 
-	# Content
+	# Content with better readability
 	var content_label = Label.new()
 	content_label.text = item.get("content", "")
-	content_label.add_theme_font_size_override("font_size", 16)  # Readable content
+	content_label.add_theme_font_size_override("font_size", 14)
 	content_label.add_theme_color_override("font_color", TEXT_SECONDARY)
 	content_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	card.add_child(content_label)
 
-	# Separator line
-	var separator = ColorRect.new()
-	separator.color = BORDER_GLOW.darkened(0.5)
-	separator.custom_minimum_size = Vector2(0, 1)
-	card.add_child(separator)
-
-	return card
+	return panel
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CUSTOM TITLEBAR (Borderless Window)
@@ -1647,13 +1705,25 @@ func _build_custom_titlebar(parent: Control) -> void:
 	button_container.add_theme_constant_override("separation", 0)
 	_titlebar.add_child(button_container)
 
+	# Create borderless style for window buttons
+	var empty_style = StyleBoxEmpty.new()
+	var hover_style = StyleBoxFlat.new()
+	hover_style.bg_color = Color(0.2, 0.2, 0.22, 0.5)
+	var close_hover_style = StyleBoxFlat.new()
+	close_hover_style.bg_color = Color(0.8, 0.2, 0.2, 0.6)
+
 	# Minimize button
 	var minimize_btn = Button.new()
 	minimize_btn.text = "─"
 	minimize_btn.custom_minimum_size = Vector2(46, 32)
 	minimize_btn.flat = true
+	minimize_btn.focus_mode = Control.FOCUS_NONE
 	minimize_btn.add_theme_font_size_override("font_size", 14)
 	minimize_btn.add_theme_color_override("font_color", TEXT_SECONDARY)
+	minimize_btn.add_theme_stylebox_override("normal", empty_style)
+	minimize_btn.add_theme_stylebox_override("hover", hover_style)
+	minimize_btn.add_theme_stylebox_override("pressed", hover_style)
+	minimize_btn.add_theme_stylebox_override("focus", empty_style)
 	minimize_btn.pressed.connect(_on_minimize_pressed)
 	minimize_btn.mouse_entered.connect(func(): minimize_btn.add_theme_color_override("font_color", TEXT_PRIMARY))
 	minimize_btn.mouse_exited.connect(func(): minimize_btn.add_theme_color_override("font_color", TEXT_SECONDARY))
@@ -1664,8 +1734,13 @@ func _build_custom_titlebar(parent: Control) -> void:
 	maximize_btn.text = "☐"
 	maximize_btn.custom_minimum_size = Vector2(46, 32)
 	maximize_btn.flat = true
+	maximize_btn.focus_mode = Control.FOCUS_NONE
 	maximize_btn.add_theme_font_size_override("font_size", 14)
 	maximize_btn.add_theme_color_override("font_color", TEXT_SECONDARY)
+	maximize_btn.add_theme_stylebox_override("normal", empty_style)
+	maximize_btn.add_theme_stylebox_override("hover", hover_style)
+	maximize_btn.add_theme_stylebox_override("pressed", hover_style)
+	maximize_btn.add_theme_stylebox_override("focus", empty_style)
 	maximize_btn.pressed.connect(_on_maximize_pressed)
 	maximize_btn.mouse_entered.connect(func(): maximize_btn.add_theme_color_override("font_color", TEXT_PRIMARY))
 	maximize_btn.mouse_exited.connect(func(): maximize_btn.add_theme_color_override("font_color", TEXT_SECONDARY))
@@ -1676,10 +1751,15 @@ func _build_custom_titlebar(parent: Control) -> void:
 	close_btn.text = "✕"
 	close_btn.custom_minimum_size = Vector2(46, 32)
 	close_btn.flat = true
+	close_btn.focus_mode = Control.FOCUS_NONE
 	close_btn.add_theme_font_size_override("font_size", 14)
 	close_btn.add_theme_color_override("font_color", TEXT_SECONDARY)
+	close_btn.add_theme_stylebox_override("normal", empty_style)
+	close_btn.add_theme_stylebox_override("hover", close_hover_style)
+	close_btn.add_theme_stylebox_override("pressed", close_hover_style)
+	close_btn.add_theme_stylebox_override("focus", empty_style)
 	close_btn.pressed.connect(_on_close_pressed)
-	close_btn.mouse_entered.connect(func(): close_btn.add_theme_color_override("font_color", Color(1, 0.3, 0.3)))
+	close_btn.mouse_entered.connect(func(): close_btn.add_theme_color_override("font_color", Color(1, 0.9, 0.9)))
 	close_btn.mouse_exited.connect(func(): close_btn.add_theme_color_override("font_color", TEXT_SECONDARY))
 	button_container.add_child(close_btn)
 
@@ -4225,6 +4305,12 @@ func _on_wallet_connect_pressed() -> void:
 	"""Handle wallet connect button press"""
 	if SoundManager:
 		SoundManager.play_button_click_sound(-6.0)
+
+	# Block wallet connect for guest users
+	if current_state == ArmoryState.GUEST:
+		if NotificationManager:
+			NotificationManager.show_notification("Log in to connect your wallet", "warning")
+		return
 
 	# Connect - open browser for SIWE flow
 	print("[Armory] Opening wallet connect...")
@@ -9188,6 +9274,12 @@ func _show_guest_ui() -> void:
 		logout_button.visible = false
 	_populate_recent_unlocks()
 
+	# Disable wallet connect for guests
+	if _bridge_connect_btn:
+		_bridge_connect_btn.disabled = true
+		_bridge_connect_btn.tooltip_text = "Log in to connect wallet"
+		_bridge_connect_btn.modulate = Color(0.5, 0.5, 0.5, 0.7)
+
 func _show_new_player_ui() -> void:
 	var user_id = profile.get("user_id", 0)
 	if subtitle_label:
@@ -9209,6 +9301,12 @@ func _show_authenticated_ui() -> void:
 		logout_button.visible = true
 	_update_launcher_display()
 	_update_stats_display()
+
+	# Re-enable wallet connect for authenticated users
+	if _bridge_connect_btn:
+		_bridge_connect_btn.disabled = false
+		_bridge_connect_btn.tooltip_text = ""
+		_bridge_connect_btn.modulate = Color(1, 1, 1, 1)
 
 func _update_launcher_display() -> void:
 	"""Update the launcher profile column with current profile data"""

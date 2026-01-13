@@ -10,6 +10,8 @@ uniform float hill_intensity : hint_range(0.0, 1.0) = 0.35;
 uniform float hill_scale : hint_range(0.00001, 0.001) = 0.00006;
 uniform float crack_intensity : hint_range(0.0, 1.0) = 0.4;
 uniform float stone_intensity : hint_range(0.0, 1.0) = 0.3;
+uniform float lava_intensity : hint_range(0.0, 1.0) = 0.6;
+uniform vec4 lava_color : source_color = vec4(1.0, 0.4, 0.1, 1.0);
 
 // Hash functions for noise
 vec2 hash2(vec2 p) {
@@ -86,34 +88,44 @@ vec2 warp_domain(vec2 p, float amount) {
 }
 
 // Multi-layer crack pattern for realistic dried earth
-// Returns vec2: x = crack darkness, y = raised edge amount
-vec2 cracked_earth_detailed(vec2 p) {
+// Returns vec3: x = total cracks, y = raised edges, z = large crack only (for lava)
+vec3 cracked_earth_detailed(vec2 p) {
     float cracks = 0.0;
     float raised_edges = 0.0;
 
     // Layer 1: Large primary cracks (dominant pattern)
-    vec2 p1 = warp_domain(p * 0.8, 0.4);
+    // Lower multiplier = larger cells = fewer cracks
+    vec2 p1 = warp_domain(p * 0.17, 0.4);
     vec3 v1 = voronoi_cracks(p1);
-    float crack1 = 1.0 - smoothstep(0.0, 0.02, v1.y);
-    float edge1 = smoothstep(0.02, 0.06, v1.y) * (1.0 - smoothstep(0.06, 0.12, v1.y));
-    cracks += crack1 * 0.8;
-    raised_edges += edge1 * 0.6;
+    // Sharp, thin cracks - tight gradient for crisp lines
+    float crack1 = 1.0 - smoothstep(0.0, 0.015, v1.y);
+    float edge1 = smoothstep(0.015, 0.03, v1.y) * (1.0 - smoothstep(0.03, 0.05, v1.y));
+    cracks += crack1 * 0.6;  // Reduced intensity
+    raised_edges += edge1 * 0.3;
+    float large_crack = crack1;  // Store large crack separately for lava
 
-    // Layer 2: Medium secondary cracks (fills in gaps)
-    vec2 p2 = warp_domain(p * 2.0 + vec2(100.0, 50.0), 0.3);
+    // Mask for smaller cracks - fade them out near large crack edges
+    // v1.y is distance to nearest large crack edge
+    // When v1.y is small, we're near a large crack - don't show small cracks there
+    float cell_interior = smoothstep(0.025, 0.08, v1.y);  // Adjusted for sharper cracks
+
+    // Layer 2: Medium secondary cracks (fills in gaps) - CONFINED to large cells
+    // Scaled proportionally for large 0.17
+    vec2 p2 = warp_domain(p * 0.42 + vec2(100.0, 50.0), 0.3);
     vec3 v2 = voronoi_cracks(p2);
     float crack2 = 1.0 - smoothstep(0.0, 0.018, v2.y);
     float edge2 = smoothstep(0.018, 0.05, v2.y) * (1.0 - smoothstep(0.05, 0.09, v2.y));
-    cracks += crack2 * 0.5;
-    raised_edges += edge2 * 0.4;
+    cracks += crack2 * 0.5 * cell_interior;  // Masked - only inside large cells
+    raised_edges += edge2 * 0.4 * cell_interior;
 
-    // Layer 3: Fine hairline cracks - much softer, subtle
-    vec2 p3 = warp_domain(p * 3.5 + vec2(200.0, 150.0), 0.2);
+    // Layer 3: Fine hairline cracks - CONFINED to large cells
+    // Scaled proportionally for large 0.17
+    vec2 p3 = warp_domain(p * 0.72 + vec2(200.0, 150.0), 0.2);
     vec3 v3 = voronoi_cracks(p3);
     float crack3 = 1.0 - smoothstep(0.0, 0.02, v3.y);
-    cracks += crack3 * 0.15;
+    cracks += crack3 * 0.15 * cell_interior;  // Masked - only inside large cells
 
-    return vec2(clamp(cracks, 0.0, 1.0), clamp(raised_edges, 0.0, 1.0));
+    return vec3(clamp(cracks, 0.0, 1.0), clamp(raised_edges, 0.0, 1.0), large_crack);
 }
 
 // Surface texture within cells (dried mud texture) - softened
@@ -133,7 +145,7 @@ float dried_surface(vec2 p) {
 
 // Get cell variation for subtle color differences
 float cell_variation(vec2 p) {
-    vec2 warped = warp_domain(p * 0.8, 0.4);
+    vec2 warped = warp_domain(p * 0.17, 0.4);  // Match large crack scale
     vec3 v = voronoi_cracks(warped);
     return v.z;
 }
@@ -146,7 +158,9 @@ float stonePattern(vec2 p) {
 }
 
 void fragment() {
-    vec2 world_pos = UV / world_scale;
+    // Partial aspect correction (2.0 instead of full 2.6 - keeps some horizontal feel)
+    vec2 aspect_corrected_uv = vec2(UV.x * 2.0, UV.y);
+    vec2 world_pos = aspect_corrected_uv / world_scale;
 
     // Start with base color
     vec3 color = base_color.rgb;
@@ -177,12 +191,36 @@ void fragment() {
 
     // === CRACKED EARTH (multi-layer realistic cracks) ===
     vec2 crack_base = world_pos * 0.002;
-    vec2 crack_data = cracked_earth_detailed(crack_base);
-    float cracks = crack_data.x;
-    float raised = crack_data.y;
+    vec3 crack_data = cracked_earth_detailed(crack_base);
+    float cracks = crack_data.x;       // Total cracks (all layers)
+    float raised = crack_data.y;       // Raised edges
+    float large_crack = crack_data.z;  // Large cracks only (for lava)
 
-    // Dark cracks (depth)
-    color -= cracks * 0.18 * crack_intensity;
+    // === LAVA IN CRACKS (depth-based - deepest/widest cracks have lava) ===
+    // large_crack: 0 = not in crack, 1 = center of crack (deepest)
+
+    // Lava in the deepest parts of cracks (center of crack lines)
+    float lava_depth = smoothstep(0.15, 0.6, large_crack);
+
+    // Sparse spatial variation - only ~30% of areas get lava
+    float lava_variation = fbm(world_pos * 0.0004, 2);
+    float lava_mask = smoothstep(0.45, 0.65, lava_variation);
+
+    float lava_in_crack = lava_depth * lava_mask * lava_intensity;
+
+    // Brighter glow bleeding out from lava areas
+    float lava_glow = smoothstep(0.05, 0.4, large_crack) * lava_mask * 0.5 * lava_intensity;
+
+    // Apply lava color - more intense
+    vec3 lava_contribution = lava_color.rgb * lava_in_crack * 3.5;
+    vec3 lava_glow_contribution = lava_color.rgb * lava_glow * 0.7;
+
+    // Dark cracks (depth) - more subtle, reduced where lava is present
+    float crack_darkness = cracks * 0.08 * crack_intensity * (1.0 - lava_in_crack * 0.8);
+    color -= crack_darkness;
+
+    // Add lava glow
+    color += lava_contribution + lava_glow_contribution;
 
     // Raised edges (dried mud curling up catches light)
     color += raised * 0.06 * crack_intensity;

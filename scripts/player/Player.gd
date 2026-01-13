@@ -5084,6 +5084,11 @@ func die() -> void:
 
 	# Reset death flag
 	is_dead = false
+	
+	# Reset sprite death state so equipment syncs properly again
+	var character_sprite = get_node_or_null("CharacterSprite")
+	if character_sprite and character_sprite.has_method("reset_from_death"):
+		character_sprite.reset_from_death()
 
 	# Notify server that we respawned (multiplayer)
 	if multiplayer.has_multiplayer_peer():

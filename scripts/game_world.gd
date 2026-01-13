@@ -1003,30 +1003,23 @@ func spawn_path_for_chunk(chunk_id: int) -> void:
 	chunk_start_x = clamp(chunk_start_x, -cs, cs * 2)
 	chunk_end_x = clamp(chunk_end_x, -cs, cs * 2)
 
-	# For chunk -1 (campfire chunk), split path around campfire clearing
-	# Campfire is at X: -6000 in chunk -1 for West→East progression
+	# For all chunks, draw continuous path through entire chunk
 	var main_path: Array = []
-	var clearing_radius = 400.0
 
 	if chunk_id == -1:
-		# Paths extend well into clearing so they blend naturally
-		var overlap = 200.0
+		# Campfire chunk - layered: road base -> clearing -> wheel ruts
+		var path_start = Vector2(chunk_start_x, 0)
+		var path_end = Vector2(chunk_end_x, 0)
+		main_path = create_zigzag_path(path_start, path_end, 8, 250, rng)
 
-		# Left path: chunk start to inside clearing (clip to chunk boundary)
-		var left_end = Vector2(CAMPFIRE_POS.x - clearing_radius + overlap, CAMPFIRE_POS.y)
-		var left_path = create_zigzag_path(Vector2(chunk_start_x, 0), left_end, 8, 250, rng)
-		draw_path_from_points(chunk_path, left_path, 260, rng, chunk_start_x, INF)
+		# 1. Draw road BASE layers first (edge, road bed, center wear - NO ruts)
+		draw_path_from_points(chunk_path, main_path, 260, rng, chunk_start_x, chunk_end_x, false)
 
-		# Right path: inside clearing to chunk end (clip to chunk boundary)
-		var right_start = Vector2(CAMPFIRE_POS.x + clearing_radius - overlap, CAMPFIRE_POS.y)
-		var right_path = create_zigzag_path(right_start, Vector2(chunk_end_x, 0), 8, 250, rng)
-		draw_path_from_points(chunk_path, right_path, 260, rng, -INF, chunk_end_x)
-
-		# Draw campfire clearing LAST (on top) to cover path ends cleanly
+		# 2. Draw campfire clearing on top of road base
 		create_campfire_circle(chunk_path, CAMPFIRE_POS, rng)
 
-		# Combine for torch placement
-		main_path = left_path + right_path
+		# 3. Draw ONLY the wheel ruts on top of everything
+		draw_path_ruts_only(chunk_path, main_path, 260, rng)
 	else:
 		# Other chunks: single continuous path with hard edges at chunk boundaries
 		var path_start = Vector2(chunk_start_x, 0)
@@ -1104,21 +1097,24 @@ func get_path_y_at_x(path_points: Array, target_x: float) -> float:
 	return 0.0
 
 func create_zigzag_path(start: Vector2, end: Vector2, _num_zigs: int, zig_amplitude: float, rng: RandomNumberGenerator) -> Array:
-	"""Generate a meandering zig-zag path between two points"""
+	"""Generate a gently meandering cart road path between two points"""
 	var points: Array = []
 	var total_distance = start.distance_to(end)
 	var direction = (end - start).normalized()
 	var perpendicular = Vector2(-direction.y, direction.x)
 
-	# More points for detailed meandering (every ~300px)
-	var num_points = int(total_distance / 300) + 2
-	num_points = clamp(num_points, 6, 30)
+	# More points for smoother curves (every ~200px for gentler bends)
+	var num_points = int(total_distance / 200) + 3
+	num_points = clamp(num_points, 8, 40)
 
-	# Multiple overlapping waves for organic zig-zag
-	var wave1_freq = rng.randf_range(3.0, 4.5)  # Primary zig-zag
-	var wave2_freq = rng.randf_range(6.0, 8.0)  # Secondary wobble
+	# Gentler waves - lower frequencies for gradual curves like a real cart road
+	var wave1_freq = rng.randf_range(1.5, 2.5)  # Primary gentle curve
+	var wave2_freq = rng.randf_range(3.0, 4.5)  # Secondary subtle wobble
 	var phase1 = rng.randf() * TAU
 	var phase2 = rng.randf() * TAU
+
+	# Reduce amplitude for gentler turns (cart roads don't have sharp turns)
+	var actual_amplitude = zig_amplitude * 0.6
 
 	for i in range(num_points + 1):
 		var t = float(i) / float(num_points)
@@ -1127,16 +1123,16 @@ func create_zigzag_path(start: Vector2, end: Vector2, _num_zigs: int, zig_amplit
 		# Taper at ends so path connects cleanly
 		var taper = sin(t * PI)
 
-		# Primary zig-zag wave (strong)
+		# Primary gentle curve (reduced frequency for gradual bends)
 		var wave1 = sin(t * wave1_freq * PI + phase1)
 		# Secondary smaller wave for organic feel
-		var wave2 = sin(t * wave2_freq * PI + phase2) * 0.3
+		var wave2 = sin(t * wave2_freq * PI + phase2) * 0.25
 
-		# Combined offset with full amplitude
-		var offset = (wave1 + wave2) * zig_amplitude * taper
+		# Combined offset with reduced amplitude
+		var offset = (wave1 + wave2) * actual_amplitude * taper
 
-		# Random noise for organic variation (subtle)
-		var noise = rng.randf_range(-20, 20) * taper
+		# Very subtle random variation
+		var noise = rng.randf_range(-10, 10) * taper
 
 		var final_offset = perpendicular * (offset + noise)
 		points.append(base_pos + final_offset)
@@ -1177,14 +1173,15 @@ func _smooth_path_points(points: Array, subdivisions: int = 4) -> Array:
 	smoothed.append(points[points.size() - 1])
 	return smoothed
 
-func draw_path_from_points(parent: Node2D, points: Array, width: float, rng: RandomNumberGenerator, clip_min_x: float = -INF, clip_max_x: float = INF):
-	"""Draw path with textured/organic edges using overlapping lines.
-	Optional clip_min_x/clip_max_x create hard edges at chunk boundaries."""
+func draw_path_from_points(parent: Node2D, points: Array, width: float, rng: RandomNumberGenerator, clip_min_x: float = -INF, clip_max_x: float = INF, include_ruts: bool = true):
+	"""Draw 1800s cart road style path with wheel ruts and worn dirt texture.
+	Optional clip_min_x/clip_max_x create hard edges at chunk boundaries.
+	Set include_ruts=false to skip drawing wheel ruts (for layering purposes)."""
 	if points.size() < 2:
 		return
 
-	# Smooth the path using Catmull-Rom splines for natural curves
-	var smooth_points = _smooth_path_points(points, 5)
+	# Extra smooth paths - more subdivisions for gentler curves
+	var smooth_points = _smooth_path_points(points, 10)
 
 	# Clip points to chunk boundaries if specified
 	var has_clipping = clip_min_x > -INF or clip_max_x < INF
@@ -1194,46 +1191,134 @@ func draw_path_from_points(parent: Node2D, points: Array, width: float, rng: Ran
 	if smooth_points.size() < 2:
 		return
 
-	# Consistent path color - single shade
-	const PATH_COLOR = Color(0.06, 0.06, 0.07, 0.85)
+	# Cart road colors - warmer browns visible against dark ground
+	const ROAD_EDGE_COLOR = Color(0.065, 0.055, 0.045, 0.45)      # Outer rough edge (warmer)
+	const ROAD_BASE_COLOR = Color(0.095, 0.08, 0.065, 0.94)       # Main road bed (visible brown)
+	const RUT_COLOR = Color(0.045, 0.038, 0.03, 0.8)              # Wheel ruts (darker, subtle)
+	const CENTER_WEAR_COLOR = Color(0.11, 0.095, 0.075, 0.7)      # Center worn strip (lighter)
 
-	# Create multiple overlapping lines for soft edges (tightened fade)
-	var layers = [
-		{"width_mult": 1.85, "alpha": 0.6, "noise": 4},    # Outer fade (reduced noise for smooth edges)
-		{"width_mult": 1.5, "alpha": 0.85, "noise": 2},    # Core path (minimal noise)
-	]
+	# Calculate perpendicular offset for wheel ruts (realistic wagon axle ~5-6ft)
+	var rut_spacing = width * 0.22  # Distance from center to each rut (closer together)
+	var rut_width_val = width * 0.07  # Width of each rut
 
-	for layer in layers:
-		var line = Line2D.new()
-		line.width = width * layer.width_mult
-		line.default_color = Color(PATH_COLOR.r, PATH_COLOR.g, PATH_COLOR.b, layer.alpha)
-		line.joint_mode = Line2D.LINE_JOINT_ROUND
-		# Use square caps at chunk boundaries for hard edges
-		if has_clipping:
-			line.begin_cap_mode = Line2D.LINE_CAP_BOX
-			line.end_cap_mode = Line2D.LINE_CAP_BOX
+	# Create layered cart road effect (drawn bottom to top)
+	# Layer 1: Outer rough edge with dirt transition
+	var edge_line = Line2D.new()
+	edge_line.width = width * 1.7
+	edge_line.default_color = ROAD_EDGE_COLOR
+	edge_line.joint_mode = Line2D.LINE_JOINT_ROUND
+	edge_line.begin_cap_mode = Line2D.LINE_CAP_ROUND if not has_clipping else Line2D.LINE_CAP_BOX
+	edge_line.end_cap_mode = Line2D.LINE_CAP_ROUND if not has_clipping else Line2D.LINE_CAP_BOX
+	edge_line.antialiased = true
+	_add_path_points_with_noise(edge_line, smooth_points, rng, 6, has_clipping)
+	parent.add_child(edge_line)
+
+	# Layer 2: Main road bed
+	var road_line = Line2D.new()
+	road_line.width = width * 1.25
+	road_line.default_color = ROAD_BASE_COLOR
+	road_line.joint_mode = Line2D.LINE_JOINT_ROUND
+	road_line.begin_cap_mode = Line2D.LINE_CAP_ROUND if not has_clipping else Line2D.LINE_CAP_BOX
+	road_line.end_cap_mode = Line2D.LINE_CAP_ROUND if not has_clipping else Line2D.LINE_CAP_BOX
+	road_line.antialiased = true
+	_add_path_points_with_noise(road_line, smooth_points, rng, 2, has_clipping)
+	parent.add_child(road_line)
+
+	# Layer 3: Center worn strip (between wheel ruts - lighter from foot traffic)
+	var center_line = Line2D.new()
+	center_line.width = width * 0.28
+	center_line.default_color = CENTER_WEAR_COLOR
+	center_line.joint_mode = Line2D.LINE_JOINT_ROUND
+	center_line.begin_cap_mode = Line2D.LINE_CAP_ROUND if not has_clipping else Line2D.LINE_CAP_BOX
+	center_line.end_cap_mode = Line2D.LINE_CAP_ROUND if not has_clipping else Line2D.LINE_CAP_BOX
+	center_line.antialiased = true
+	_add_path_points_with_noise(center_line, smooth_points, rng, 1, has_clipping)
+	parent.add_child(center_line)
+
+	# Layer 4 & 5: Wheel ruts (two parallel darker lines - subtle)
+	if include_ruts:
+		_draw_wheel_rut(parent, smooth_points, rut_spacing, rut_width_val, RUT_COLOR, rng, has_clipping, true)  # Left rut
+		_draw_wheel_rut(parent, smooth_points, rut_spacing, rut_width_val, RUT_COLOR, rng, has_clipping, false) # Right rut
+
+func draw_path_ruts_only(parent: Node2D, points: Array, width: float, rng: RandomNumberGenerator):
+	"""Draw only the wheel ruts - for layering on top of other elements."""
+	if points.size() < 2:
+		return
+
+	var smooth_points = _smooth_path_points(points, 10)
+	if smooth_points.size() < 2:
+		return
+
+	const RUT_COLOR = Color(0.045, 0.038, 0.03, 0.8)
+	var rut_spacing = width * 0.22
+	var rut_width_val = width * 0.07
+
+	_draw_wheel_rut(parent, smooth_points, rut_spacing, rut_width_val, RUT_COLOR, rng, false, true)  # Left rut
+	_draw_wheel_rut(parent, smooth_points, rut_spacing, rut_width_val, RUT_COLOR, rng, false, false) # Right rut
+
+func _add_path_points_with_noise(line: Line2D, points: Array, rng: RandomNumberGenerator, noise_amount: float, has_clipping: bool) -> void:
+	"""Add points to a line with optional noise for organic edges."""
+	for i in range(points.size()):
+		var point = points[i]
+		var actual_noise = noise_amount
+		# No noise at endpoints for hard chunk edges
+		if i == 0 or i == points.size() - 1:
+			if has_clipping:
+				actual_noise = 0
+			else:
+				actual_noise *= 0.3
+		var noisy_point = point + Vector2(
+			rng.randf_range(-actual_noise, actual_noise),
+			rng.randf_range(-actual_noise, actual_noise)
+		)
+		line.add_point(noisy_point)
+
+func _draw_wheel_rut(parent: Node2D, points: Array, spacing: float, rut_width: float, color: Color, rng: RandomNumberGenerator, has_clipping: bool, is_left: bool) -> void:
+	"""Draw a wheel rut line offset from the main path."""
+	if points.size() < 2:
+		return
+
+	var rut_line = Line2D.new()
+	rut_line.width = rut_width
+	rut_line.default_color = color
+	rut_line.joint_mode = Line2D.LINE_JOINT_ROUND
+	rut_line.begin_cap_mode = Line2D.LINE_CAP_ROUND if not has_clipping else Line2D.LINE_CAP_BOX
+	rut_line.end_cap_mode = Line2D.LINE_CAP_ROUND if not has_clipping else Line2D.LINE_CAP_BOX
+	rut_line.antialiased = true
+
+	# Offset each point perpendicular to the path direction
+	var offset_mult = -1.0 if is_left else 1.0
+
+	for i in range(points.size()):
+		var point = points[i]
+
+		# Calculate perpendicular direction
+		var perpendicular: Vector2
+		if i == 0:
+			var dir = (points[1] - points[0]).normalized()
+			perpendicular = Vector2(-dir.y, dir.x)
+		elif i == points.size() - 1:
+			var dir = (points[i] - points[i - 1]).normalized()
+			perpendicular = Vector2(-dir.y, dir.x)
 		else:
-			line.begin_cap_mode = Line2D.LINE_CAP_ROUND
-			line.end_cap_mode = Line2D.LINE_CAP_ROUND
-		line.antialiased = true
+			var dir1 = (points[i] - points[i - 1]).normalized()
+			var dir2 = (points[i + 1] - points[i]).normalized()
+			var avg_dir = (dir1 + dir2).normalized()
+			perpendicular = Vector2(-avg_dir.y, avg_dir.x)
 
-		# Add smoothed points with subtle noise for organic edges
-		for i in range(smooth_points.size()):
-			var point = smooth_points[i]
-			var noise_amount = layer.noise
-			# No noise at endpoints for hard chunk edges
-			if i == 0 or i == smooth_points.size() - 1:
-				if has_clipping:
-					noise_amount = 0  # Hard edge - no noise
-				else:
-					noise_amount *= 0.3
-			var noisy_point = point + Vector2(
-				rng.randf_range(-noise_amount, noise_amount),
-				rng.randf_range(-noise_amount, noise_amount)
-			)
-			line.add_point(noisy_point)
+		# Add wobble to simulate uneven wheel tracks
+		var wobble = sin(float(i) * 0.8) * 4.0 + sin(float(i) * 2.3) * 2.0
+		var offset_point = point + perpendicular * (spacing * offset_mult + wobble)
 
-		parent.add_child(line)
+		# Small random variation
+		offset_point += Vector2(
+			rng.randf_range(-2, 2),
+			rng.randf_range(-2, 2)
+		)
+
+		rut_line.add_point(offset_point)
+
+	parent.add_child(rut_line)
 
 func _clip_path_to_bounds(points: Array, min_x: float, max_x: float) -> Array:
 	"""Clip path points to X boundaries, creating hard edges at chunk borders."""
@@ -1659,45 +1744,179 @@ func create_feathered_area(parent: Node2D, center: Vector2, base_size: float, rn
 			parent.add_child(rect)
 
 func create_campfire_circle(parent: Node2D, center: Vector2, rng: RandomNumberGenerator):
-	"""Create worn circular clearing around campfire with soft fade edge"""
-	var clearing_radius = 400.0
+	"""Create wagon rest stop clearing - elongated dirt area with cart road running through"""
+	# Elongated oval shape (wider than tall - like a widened road area)
+	# 25% larger for more prop space
+	var clearing_width = 600.0   # East-west extent (was 480)
+	var clearing_height = 475.0  # North-south extent (was 380)
 
-	# Generate base shape points (reused for both layers)
-	var num_points = 32
+	# Colors matching cart road style - warmer browns
+	const CLEARING_EDGE_COLOR = Color(0.07, 0.06, 0.048, 0.4)
+	const CLEARING_BASE_COLOR = Color(0.09, 0.075, 0.06, 0.95)
+	const CLEARING_CENTER_COLOR = Color(0.105, 0.09, 0.072, 0.88)
+	const RUT_COLOR = Color(0.048, 0.04, 0.032, 0.75)
+
+	# Generate elongated oval shape with irregular edges
+	var num_points = 40
 	var base_points = []
 	for i in range(num_points):
 		var angle = (float(i) / float(num_points)) * TAU
-		var wobble = sin(angle * 2) * 15 + cos(angle * 3) * 10
-		var noise = rng.randf_range(-10, 10)
-		base_points.append({"angle": angle, "wobble": wobble, "noise": noise})
+		# Elongate in X direction (horizontal)
+		var base_x = cos(angle) * clearing_width
+		var base_y = sin(angle) * clearing_height
+		# Add organic wobble
+		var wobble_x = sin(angle * 3) * 20 + cos(angle * 5) * 12
+		var wobble_y = cos(angle * 2) * 18 + sin(angle * 4) * 10
+		var noise_x = rng.randf_range(-15, 15)
+		var noise_y = rng.randf_range(-12, 12)
+		base_points.append({
+			"x": base_x + wobble_x + noise_x,
+			"y": base_y + wobble_y + noise_y
+		})
 
-	# Outer fade layer (larger, semi-transparent) - drawn first
+	# Layer 1: Outer rough edge (grass/dirt transition)
 	var outer_polygon = Polygon2D.new()
 	outer_polygon.position = center
 	var outer_points = PackedVector2Array()
-	var outer_radius = clearing_radius + 40  # 25% bigger fade
 	for p in base_points:
-		var point_radius = outer_radius + p.wobble + p.noise
-		outer_points.append(Vector2(cos(p.angle), sin(p.angle)) * point_radius)
+		outer_points.append(Vector2(p.x * 1.15, p.y * 1.15))
 	outer_polygon.polygon = outer_points
-	outer_polygon.color = Color(0.055, 0.055, 0.065, 0.35)  # Between path and old clearing
+	outer_polygon.color = CLEARING_EDGE_COLOR
 	outer_polygon.antialiased = true
 	parent.add_child(outer_polygon)
 
-	# Main clearing polygon (opaque) - drawn on top
-	var polygon = Polygon2D.new()
-	polygon.position = center
-	var points = PackedVector2Array()
+	# Layer 2: Main clearing area
+	var main_polygon = Polygon2D.new()
+	main_polygon.position = center
+	var main_points = PackedVector2Array()
 	for p in base_points:
-		var point_radius = clearing_radius + p.wobble + p.noise
-		points.append(Vector2(cos(p.angle), sin(p.angle)) * point_radius)
-	polygon.polygon = points
-	polygon.color = Color(0.055, 0.055, 0.065, 1.0)  # Lighter than before, still darker than path (0.06)
-	polygon.antialiased = true
-	parent.add_child(polygon)
+		main_points.append(Vector2(p.x, p.y))
+	main_polygon.polygon = main_points
+	main_polygon.color = CLEARING_BASE_COLOR
+	main_polygon.antialiased = true
+	parent.add_child(main_polygon)
+
+	# Layer 3: Center worn area (lighter - more foot traffic)
+	var center_polygon = Polygon2D.new()
+	center_polygon.position = center
+	var center_points = PackedVector2Array()
+	for p in base_points:
+		center_points.append(Vector2(p.x * 0.6, p.y * 0.6))
+	center_polygon.polygon = center_points
+	center_polygon.color = CLEARING_CENTER_COLOR
+	center_polygon.antialiased = true
+	parent.add_child(center_polygon)
+
+	# Main road continues through the clearing (drawn before this function)
+	# No separate road needed - the continuous path handles it
 
 	# Add scattered bones/skulls as decoration on the clearing
-	add_campfire_decorations(parent, center, clearing_radius, rng)
+	add_campfire_decorations(parent, center, min(clearing_width, clearing_height), rng)
+
+func _draw_clearing_wheel_ruts(parent: Node2D, center: Vector2, width: float, color: Color, rng: RandomNumberGenerator) -> void:
+	"""Draw detailed cart road that curves AROUND the campfire (north side)"""
+	var road_width = 180.0  # Width of the road through clearing
+	var rut_spacing = 55.0  # Distance between wheel ruts (realistic axle width)
+	var rut_length = width * 1.6
+	var campfire_avoid_radius = 150.0  # Stay this far from campfire center
+
+	# Colors matching the main road
+	const ROAD_EDGE_COLOR = Color(0.065, 0.055, 0.045, 0.4)
+	const ROAD_BASE_COLOR = Color(0.095, 0.08, 0.065, 0.9)
+	const CENTER_WEAR_COLOR = Color(0.11, 0.095, 0.075, 0.65)
+	const RUT_COLOR = Color(0.045, 0.038, 0.03, 0.75)
+
+	# Generate arc points that curve around campfire
+	var num_points = 20
+	var arc_points: Array = []
+	for i in range(num_points):
+		var t = float(i) / float(num_points - 1)
+		var x = center.x - rut_length / 2 + t * rut_length
+
+		# Arc around campfire - curve north (negative Y) to avoid the fire
+		var arc_strength = sin(t * PI)
+		var arc_offset = -campfire_avoid_radius * arc_strength
+
+		# Subtle wobble for organic feel
+		var wobble = sin(t * 8) * 3 + sin(t * 13) * 2
+
+		arc_points.append(Vector2(x, center.y + arc_offset + wobble))
+
+	# Layer 1: Outer edge (road shoulder)
+	var edge_line = Line2D.new()
+	edge_line.width = road_width * 1.4
+	edge_line.default_color = ROAD_EDGE_COLOR
+	edge_line.joint_mode = Line2D.LINE_JOINT_ROUND
+	edge_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	edge_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	edge_line.antialiased = true
+	for p in arc_points:
+		edge_line.add_point(p + Vector2(rng.randf_range(-4, 4), rng.randf_range(-4, 4)))
+	parent.add_child(edge_line)
+
+	# Layer 2: Main road bed
+	var road_line = Line2D.new()
+	road_line.width = road_width
+	road_line.default_color = ROAD_BASE_COLOR
+	road_line.joint_mode = Line2D.LINE_JOINT_ROUND
+	road_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	road_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	road_line.antialiased = true
+	for p in arc_points:
+		road_line.add_point(p + Vector2(rng.randf_range(-2, 2), rng.randf_range(-2, 2)))
+	parent.add_child(road_line)
+
+	# Layer 3: Center worn strip
+	var center_line = Line2D.new()
+	center_line.width = road_width * 0.35
+	center_line.default_color = CENTER_WEAR_COLOR
+	center_line.joint_mode = Line2D.LINE_JOINT_ROUND
+	center_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	center_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	center_line.antialiased = true
+	for p in arc_points:
+		center_line.add_point(p)
+	parent.add_child(center_line)
+
+	# Layer 4 & 5: Wheel ruts (two parallel darker lines)
+	var left_rut = Line2D.new()
+	left_rut.width = 16
+	left_rut.default_color = RUT_COLOR
+	left_rut.joint_mode = Line2D.LINE_JOINT_ROUND
+	left_rut.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	left_rut.end_cap_mode = Line2D.LINE_CAP_ROUND
+	left_rut.antialiased = true
+
+	var right_rut = Line2D.new()
+	right_rut.width = 16
+	right_rut.default_color = RUT_COLOR
+	right_rut.joint_mode = Line2D.LINE_JOINT_ROUND
+	right_rut.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	right_rut.end_cap_mode = Line2D.LINE_CAP_ROUND
+	right_rut.antialiased = true
+
+	# Offset ruts perpendicular to path direction
+	for i in range(arc_points.size()):
+		var p = arc_points[i]
+
+		# Calculate perpendicular direction
+		var perpendicular: Vector2
+		if i == 0:
+			perpendicular = (arc_points[1] - arc_points[0]).normalized()
+		elif i == arc_points.size() - 1:
+			perpendicular = (arc_points[i] - arc_points[i - 1]).normalized()
+		else:
+			perpendicular = (arc_points[i + 1] - arc_points[i - 1]).normalized()
+		perpendicular = Vector2(-perpendicular.y, perpendicular.x)
+
+		# Add wobble
+		var wobble = sin(float(i) * 0.6) * 3 + sin(float(i) * 1.5) * 2
+
+		left_rut.add_point(p + perpendicular * (rut_spacing / 2 + wobble))
+		right_rut.add_point(p - perpendicular * (rut_spacing / 2 - wobble))
+
+	parent.add_child(left_rut)
+	parent.add_child(right_rut)
 
 func add_campfire_decorations(parent: Node2D, center: Vector2, clearing_radius: float, rng: RandomNumberGenerator):
 	"""Add scattered bones, skulls around the campfire clearing"""

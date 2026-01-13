@@ -428,3 +428,60 @@ func get_debug_info() -> Dictionary:
 		"total_cells_loaded": cells_loaded_this_session,
 		"player_cell": last_player_cell
 	}
+
+func get_prop_stats() -> Dictionary:
+	"""Get detailed prop statistics for debug display (matches ChunkBasedPropSystem format)"""
+	var stats = {
+		"trees": 0,
+		"tree_nodes": 0,
+		"rocks_large": 0,
+		"rocks_medium": 0,
+		"rocks_small": 0,
+		"rock_nodes": 0,
+		"lava_pools": 0,
+		"bones": 0,
+		"other": 0,
+		"total_props": 0,
+		"total_nodes": 0,
+		"cells_loaded": loaded_cells.size(),
+		"cells_cached": cached_cells.size()
+	}
+
+	# Count props in all loaded cells
+	for cell_key in loaded_cells.keys():
+		var cell_data = loaded_cells[cell_key]
+		if not cell_data or not is_instance_valid(cell_data.props_container):
+			continue
+
+		for child in cell_data.props_container.get_children():
+			var child_name = child.name
+			var child_nodes = _count_nodes_recursive(child)
+			stats.total_nodes += child_nodes
+			stats.total_props += 1
+
+			if child_name.begins_with("Tree_"):
+				stats.trees += 1
+				stats.tree_nodes += child_nodes
+			elif child_name.begins_with("Rock_"):
+				stats.rock_nodes += child_nodes
+				if "large" in child_name.to_lower():
+					stats.rocks_large += 1
+				elif "medium" in child_name.to_lower():
+					stats.rocks_medium += 1
+				else:
+					stats.rocks_small += 1
+			elif child_name.begins_with("Lava") or child_name.begins_with("Monster"):
+				stats.lava_pools += 1
+			elif child_name.begins_with("Bone") or child_name.begins_with("Skull"):
+				stats.bones += 1
+			else:
+				stats.other += 1
+
+	return stats
+
+func _count_nodes_recursive(node: Node) -> int:
+	"""Count total nodes in a subtree"""
+	var count = 1
+	for child in node.get_children():
+		count += _count_nodes_recursive(child)
+	return count

@@ -58,6 +58,7 @@ extends Node
 ##   {"action": "get_forge_items", "type": "shield"}  - Get forge items by type
 
 const PORT = 9050
+const BehaviorTreeAIScript = preload("res://scripts/debug/BehaviorTreeAI.gd")
 var server := TCPServer.new()
 var clients: Array[StreamPeerTCP] = []
 
@@ -121,6 +122,22 @@ const AVOIDANCE_DURATION := 0.4  # Time to move in avoidance direction
 const THREAT_DETECTION_RANGE := 150.0  # Detect enemies within this range
 const THREAT_RESPONSE_RANGE := 80.0  # Engage if enemies this close
 
+# Human-like looting state machine
+enum LootState { NONE, WALKING_TO_CORPSE, WAITING_FOR_UI, LOOTING, CLOSING }
+var _human_loot_state := LootState.NONE
+var _human_loot_target: Node2D = null  # Current corpse we're looting
+var _human_loot_timer := 0.0
+const HUMAN_LOOT_WALK_RANGE := 60.0  # How close to walk before pressing F
+const HUMAN_LOOT_UI_WAIT := 0.3  # Wait for LootUI to open
+const HUMAN_LOOT_CLOSE_WAIT := 0.2  # Wait after taking all
+
+# Loot-aware combat mode (pauses after each kill to loot)
+var _loot_aware_combat := false
+
+# Behavior Tree AI system - runs at 60fps for reactive gameplay
+var behavior_tree: Node = null  # BehaviorTreeAI instance
+var _bt_last_status: Dictionary = {}
+
 func _ready():
 	# Only run in debug builds
 	if not OS.is_debug_build():
@@ -132,6 +149,13 @@ func _ready():
 		print("[MCPBridge] AI control server listening on port %d" % PORT)
 	else:
 		print("[MCPBridge] Failed to start server: %s" % err)
+	
+	# Initialize Behavior Tree AI
+	behavior_tree = BehaviorTreeAIScript.new()
+	behavior_tree.name = "BehaviorTreeAI"
+	add_child(behavior_tree)
+	behavior_tree.setup(self)
+	print("[MCPBridge] Behavior Tree AI initialized")
 
 func _process(delta):
 	_accept_connections()
@@ -139,7 +163,14 @@ func _process(delta):
 	_check_hp_emergency()  # ALWAYS check HP - retreat if too low
 	_check_immediate_threats()  # ALWAYS check for attacks on us
 	_update_pathing(delta)
+	_update_human_loot(delta)  # Human-like looting state machine
 	_update_auto_combat(delta)
+	_update_behavior_tree(delta)  # Behavior Tree AI tick
+
+func _update_behavior_tree(delta: float) -> void:
+	"""Tick the Behavior Tree AI if enabled"""
+	if behavior_tree and behavior_tree.bt_enabled:
+		_bt_last_status = behavior_tree.tick(delta)
 
 func _check_hp_emergency():
 	"""Emergency HP check - retreat to campfire if too low, regardless of current activity"""
@@ -443,6 +474,119 @@ func _handle_command(cmd: Dictionary) -> Dictionary:
 		"loot_phase":
 			return _cmd_loot_phase()
 
+
+		# Human-like looting commands
+		"human_loot":
+			return _cmd_human_loot()
+		
+		"walk_to_corpse":
+			return _cmd_walk_to_corpse()
+		
+		"open_loot_ui":
+			return _cmd_open_loot_ui()
+		
+		"take_all_loot":
+			return _cmd_take_all_loot()
+		
+		"loot_aware_combat":
+			_loot_aware_combat = cmd.get("enabled", true)
+			return {ok = true, loot_aware = _loot_aware_combat}
+		
+		# ═══════════════════════════════════════════════════════════════════
+		# BEHAVIOR TREE COMMANDS
+		# ═══════════════════════════════════════════════════════════════════
+		
+		"bt_enable":
+			if behavior_tree:
+				behavior_tree.bt_enabled = true
+				ai_controlled = true
+				player = _find_player()
+				if player and "ai_facing_override" in player:
+					player.ai_facing_override = true
+				return {ok = true, enabled = true}
+			return {error = "Behavior tree not initialized"}
+		
+		"bt_disable":
+			if behavior_tree:
+				behavior_tree.bt_enabled = false
+				_release_inputs()
+				return {ok = true, enabled = false}
+			return {error = "Behavior tree not initialized"}
+		
+		"bt_status":
+			if behavior_tree:
+				var status = behavior_tree.get_status()
+				status["last_tick"] = _bt_last_status
+				return status
+			return {error = "Behavior tree not initialized"}
+		
+		"bt_goal":
+			if behavior_tree:
+				var goal = cmd.get("goal", "idle")
+				var priority = cmd.get("priority", 3)  # STRATEGIC by default
+				var data = cmd.get("data", {})
+				behavior_tree.set_goal(goal, priority, data)
+				return {ok = true, goal = goal, priority = priority}
+			return {error = "Behavior tree not initialized"}
+		
+		"bt_events":
+			if behavior_tree:
+				return {events = behavior_tree.get_pending_events()}
+			return {error = "Behavior tree not initialized"}
+		
+		"bt_pause":
+			if behavior_tree:
+				behavior_tree.bt_paused = cmd.get("paused", true)
+				return {ok = true, paused = behavior_tree.bt_paused}
+			return {error = "Behavior tree not initialized"}
+		
+		# Convenience commands that set goals
+		"bt_gear_up":
+			if behavior_tree:
+				behavior_tree.bt_enabled = true
+				ai_controlled = true
+				player = _find_player()
+				behavior_tree.set_goal("gear_up", 2, {})  # TACTICAL priority
+				return {ok = true, goal = "gear_up"}
+			return {error = "Behavior tree not initialized"}
+		
+		"bt_grind":
+			if behavior_tree:
+				behavior_tree.bt_enabled = true
+				ai_controlled = true
+				player = _find_player()
+				behavior_tree.set_goal("quest_grind", 3, {})  # STRATEGIC priority
+				return {ok = true, goal = "quest_grind"}
+			return {error = "Behavior tree not initialized"}
+		
+		"bt_combat":
+			if behavior_tree:
+				behavior_tree.bt_enabled = true
+				ai_controlled = true
+				player = _find_player()
+				behavior_tree.set_goal("combat", 2, {})  # TACTICAL priority
+				return {ok = true, goal = "combat"}
+			return {error = "Behavior tree not initialized"}
+		
+		"bt_heal":
+			if behavior_tree:
+				behavior_tree.bt_enabled = true
+				ai_controlled = true
+				player = _find_player()
+				behavior_tree.set_goal("flee_to_campfire", 0, {})  # CRITICAL priority
+				return {ok = true, goal = "flee_to_campfire"}
+			return {error = "Behavior tree not initialized"}
+		
+		"bt_metrics":
+			if behavior_tree:
+				return behavior_tree.get_metrics()
+			return {error = "Behavior tree not initialized"}
+		
+		"bt_analyze":
+			if behavior_tree:
+				return behavior_tree.analyze_performance()
+			return {error = "Behavior tree not initialized"}
+		
 		_:
 			return {error = "Unknown action: %s" % cmd.get("action", "")}
 
@@ -3104,3 +3248,222 @@ func _move_out_of_hazard():
 	elif escape_dir.x > 0.3: Input.action_press("move_right")
 	if escape_dir.y < -0.3: Input.action_press("move_up")
 	elif escape_dir.y > 0.3: Input.action_press("move_down")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# HUMAN-LIKE LOOTING SYSTEM
+# These commands create a more natural-looking loot flow:
+# walk to corpse -> press F -> wait for UI -> press F (take all) -> wait -> done
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func _cmd_human_loot() -> Dictionary:
+	"""Start human-like looting: find nearest corpse, walk to it, open UI, take all"""
+	if not player:
+		return {error = "No player"}
+	
+	# Find nearest corpse with loot
+	var best_corpse: Node2D = null
+	var best_dist := 999999.0
+	var pos = player.global_position
+	
+	for corpse in get_tree().get_nodes_in_group("corpses"):
+		if not is_instance_valid(corpse):
+			continue
+		var has_gold = "corpse_gold" in corpse and corpse.corpse_gold > 0
+		var has_items = "corpse_loot" in corpse and corpse.corpse_loot.size() > 0
+		if not has_gold and not has_items:
+			continue
+		var d = corpse.global_position.distance_to(pos)
+		if d < best_dist:
+			best_dist = d
+			best_corpse = corpse
+	
+	if not best_corpse:
+		return {error = "No corpses with loot nearby"}
+	
+	# Start human loot state machine
+	_human_loot_state = LootState.WALKING_TO_CORPSE
+	_human_loot_target = best_corpse
+	_human_loot_timer = 0.0
+	
+	# Start walking to corpse
+	_move_target = best_corpse.global_position
+	_is_pathing = true
+	
+	print("[MCPBridge] Human loot: walking to corpse at (%.0f, %.0f)" % [best_corpse.global_position.x, best_corpse.global_position.y])
+	
+	return {
+		ok = true,
+		state = "walking_to_corpse",
+		corpse_name = best_corpse.name,
+		distance = best_dist
+	}
+
+func _cmd_walk_to_corpse() -> Dictionary:
+	"""Walk to nearest corpse position (does not open loot UI)"""
+	if not player:
+		return {error = "No player"}
+	
+	var best_corpse: Node2D = null
+	var best_dist := 999999.0
+	var pos = player.global_position
+	
+	for corpse in get_tree().get_nodes_in_group("corpses"):
+		if not is_instance_valid(corpse):
+			continue
+		var d = corpse.global_position.distance_to(pos)
+		if d < best_dist:
+			best_dist = d
+			best_corpse = corpse
+	
+	if not best_corpse:
+		return {error = "No corpses nearby"}
+	
+	# Start pathing to corpse
+	_move_target = best_corpse.global_position
+	_is_pathing = true
+	
+	return {
+		ok = true,
+		corpse_name = best_corpse.name,
+		corpse_x = best_corpse.global_position.x,
+		corpse_y = best_corpse.global_position.y,
+		distance = best_dist
+	}
+
+func _cmd_open_loot_ui() -> Dictionary:
+	"""Simulate pressing F to open loot UI (must be near corpse)"""
+	if not player:
+		return {error = "No player"}
+	
+	# Check if LootBodyUI is already open
+	var loot_ui = get_node_or_null("/root/LootBodyUI")
+	if loot_ui and loot_ui.visible:
+		return {ok = true, already_open = true}
+	
+	# Check if we are near a corpse
+	var pos = player.global_position
+	var nearest_corpse: Node2D = null
+	var nearest_dist := 999999.0
+	
+	for corpse in get_tree().get_nodes_in_group("corpses"):
+		if not is_instance_valid(corpse):
+			continue
+		var d = corpse.global_position.distance_to(pos)
+		if d < nearest_dist:
+			nearest_dist = d
+			nearest_corpse = corpse
+	
+	if not nearest_corpse or nearest_dist > 100.0:
+		return {error = "Not near any corpse (nearest: %.0f)" % nearest_dist}
+	
+	# Simulate F key press (interact action)
+	Input.action_press("interact")
+	get_tree().create_timer(0.1).timeout.connect(func(): Input.action_release("interact"))
+	
+	print("[MCPBridge] Opening loot UI for %s" % nearest_corpse.name)
+	
+	return {
+		ok = true,
+		corpse_name = nearest_corpse.name,
+		distance = nearest_dist
+	}
+
+func _cmd_take_all_loot() -> Dictionary:
+	"""Simulate pressing F to take all loot (LootUI must be open)"""
+	# Find the LootBodyUI
+	var loot_ui = get_node_or_null("/root/LootBodyUI")
+	if not loot_ui:
+		# Try finding it in the scene tree
+		for node in get_tree().get_nodes_in_group("ui"):
+			if node.name == "LootBodyUI" or node is LootBodyUI:
+				loot_ui = node
+				break
+	
+	if not loot_ui:
+		# Last resort: search entire tree
+		var root = get_tree().root
+		loot_ui = _find_node_by_class(root, "LootBodyUI")
+	
+	if not loot_ui or not loot_ui.visible:
+		return {error = "LootUI not open"}
+	
+	# Simulate F key press (triggers take_all in LootBodyUI)
+	Input.action_press("interact")
+	get_tree().create_timer(0.1).timeout.connect(func(): Input.action_release("interact"))
+	
+	print("[MCPBridge] Taking all loot")
+	
+	return {ok = true, action = "take_all"}
+
+func _find_node_by_class(node: Node, class_name_str: String) -> Node:
+	"""Recursively find a node by class name"""
+	if node.get_class() == class_name_str or node.name == class_name_str:
+		return node
+	for child in node.get_children():
+		var found = _find_node_by_class(child, class_name_str)
+		if found:
+			return found
+	return null
+
+func _update_human_loot(delta: float) -> void:
+	"""Update human-like loot state machine"""
+	if _human_loot_state == LootState.NONE:
+		return
+	
+	if not player:
+		_human_loot_state = LootState.NONE
+		return
+	
+	var pos = player.global_position
+	
+	match _human_loot_state:
+		LootState.WALKING_TO_CORPSE:
+			# Check if we reached the corpse
+			if not is_instance_valid(_human_loot_target):
+				print("[MCPBridge] Human loot: corpse despawned")
+				_human_loot_state = LootState.NONE
+				_is_pathing = false
+				return
+			
+			var dist = pos.distance_to(_human_loot_target.global_position)
+			if dist <= HUMAN_LOOT_WALK_RANGE:
+				# Arrived! Stop moving and open loot UI
+				_is_pathing = false
+				_release_inputs()
+				print("[MCPBridge] Human loot: arrived at corpse, pressing F")
+				
+				# Press F to open loot UI
+				Input.action_press("interact")
+				get_tree().create_timer(0.1).timeout.connect(func(): Input.action_release("interact"))
+				
+				_human_loot_state = LootState.WAITING_FOR_UI
+				_human_loot_timer = 0.0
+		
+		LootState.WAITING_FOR_UI:
+			_human_loot_timer += delta
+			if _human_loot_timer >= HUMAN_LOOT_UI_WAIT:
+				# Check if UI opened
+				var loot_ui = _find_node_by_class(get_tree().root, "LootBodyUI")
+				if loot_ui and loot_ui.visible:
+					print("[MCPBridge] Human loot: UI open, pressing F for Take All")
+					# Press F again to take all
+					Input.action_press("interact")
+					get_tree().create_timer(0.1).timeout.connect(func(): Input.action_release("interact"))
+					_human_loot_state = LootState.LOOTING
+					_human_loot_timer = 0.0
+				else:
+					# UI didn't open, maybe corpse was empty
+					print("[MCPBridge] Human loot: UI didn't open (corpse empty?)")
+					_human_loot_state = LootState.NONE
+		
+		LootState.LOOTING:
+			_human_loot_timer += delta
+			if _human_loot_timer >= HUMAN_LOOT_CLOSE_WAIT:
+				print("[MCPBridge] Human loot: complete")
+				_human_loot_state = LootState.NONE
+				_human_loot_target = null
+
+func is_human_looting() -> bool:
+	"""Check if currently in human loot process"""
+	return _human_loot_state != LootState.NONE
