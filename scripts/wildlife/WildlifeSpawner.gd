@@ -85,21 +85,28 @@ func _try_spawn_animal() -> void:
 	if active_animals.size() >= max_animals:
 		return
 
-	# Check if any player is close enough
+	# Check if any player is close enough to the spawn zone
+	# Uses distance to zone EDGE, not center, so wide zones work properly
 	var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
 	var player_nearby = false
 	var nearest_player: Node2D = null
 	var nearest_dist: float = INF
 
 	for player in players:
-		var dist = player.global_position.distance_to(_get_zone_center())
-		if dist < player_proximity_required:
+		var dist_to_zone = _get_distance_to_zone(player.global_position)
+		if dist_to_zone < player_proximity_required:
 			player_nearby = true
-			if dist < nearest_dist:
-				nearest_dist = dist
+			if dist_to_zone < nearest_dist:
+				nearest_dist = dist_to_zone
 				nearest_player = player
 
 	if not player_nearby:
+		# Debug: log why not spawning (every 10 seconds to avoid spam)
+		if Engine.get_frames_drawn() % 300 == 0 and players.size() > 0:
+			var sample_player = players[0]
+			var dist = _get_distance_to_zone(sample_player.global_position)
+			print("🐰 [Wildlife] No spawn - player at %s, dist to zone=%.0f, required=%.0f" % [
+				sample_player.global_position, dist, player_proximity_required])
 		return
 
 	# Find spawn position away from player
@@ -122,6 +129,7 @@ func _try_spawn_animal() -> void:
 
 	if animal:
 		active_animals.append(animal)
+		print("🐰 [Wildlife] Spawned %s at %s (total: %d/%d)" % [animal_type, spawn_pos, active_animals.size(), max_animals])
 		# Connect death signal for cleanup
 		if animal.has_signal("animal_died"):
 			animal.animal_died.connect(_on_animal_died)
@@ -147,6 +155,16 @@ func _spawn_local(animal_type: String, spawn_pos: Vector2) -> Node:
 
 func _get_zone_center() -> Vector2:
 	return (spawn_area_min + spawn_area_max) / 2.0
+
+
+func _get_distance_to_zone(pos: Vector2) -> float:
+	"""Get shortest distance from position to the spawn zone.
+	Returns 0 if position is inside the zone."""
+	# Clamp to zone bounds to find nearest point
+	var nearest_x = clamp(pos.x, spawn_area_min.x, spawn_area_max.x)
+	var nearest_y = clamp(pos.y, spawn_area_min.y, spawn_area_max.y)
+	var nearest_point = Vector2(nearest_x, nearest_y)
+	return pos.distance_to(nearest_point)
 
 
 func _get_spawn_position(avoid_player: Node2D = null) -> Vector2:

@@ -2793,9 +2793,9 @@ func _setup_wildlife_spawner() -> void:
 	wildlife_spawner.name = "WildlifeSpawner"
 
 	# Configure spawn zone - horizontal progression (west→east)
-	# Campfire is at x=-6000, so start wildlife east of that
+	# Campfire is at x=-6000, zone includes campfire area for early-game wildlife
 	# World: x=-8000 to x=16000, y=-4000 to y=4000
-	wildlife_spawner.spawn_area_min = Vector2(-4000, -3500)
+	wildlife_spawner.spawn_area_min = Vector2(-7500, -3500)  # Extends west past campfire
 	wildlife_spawner.spawn_area_max = Vector2(16000, 3500)
 	wildlife_spawner.max_animals = 15
 	wildlife_spawner.spawn_interval = 2.0

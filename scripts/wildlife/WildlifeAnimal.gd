@@ -205,6 +205,11 @@ func _update_animation(delta: float) -> void:
 			next_frame = 0
 		current_sprite.frame = next_frame
 
+		# Debug: Log animation updates occasionally
+		if Engine.get_frames_drawn() % 60 == 0:
+			print("[Wildlife] %s anim: frame=%d/%d fps=%.1f delta=%.4f" % [
+				animal_type, current_sprite.frame, current_sprite.hframes, animation_fps, delta])
+
 
 func _update_facing() -> void:
 	if velocity.length_squared() > 1.0:
