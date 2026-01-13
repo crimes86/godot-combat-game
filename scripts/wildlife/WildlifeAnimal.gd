@@ -229,19 +229,20 @@ func _play_animation(anim_name: String) -> void:
 	if run_sprite: run_sprite.visible = false
 
 	# Show and set current sprite based on animation
+	# DEBUG: Slow FPS to diagnose scrolling issue
 	match anim_name:
 		"idle":
 			current_sprite = idle_sprite
-			animation_fps = 8.0
+			animation_fps = 2.0  # Very slow for debugging
 		"walk":
 			current_sprite = walk_sprite
-			animation_fps = 10.0
+			animation_fps = 4.0  # Slow for debugging
 		"run":
 			current_sprite = run_sprite
-			animation_fps = 12.0
+			animation_fps = 6.0  # Slow for debugging
 		_:
 			current_sprite = idle_sprite
-			animation_fps = 8.0
+			animation_fps = 2.0
 
 	if current_sprite:
 		current_sprite.visible = true
