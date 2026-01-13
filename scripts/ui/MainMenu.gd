@@ -892,8 +892,18 @@ func _on_cancel_connect_pressed() -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _on_authentication_required():
-	"""Server requested authentication - show auth panel for joining OR auto-login as guest"""
-	if current_state == MenuState.GUEST_SERVER_SELECT:
+	"""Server requested authentication - use Ashbane auth if logged in, otherwise guest"""
+	# Check if user is authenticated with Ashbane
+	if AshbaneAuth and AshbaneAuth.is_logged_in() and not AshbaneAuth.is_guest:
+		# Use Ashbane authentication for persistent data
+		var username = AshbaneAuth.username
+		var user_id = AshbaneAuth.user_id
+		var display_name = AshbaneAuth.display_name if AshbaneAuth.display_name else username
+		if server_status_label:
+			server_status_label.text = "Authenticating as %s..." % display_name
+		LogManager.info("Using Ashbane auth: %s (id: %d)" % [display_name, user_id], "network")
+		NetworkManager.send_ashbane_login(username, user_id, display_name)
+	elif current_state == MenuState.GUEST_SERVER_SELECT:
 		# Guest mode - automatically send guest login
 		var guest_name = name_input.text.strip_edges() if name_input else ""
 		if guest_name.is_empty():

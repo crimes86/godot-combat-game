@@ -593,6 +593,17 @@ func send_guest_login(guest_name: String) -> void:
 
 	rpc_id(1, "handle_guest_request", guest_name)
 
+
+func send_ashbane_login(username: String, user_id: int, display_name: String = "") -> void:
+	"""Client sends Ashbane-authenticated login (persistent, server trusts client auth)"""
+	if not peer or not multiplayer.has_multiplayer_peer():
+		login_failed.emit("Not connected to server")
+		return
+
+	var name_to_use = display_name if not display_name.is_empty() else username
+	LogManager.info("Sending Ashbane auth: %s (user_id: %d)" % [name_to_use, user_id], "network")
+	rpc_id(1, "handle_ashbane_auth_request", username, user_id, name_to_use)
+
 func _hash_password_for_transport(password: String) -> String:
 	"""Hash password for network transport (additional server-side hashing will be applied)"""
 	var ctx = HashingContext.new()
@@ -775,6 +786,124 @@ func handle_guest_request(guest_name: String) -> void:
 	# Send success to client
 	rpc_id(peer_id, "receive_login_response", true, "", guest_data)
 	LogManager.info("Guest %s (peer %d) joined" % [guest_name, peer_id], "player")
+
+
+@rpc("any_peer", "reliable")
+func handle_ashbane_auth_request(username: String, user_id: int, display_name: String) -> void:
+	"""Server handles Ashbane-authenticated user login.
+	The server trusts the client's Ashbane auth and creates/retrieves their player data."""
+	if not multiplayer:
+		return
+
+	if not is_host:
+		return
+
+	var peer_id = multiplayer.get_remote_sender_id()
+
+	# Sanitize username (use as unique identifier for persistence)
+	username = username.strip_edges()
+	if username.is_empty():
+		rpc_id(peer_id, "receive_login_response", false, "Invalid username", {})
+		return
+
+	# Use display_name for in-game name, fallback to username
+	var player_name = display_name if not display_name.is_empty() else username
+	player_name = _sanitize_guest_name(player_name)  # Sanitize for safety
+
+	LogManager.info("Ashbane auth request from peer %d: %s (user_id: %d)" % [peer_id, player_name, user_id], "network")
+
+	# Check if this Ashbane user has existing data in database
+	var player_data: Dictionary = {}
+	if DatabaseManager:
+		# Try to get existing data by username
+		var existing = DatabaseManager.get_player_data(username)
+		if not existing.is_empty():
+			# Existing user - load their data
+			player_data = existing
+			player_data["character_name"] = player_name  # Update display name
+			LogManager.info("Loaded existing Ashbane user data: %s" % username, "database")
+		else:
+			# New Ashbane user - create entry with default data
+			# Create account without password (Ashbane-only auth)
+			var create_result = DatabaseManager.create_account(username, "ashbane_auth_%d" % user_id)
+			if create_result.success:
+				player_data = DatabaseManager.get_player_data(username)
+				if player_data.is_empty():
+					# Initialize with defaults
+					player_data = {
+						"id": user_id,
+						"username": username,
+						"character_name": player_name,
+						"gender": "male",
+						"level": 1,
+						"xp": 0,
+						"gold": 100,
+						"strength": 10,
+						"agility": 10,
+						"dexterity": 10,
+						"intelligence": 10,
+						"wisdom": 10,
+						"vitality": 10,
+						"current_hp": 100.0,
+						"max_hp": 100.0,
+						"position_x": -2000.0,
+						"position_y": 0.0,
+						"inventory": [],
+						"equipment": {},
+						"appearance": {}
+					}
+				LogManager.info("Created new Ashbane user: %s" % username, "database")
+			else:
+				# Account exists but couldn't retrieve - try direct login
+				player_data = DatabaseManager.get_player_data(username)
+				if player_data.is_empty():
+					LogManager.warn("Failed to create/retrieve Ashbane user: %s" % username, "database")
+	else:
+		# No database - create temporary data
+		player_data = {
+			"id": user_id,
+			"username": username,
+			"character_name": player_name,
+			"gender": "male",
+			"level": 1,
+			"xp": 0,
+			"gold": 100
+		}
+
+	# Ensure player_data has required fields
+	player_data["username"] = username
+	player_data["character_name"] = player_name
+	if not player_data.has("id"):
+		player_data["id"] = user_id
+
+	# Add to authenticated players (NOT guest!)
+	authenticated_players[peer_id] = {
+		"username": username,
+		"player_data": player_data,
+		"is_guest": false  # IMPORTANT: Ashbane users are NOT guests
+	}
+
+	# Add to connected players
+	connected_players[peer_id] = {
+		"name": player_name,
+		"ready": true
+	}
+
+	# Notify all players
+	rpc("player_joined", peer_id, connected_players[peer_id])
+
+	# Emit player_authenticated signal on SERVER
+	LogManager.debug("Emitting player_authenticated for Ashbane peer %d: '%s'" % [peer_id, player_name], "network")
+	player_authenticated.emit(peer_id, player_name)
+
+	# Start auto-save for this user
+	if DatabaseManager:
+		DatabaseManager.start_auto_save(username)
+
+	# Send success to client
+	rpc_id(peer_id, "receive_login_response", true, "", player_data)
+	LogManager.info("Ashbane user %s (peer %d) authenticated and joined" % [player_name, peer_id], "player")
+
 
 # --- Client-side auth response handlers ---
 
