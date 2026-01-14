@@ -27,22 +27,23 @@ const SKILL_GAIN_BLOCK: float = 1.0  # Full block
 const SKILL_GAIN_PARTIAL_BLOCK: float = 0.5  # Partial block
 const SKILL_GAIN_HIT_WITH_SHIELD: float = 0.1  # Hit taken while shield equipped
 
-# Title thresholds
-const TITLE_THRESHOLDS = [0, 50, 100, 150, 200, 250, 300]
+# Title thresholds - absolute skill values
+# 0=Untrained (0 skill), 1+ skill gets first title, then 50, 100, 150, 200, 250 for higher tiers
+const TITLE_THRESHOLDS = [0, 1, 50, 100, 150, 200, 250]
 
-# Title names per category
+# Title names per category - index 0 is "Untrained" (0 skill only)
 const TITLES = {
-	"swords": ["", "Squire", "Swordsman", "Bladesman", "Blademaster", "Sword Saint", "Kensei"],
-	"daggers": ["", "Footpad", "Cutthroat", "Assassin", "Shadowblade", "Phantom", "Reaper"],
-	"axes": ["", "Woodsman", "Hewer", "Cleaver", "Headsman", "Warlord", "Berserker"],
-	"maces": ["", "Initiate", "Enforcer", "Crusher", "Demolisher", "Juggernaut", "Titan"],
-	"hammers": ["", "Striker", "Smasher", "Breaker", "Earthshaker", "Worldbreaker", "Godhand"],
-	"spears": ["", "Militia", "Pikeman", "Hoplite", "Lancer", "Dragoon", "Valkyrie"],
-	"bows": ["", "Fletcher", "Archer", "Marksman", "Sharpshooter", "Deadeye", "Hawkeye"],
-	"healing": ["", "Acolyte", "Healer", "Priest", "Bishop", "Cardinal", "Saint"],
-	"arcane": ["", "Apprentice", "Conjurer", "Mage", "Sorcerer", "Archmage", "Archon"],
-	"guns": ["", "Recruit", "Gunner", "Marksman", "Sharpshooter", "Ace", "Deadshot"],
-	"blocking": ["", "Defender", "Guardian", "Bulwark", "Shieldmaster", "Aegis", "Invincible"]
+	"swords": ["Untrained", "Squire", "Swordsman", "Bladesman", "Blademaster", "Sword Saint", "Kensei"],
+	"daggers": ["Untrained", "Footpad", "Cutthroat", "Assassin", "Shadowblade", "Phantom", "Reaper"],
+	"axes": ["Untrained", "Woodsman", "Hewer", "Cleaver", "Headsman", "Warlord", "Berserker"],
+	"maces": ["Untrained", "Initiate", "Enforcer", "Crusher", "Demolisher", "Juggernaut", "Titan"],
+	"hammers": ["Untrained", "Striker", "Smasher", "Breaker", "Earthshaker", "Worldbreaker", "Godhand"],
+	"spears": ["Untrained", "Militia", "Pikeman", "Hoplite", "Lancer", "Dragoon", "Valkyrie"],
+	"bows": ["Untrained", "Fletcher", "Archer", "Marksman", "Sharpshooter", "Deadeye", "Hawkeye"],
+	"healing": ["Untrained", "Acolyte", "Healer", "Priest", "Bishop", "Cardinal", "Saint"],
+	"arcane": ["Untrained", "Apprentice", "Conjurer", "Mage", "Sorcerer", "Archmage", "Archon"],
+	"guns": ["Untrained", "Recruit", "Gunner", "Marksman", "Sharpshooter", "Ace", "Deadshot"],
+	"blocking": ["Untrained", "Defender", "Guardian", "Bulwark", "Shieldmaster", "Aegis", "Invincible"]
 }
 
 # Weapon type to category mapping
@@ -142,33 +143,60 @@ func roll_hit(category: String) -> bool:
 	var miss_chance = get_miss_chance(category)
 	return randf() >= miss_chance
 
-## Get title index for skill level (0-6)
+## Get title index for skill level (0-6) based on absolute thresholds
 func get_title_index(skill: float) -> int:
-	if skill >= 300:
-		return 6
+	# Absolute thresholds: 0=Untrained, 1+=First title, 50+=Second, etc.
+	if skill <= 0:
+		return 0  # Untrained
 	elif skill >= 250:
-		return 5
+		return 6  # Grandmaster tier
 	elif skill >= 200:
-		return 4
+		return 5
 	elif skill >= 150:
-		return 3
+		return 4
 	elif skill >= 100:
-		return 2
+		return 3
 	elif skill >= 50:
-		return 1
+		return 2
 	else:
-		return 0
+		return 1  # 1-49 skill = first real title (Militia, Squire, etc.)
 
 ## Get current title for category
 func get_title(category: String) -> String:
 	var cat = category.to_lower()
 	var skill = get_skill(cat)
 	var index = get_title_index(skill)
-	var titles = TITLES.get(cat, ["", "Novice", "Apprentice", "Journeyman", "Expert", "Master", "Grandmaster"])
+	var titles = TITLES.get(cat, ["Untrained", "Novice", "Apprentice", "Journeyman", "Expert", "Master", "Grandmaster"])
 	return titles[index] if index < titles.size() else titles[-1]
 
-## Add skill points with catch-up mechanic
-func add_skill(category: String, base_amount: float) -> float:
+
+## Get the next title the player is working toward (or empty if maxed)
+func get_next_title(category: String) -> String:
+	var cat = category.to_lower()
+	var skill = get_skill(cat)
+	var index = get_title_index(skill)
+	var titles = TITLES.get(cat, ["Untrained", "Novice", "Apprentice", "Journeyman", "Expert", "Master", "Grandmaster"])
+	var next_index = index + 1
+	if next_index >= titles.size():
+		return ""  # Already at max
+	return titles[next_index]
+
+
+## Get skill needed for next title (returns -1 if already maxed)
+func get_skill_for_next_title(category: String) -> int:
+	var cat = category.to_lower()
+	var skill = get_skill(cat)
+	var index = get_title_index(skill)
+
+	if index >= 6:
+		return -1  # Already at max title
+
+	# Absolute thresholds matching get_title_index
+	var thresholds = [0, 1, 50, 100, 150, 200, 250]
+	return thresholds[index + 1] if index + 1 < thresholds.size() else 250
+
+## Add skill points (linear progression, no catch-up)
+func add_skill(category: String, amount: float) -> float:
 	var cat = category.to_lower()
 	if cat not in skills:
 		return 0.0
@@ -180,21 +208,17 @@ func add_skill(category: String, base_amount: float) -> float:
 	if current >= cap:
 		return 0.0
 
-	# Catch-up multiplier: 3x at empty, 0.5x near cap
-	var fill_ratio = current / float(cap) if cap > 0 else 0.0
-	var catch_up_mult = lerpf(3.0, 0.5, fill_ratio)
-
-	var final_gain = base_amount * catch_up_mult
 	var old_skill = current
 	var old_title_index = get_title_index(old_skill)
 
-	# Apply gain (capped)
-	skills[cat] = minf(current + final_gain, float(cap))
+	# Apply gain (capped at current level cap)
+	var actual_gain = minf(amount, float(cap) - current)
+	skills[cat] = current + actual_gain
 	var new_skill = skills[cat]
 	var new_title_index = get_title_index(new_skill)
 
 	# Emit skill gained signal
-	skill_gained.emit(cat, final_gain, new_skill)
+	skill_gained.emit(cat, actual_gain, new_skill)
 
 	# Check for title advancement
 	if new_title_index > old_title_index:
@@ -202,7 +226,7 @@ func add_skill(category: String, base_amount: float) -> float:
 		title_earned.emit(cat, new_title)
 		skill_level_up.emit(cat, new_title_index, new_title)
 
-	return final_gain
+	return actual_gain
 
 ## Called when player lands a hit
 func on_hit(weapon_type: String, is_crit: bool = false) -> float:

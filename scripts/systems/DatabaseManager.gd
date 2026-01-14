@@ -280,6 +280,32 @@ func validate_inventory_data(inv_data) -> Variant:
 	inv_data["items"] = valid_items
 	return inv_data
 
+
+func _validate_weapon_skills(ws_data: Dictionary) -> Dictionary:
+	"""Validate weapon skill values - cap based on player level, max 300."""
+	var validated = {}
+	var valid_categories = [
+		"swords", "daggers", "axes", "maces", "hammers",
+		"spears", "bows", "healing", "arcane", "guns", "blocking"
+	]
+
+	# Calculate skill cap (level * 10, max 300)
+	var skill_cap = mini(CharacterStats.level * 10, 300)
+
+	for category in valid_categories:
+		if ws_data.has(category):
+			var skill_value = ws_data[category]
+			if skill_value is float or skill_value is int:
+				# Clamp to valid range (0 to cap)
+				validated[category] = clampf(float(skill_value), 0.0, float(skill_cap))
+			else:
+				validated[category] = 0.0
+		else:
+			validated[category] = 0.0
+
+	return validated
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # AUTHENTICATION
 # ═══════════════════════════════════════════════════════════════════════════
@@ -482,6 +508,8 @@ func save_player_data(username: String, data: Dictionary) -> bool:
 		"inventory", "equipment", "appearance",
 		"total_playtime_seconds",
 		"quests",
+		# Weapon skill mastery
+		"weapon_skills",
 		# Duel statistics
 		"duel_wins", "duel_losses", "duel_daily_opponents",
 		# Allegiance/PvP state
@@ -920,6 +948,16 @@ func apply_player_data_to_systems(username: String, player: Node = null) -> void
 				"total_playtime": data.get("total_playtime_seconds", 0)
 			}
 			CharacterStats.load_save_data(fallback_stats)
+
+	# Load weapon skills
+	var ws_json = data.get("weapon_skills", "")
+	if ws_json is String and not ws_json.is_empty():
+		var ws_data = JSON.parse_string(ws_json)
+		if ws_data and ws_data is Dictionary and WeaponSkillManager:
+			# Validate skill values against cap before loading
+			var validated_ws = _validate_weapon_skills(ws_data)
+			WeaponSkillManager.load_save_data({"weapon_skills": validated_ws})
+			LogManager.debug("Loaded weapon skills for: %s" % username, "database")
 
 	# NOTE: Position is NOT restored here - game_world.gd handles spawn position correctly
 	# before calling this function (it uses hub return position or saved position as appropriate)

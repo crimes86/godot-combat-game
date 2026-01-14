@@ -32,6 +32,10 @@ run_frames = 6
 
 [node name="Sprite" type="Sprite2D" parent="."]
 texture_filter = 0
+texture = ExtResource("2_idle")
+hframes = 8
+vframes = 1
+region_enabled = false
 scale = Vector2(1.5, 1.5)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]

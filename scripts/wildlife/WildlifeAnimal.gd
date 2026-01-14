@@ -51,8 +51,8 @@ const IDLE_TIME_MAX: float = 4.0
 const ALERT_TIME: float = 1.5
 
 # Single sprite reference (we switch textures instead of multiple sprites)
-@onready var sprite: Sprite2D = $Sprite if has_node("Sprite") else null
-@onready var detection_area: Area2D = $DetectionArea if has_node("DetectionArea") else null
+var sprite: Sprite2D = null
+var detection_area: Area2D = null
 
 # Animation state
 var current_anim: String = "idle"
@@ -72,6 +72,10 @@ func _ready() -> void:
 	home_position = global_position
 	current_health = max_health
 
+	# Get node references explicitly in _ready to ensure they exist
+	sprite = get_node_or_null("Sprite")
+	detection_area = get_node_or_null("DetectionArea")
+
 	# Set up detection area if it exists
 	if detection_area:
 		detection_area.body_entered.connect(_on_body_entered_detection)
@@ -79,6 +83,33 @@ func _ready() -> void:
 
 	# Start with random idle time
 	idle_timer = randf_range(IDLE_TIME_MIN, IDLE_TIME_MAX)
+
+	# Initialize sprite - ensure hframes is set correctly for sprite sheet animation
+	if sprite:
+		print("[Wildlife] %s init - idle_frames=%d, walk_frames=%d, run_frames=%d" % [animal_type, idle_frames, walk_frames, run_frames])
+		print("[Wildlife] %s textures - idle=%s, walk=%s, run=%s" % [animal_type, idle_texture, walk_texture, run_texture])
+
+		# Explicitly disable region mode to ensure hframes works
+		sprite.region_enabled = false
+
+		if idle_texture:
+			sprite.texture = idle_texture
+			# Print texture size for debugging
+			print("[Wildlife] %s texture size: %s" % [animal_type, idle_texture.get_size()])
+
+		sprite.hframes = idle_frames
+		sprite.vframes = 1
+		sprite.frame = 0
+		current_anim = ""  # Reset so _play_animation will run fully
+		current_frames = idle_frames
+
+		print("[Wildlife] %s sprite after init: hframes=%d, vframes=%d, frame=%d, region_enabled=%s" % [
+			animal_type, sprite.hframes, sprite.vframes, sprite.frame, sprite.region_enabled])
+
+		# Verify state after first frame with deferred call
+		call_deferred("_verify_sprite_state")
+	else:
+		push_error("[Wildlife] %s - NO SPRITE FOUND!" % animal_type)
 
 	# Initialize sprite with idle animation
 	_play_animation("idle")
@@ -223,11 +254,11 @@ func _update_facing() -> void:
 
 func _play_animation(anim_name: String) -> void:
 	if not sprite:
+		push_warning("[Wildlife] _play_animation called but sprite is null!")
 		return
 
-	# Don't restart if same animation
-	if anim_name == current_anim and sprite.texture != null:
-		return
+	# Don't restart if same animation (but still ensure hframes is correct)
+	var same_anim = (anim_name == current_anim and sprite.texture != null)
 
 	current_anim = anim_name
 
@@ -250,11 +281,16 @@ func _play_animation(anim_name: String) -> void:
 			current_frames = idle_frames
 			animation_fps = 8.0
 
-	# Configure sprite for horizontal sprite sheet
+	# ALWAYS configure sprite for horizontal sprite sheet (even if same animation)
+	# This fixes issues where hframes might have been reset
+	sprite.region_enabled = false
 	sprite.hframes = current_frames
 	sprite.vframes = 1
-	sprite.frame = 0
-	frame_timer = 0.0
+
+	# Only reset frame if animation changed
+	if not same_anim:
+		sprite.frame = 0
+		frame_timer = 0.0
 
 
 func _get_nearest_player() -> Node2D:
@@ -384,3 +420,25 @@ func get_animal_info() -> Dictionary:
 		"max_health": max_health,
 		"position": global_position
 	}
+
+
+func _verify_sprite_state() -> void:
+	"""Deferred check to verify sprite state after first frame."""
+	if not sprite:
+		return
+
+	print("[Wildlife] %s VERIFY (deferred): hframes=%d, vframes=%d, frame=%d, region=%s, tex=%s" % [
+		animal_type,
+		sprite.hframes,
+		sprite.vframes,
+		sprite.frame,
+		sprite.region_enabled,
+		sprite.texture.resource_path if sprite.texture else "null"
+	])
+
+	# Force hframes again in case something reset it
+	if sprite.hframes != current_frames:
+		push_warning("[Wildlife] %s hframes was changed! Resetting from %d to %d" % [
+			animal_type, sprite.hframes, current_frames])
+		sprite.hframes = current_frames
+		sprite.vframes = 1

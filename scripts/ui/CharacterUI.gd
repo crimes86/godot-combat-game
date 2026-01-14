@@ -1098,32 +1098,32 @@ func refresh_weapon_mastery() -> void:
 	mastery_title_label.text = title
 
 func _get_titles_for_category(category: String) -> Array:
-	"""Get title progression for a weapon category"""
+	"""Get title progression for a weapon category (includes Untrained at index 0)"""
 	match category:
 		"Swords":
-			return ["Squire", "Swordsman", "Bladesman", "Blademaster", "Sword Saint", "Kensei"]
+			return ["Untrained", "Squire", "Swordsman", "Bladesman", "Blademaster", "Sword Saint", "Kensei"]
 		"Daggers":
-			return ["Footpad", "Cutthroat", "Assassin", "Shadowblade", "Phantom", "Reaper"]
+			return ["Untrained", "Footpad", "Cutthroat", "Assassin", "Shadowblade", "Phantom", "Reaper"]
 		"Axes":
-			return ["Woodsman", "Hewer", "Cleaver", "Headsman", "Warlord", "Berserker"]
+			return ["Untrained", "Woodsman", "Hewer", "Cleaver", "Headsman", "Warlord", "Berserker"]
 		"Maces":
-			return ["Initiate", "Enforcer", "Crusher", "Demolisher", "Juggernaut", "Titan"]
+			return ["Untrained", "Initiate", "Enforcer", "Crusher", "Demolisher", "Juggernaut", "Titan"]
 		"Hammers":
-			return ["Striker", "Smasher", "Breaker", "Earthshaker", "Worldbreaker", "Godhand"]
+			return ["Untrained", "Striker", "Smasher", "Breaker", "Earthshaker", "Worldbreaker", "Godhand"]
 		"Spears":
-			return ["Militia", "Pikeman", "Hoplite", "Lancer", "Dragoon", "Valkyrie"]
+			return ["Untrained", "Militia", "Pikeman", "Hoplite", "Lancer", "Dragoon", "Valkyrie"]
 		"Bows":
-			return ["Fletcher", "Archer", "Marksman", "Sharpshooter", "Deadeye", "Hawkeye"]
+			return ["Untrained", "Fletcher", "Archer", "Marksman", "Sharpshooter", "Deadeye", "Hawkeye"]
 		"Healing":
-			return ["Acolyte", "Healer", "Priest", "Bishop", "Cardinal", "Saint"]
+			return ["Untrained", "Acolyte", "Healer", "Priest", "Bishop", "Cardinal", "Saint"]
 		"Arcane":
-			return ["Apprentice", "Conjurer", "Mage", "Sorcerer", "Archmage", "Archon"]
+			return ["Untrained", "Apprentice", "Conjurer", "Mage", "Sorcerer", "Archmage", "Archon"]
 		"Guns":
-			return ["Recruit", "Gunner", "Sharpshooter", "Sniper", "Ace", "Deadshot"]
+			return ["Untrained", "Recruit", "Gunner", "Sharpshooter", "Sniper", "Ace", "Deadshot"]
 		"Blocking":
-			return ["Defender", "Guardian", "Bulwark", "Shieldmaster", "Aegis", "Invincible"]
+			return ["Untrained", "Defender", "Guardian", "Bulwark", "Shieldmaster", "Aegis", "Invincible"]
 		_:
-			return ["Novice", "Apprentice", "Journeyman", "Expert", "Master", "Grandmaster"]
+			return ["Untrained", "Novice", "Apprentice", "Journeyman", "Expert", "Master", "Grandmaster"]
 
 func create_equipment_slot_compact(slot_name: String, label_text: String, is_tool: bool = false) -> Control:
 	"""Create a compact equipment slot with small icon + text label below"""
