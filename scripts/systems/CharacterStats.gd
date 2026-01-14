@@ -395,15 +395,18 @@ func gain_experience(amount: int) -> void:
 	"""Grant experience points and check for level ups"""
 	if amount <= 0:
 		return
-	
+
 	experience += amount
 	experience_gained.emit(amount, experience)
-	
+
 	print("💰 Gained ", amount, " XP (Total: ", experience, "/", experience_to_next_level, ")")
-	
+
 	# Check for level up (can level multiple times from one XP gain)
 	while experience >= experience_to_next_level:
 		level_up_character()
+
+	# Sync to server immediately so XP isn't lost on disconnect
+	_sync_to_server()
 
 func level_up_character() -> void:
 	"""Level up the character and grant stat increases"""
@@ -475,6 +478,9 @@ func add_gold(amount: int) -> void:
 
 	print("💰 Gained ", amount, " gold (Total: ", gold, ")")
 
+	# Sync to server immediately so gold isn't lost on disconnect
+	_sync_to_server()
+
 func spend_gold(amount: int) -> bool:
 	"""Spend gold (returns false if not enough gold)"""
 	if amount < 0:
@@ -492,6 +498,9 @@ func spend_gold(amount: int) -> bool:
 	gold_changed.emit(-amount, gold)
 
 	print("💸 Spent ", amount, " gold (Remaining: ", gold, ")")
+
+	# Sync to server immediately so gold change persists
+	_sync_to_server()
 	return true
 
 func can_afford(amount: int) -> bool:
@@ -1126,6 +1135,17 @@ func load_save_data(data: Dictionary) -> void:
 
 	print("📊 Character data loaded: Level %d, Gold %d, Playtime %.0fs" % [level, gold, total_playtime])
 
+func _sync_to_server() -> void:
+	"""Sync current state to server immediately (for XP/level changes)"""
+	var network_manager = get_node_or_null("/root/NetworkManager")
+	if network_manager and network_manager.is_authenticated and not network_manager.is_host and not network_manager.is_guest:
+		network_manager.client_sync_state()
+
+func _initial_server_sync() -> void:
+	"""Called shortly after session start to sync initial state to server"""
+	print("[CharacterStats] Initial server sync: level=%d, xp=%d" % [level, experience])
+	_sync_to_server()
+
 # ============================================
 # PLAYTIME & KILL TRACKING
 # ============================================
@@ -1133,6 +1153,9 @@ func load_save_data(data: Dictionary) -> void:
 func start_session() -> void:
 	"""Start tracking playtime for this session"""
 	session_start_time = Time.get_unix_time_from_system()
+	# Do an initial sync to server after a short delay (let world finish loading)
+	if not Engine.is_editor_hint():
+		get_tree().create_timer(2.0).timeout.connect(_initial_server_sync)
 
 func get_session_playtime() -> float:
 	"""Get seconds played in current session"""
