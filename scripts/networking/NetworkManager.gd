@@ -1047,6 +1047,15 @@ func sync_player_state_to_server(state_data: Dictionary) -> void:
 	_client_player_states[peer_id] = state_data
 	print("[Server] Received state sync from peer %d: level=%d, xp=%d" % [peer_id, state_data.get("level", 0), state_data.get("xp", 0)])
 
+	# Immediately save to database (don't wait for auto-save timer)
+	# This ensures quit-now doesn't lose data
+	var username = authenticated_players[peer_id].username
+	if DatabaseManager and not username.is_empty():
+		if DatabaseManager.save_player_data(username, state_data):
+			print("[Server] Immediate save for %s: level=%d, xp=%d" % [username, state_data.get("level", 0), state_data.get("xp", 0)])
+		else:
+			print("[Server] ERROR: Failed immediate save for %s" % username)
+
 func _validate_player_state(state: Dictionary) -> bool:
 	"""Validate that player state has reasonable values"""
 	# Check required fields exist

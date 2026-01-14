@@ -6024,9 +6024,11 @@ func _quit_now() -> void:
 	# Sync state to server before disconnecting (gives RPC time to arrive)
 	# This ensures inventory changes are saved even on quick quit
 	if NetworkManager and NetworkManager.is_authenticated and not NetworkManager.is_host:
+		print("[Player] Quit Now - syncing state to server before disconnect...")
 		NetworkManager.client_sync_state()
-		# Small delay to let sync RPC reach server before closing connection
-		await get_tree().create_timer(0.3).timeout
+		# Give server time to receive and save the sync (increased from 0.3s)
+		await get_tree().create_timer(0.8).timeout
+		print("[Player] Quit Now - sync delay complete, disconnecting...")
 
 	# Disconnect - server will keep character for remaining logout timer
 	# (Server-side logout timer continues even after client disconnects)
