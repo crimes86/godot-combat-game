@@ -59,6 +59,7 @@ from app.routes.tapestry_routes import router as tapestry_router, init_tapestry_
 from app.routes.server_stats_routes import router as server_stats_router, init_server_stats_routes
 from app.routes.vendor_routes import router as vendor_router, init_vendor_routes
 from app.routes.telemetry_routes import router as telemetry_router, init_telemetry_routes
+from app.routes.server_routes import router as server_router
 from app.services.activity_service import (
     log_activity, ActivityCategory, AuthAction, ProviderAction,
     TapestryAction, ContributionAction, ForgeAction, SocialAction
@@ -6862,6 +6863,7 @@ app.include_router(tapestry_router)
 app.include_router(server_stats_router)
 app.include_router(vendor_router)
 app.include_router(telemetry_router)
+app.include_router(server_router)
 
 # Alias /api/character/initialize to the vendor route (spec says /api/character/initialize)
 from app.routes.vendor_routes import initialize_character as _init_char

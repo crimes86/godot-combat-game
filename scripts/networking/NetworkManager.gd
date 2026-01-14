@@ -87,6 +87,12 @@ const SERVER_SAVE_INTERVAL: float = 120.0  # Save all connected players every 2 
 var _pending_logouts: Dictionary = {}  # peer_id -> {timer: Timer, username: String, player_node: Node}
 const LOGOUT_TIMER_SECONDS: float = 10.0  # Character stays in world for 10s after logout request
 
+# Backend API for server-side character sync (server syncs to backend on logout)
+const BACKEND_API_BASE: String = "https://api.ashbane.net"
+# Server API key - set via environment variable in production
+# Generate with: openssl rand -hex 32
+var SERVER_API_KEY: String = ""
+
 func _ready():
 	# Set this as singleton
 	set_process(false)
@@ -94,6 +100,11 @@ func _ready():
 	# Initialize git hash for debugging
 	GIT_HASH = _get_git_commit_hash()
 	LogManager.info("Version %s" % NETWORK_VERSION, "network")
+
+	# Load server API key from environment (for dedicated servers)
+	SERVER_API_KEY = OS.get_environment("SERVER_API_KEY")
+	if not SERVER_API_KEY.is_empty():
+		LogManager.info("Server API key loaded from environment", "network")
 
 	# Connect multiplayer signals
 	multiplayer.peer_connected.connect(_on_player_connected)
@@ -897,7 +908,8 @@ func handle_ashbane_auth_request(username: String, user_id: int, display_name: S
 	authenticated_players[peer_id] = {
 		"username": storage_key,  # Use storage key for save/load
 		"player_data": player_data,
-		"is_guest": false  # IMPORTANT: Ashbane users are NOT guests
+		"is_guest": false,  # IMPORTANT: Ashbane users are NOT guests
+		"user_id": user_id  # Ashbane user ID for backend sync
 	}
 
 	# Add to connected players
@@ -1135,12 +1147,21 @@ func _complete_player_logout(peer_id: int) -> void:
 	var username = logout_info.username
 	var player_node = logout_info.player_node
 
+	# Get user_id from authenticated_players BEFORE we erase it (needed for backend sync)
+	var user_id: int = 0
+	var is_guest_player: bool = true
+	if authenticated_players.has(peer_id):
+		var auth_info = authenticated_players[peer_id]
+		user_id = auth_info.get("user_id", 0)
+		is_guest_player = auth_info.get("is_guest", true)
+
 	print("[Server] Camp timer complete for %s (peer %d) - saving and removing character" % [username, peer_id])
 	LogManager.info("Logout complete for %s - saving character" % username, "network")
 
 	# Save the player's CURRENT state from the node (not cached - they may have died!)
+	var state: Dictionary = {}
 	if player_node and is_instance_valid(player_node) and DatabaseManager:
-		var state = _build_state_from_player_node(player_node, peer_id)
+		state = _build_state_from_player_node(player_node, peer_id)
 		if not state.is_empty():
 			DatabaseManager.save_player_data(username, state)
 			print("[Server] Saved %s: level=%d, hp=%.0f, dead=%s" % [
@@ -1150,6 +1171,10 @@ func _complete_player_logout(peer_id: int) -> void:
 				str(state.get("current_hp", 0) <= 0)
 			])
 		DatabaseManager.logout_player(username)
+
+	# Sync to backend API (for non-guest Ashbane users)
+	if not is_guest_player and user_id > 0 and not state.is_empty():
+		_sync_player_to_backend(user_id, username, state, "camp_complete")
 
 	# Remove player from world
 	if player_node and is_instance_valid(player_node):
@@ -1191,6 +1216,74 @@ func _build_state_from_player_node(player_node: Node, peer_id: int) -> Dictionar
 				state[key] = cached[key]
 
 	return state
+
+# --- Server → Backend: Sync character on logout ---
+
+func _sync_player_to_backend(user_id: int, username: String, state: Dictionary, disconnect_reason: String = "") -> void:
+	"""Sync player state to backend API using server key.
+	Called when camp timer completes or player disconnects unexpectedly.
+	Server is authoritative for final state (player may have died during camp)."""
+	if not is_host:
+		return
+
+	if SERVER_API_KEY.is_empty():
+		print("[Server] Cannot sync to backend - SERVER_API_KEY not configured")
+		return
+
+	if user_id <= 0:
+		print("[Server] Cannot sync %s to backend - no user_id" % username)
+		return
+
+	var payload = {
+		"user_id": user_id,
+		"gold": state.get("gold", 0),
+		"level": state.get("level", 1),
+		"experience": state.get("xp", 0),
+		"inventory": state.get("inventory", []),
+		"equipped_weapon": state.get("equipped_weapon", ""),
+		"equipped_armor": state.get("equipped_armor", {}),
+		"weapon_skills": state.get("weapon_skills", {}),
+		"disconnect_reason": disconnect_reason
+	}
+
+	var url = BACKEND_API_BASE + "/api/server/character-sync"
+	var headers = PackedStringArray([
+		"X-Server-Key: " + SERVER_API_KEY,
+		"Content-Type: application/json"
+	])
+
+	# Create HTTP request for this sync
+	var http = HTTPRequest.new()
+	http.timeout = 10.0
+	add_child(http)
+	http.request_completed.connect(_on_backend_sync_completed.bind(username, http))
+
+	var json_body = JSON.stringify(payload)
+	var error = http.request(url, headers, HTTPClient.METHOD_POST, json_body)
+	if error != OK:
+		print("[Server] Failed to start backend sync for %s: error %d" % [username, error])
+		http.queue_free()
+		return
+
+	print("[Server] Syncing %s (user_id=%d) to backend: level=%d, gold=%d" % [
+		username, user_id, state.get("level", 1), state.get("gold", 0)
+	])
+
+
+func _on_backend_sync_completed(result: int, code: int, _headers: PackedStringArray,
+								body: PackedByteArray, username: String, http: HTTPRequest) -> void:
+	"""Handle backend sync HTTP response"""
+	http.queue_free()
+
+	if result == HTTPRequest.RESULT_SUCCESS and code == 200:
+		print("[Server] Backend sync SUCCESS for %s" % username)
+		LogManager.info("Backend sync success: %s" % username, "network")
+	else:
+		var body_text = body.get_string_from_utf8() if body.size() > 0 else ""
+		print("[Server] Backend sync FAILED for %s: result=%d, code=%d, body=%s" % [
+			username, result, code, body_text.substr(0, 200)
+		])
+		LogManager.warn("Backend sync failed for %s: code=%d" % [username, code], "network")
 
 # --- Client → Server: Sync player state ---
 
