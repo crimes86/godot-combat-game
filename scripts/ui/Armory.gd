@@ -11176,6 +11176,12 @@ func _load_character_from_backend() -> void:
 	if character.has("equipped_weapon") and character.equipped_weapon != "":
 		CharacterStats.equipped_weapon_data = {"id": character.equipped_weapon}
 
+	# Load weapon skills
+	if character.has("weapon_skills") and character.weapon_skills is Dictionary:
+		if WeaponSkillManager:
+			WeaponSkillManager.load_save_data({"weapon_skills": character.weapon_skills})
+			LogManager.info("Loaded weapon skills from backend", "armory")
+
 	LogManager.info("Loaded character from backend: Level %d, %d gold, %d items" % [
 		character.get("level", 1),
 		character.get("gold", 0),

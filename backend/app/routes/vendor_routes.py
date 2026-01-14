@@ -550,6 +550,7 @@ class LogoutSyncRequest(BaseModel):
     inventory: list = []
     equipped_weapon: str = ""
     equipped_armor: dict = {}  # slot -> armor_id mapping
+    weapon_skills: dict = {}  # category -> skill value (0.0 to 300.0)
 
 
 class LogoutSyncResponse(BaseModel):
@@ -592,6 +593,7 @@ async def logout_sync(
     data["experience"] = payload.experience
     data["equipped_weapon"] = payload.equipped_weapon
     data["equipped_armor"] = payload.equipped_armor
+    data["weapon_skills"] = payload.weapon_skills  # Weapon skill mastery
 
     # Trust client inventory - user is authenticated, respect their sales/deletions
     # But preserve purchased_at metadata from server for provenance tracking
@@ -765,6 +767,7 @@ async def initialize_character(
                 "inventory": char_data.get("inventory", []),
                 "equipped_weapon": char_data.get("equipped_weapon", ""),
                 "equipped_armor": char_data.get("equipped_armor", {}),
+                "weapon_skills": char_data.get("weapon_skills", {}),
                 "is_new": False
             }
         )

@@ -508,6 +508,8 @@ func save_player_data(username: String, data: Dictionary) -> bool:
 		"inventory", "equipment", "appearance",
 		"total_playtime_seconds",
 		"quests",
+		# Full character stats (includes equipped weapon, kill counts, etc.)
+		"character_stats",
 		# Weapon skill mastery
 		"weapon_skills",
 		# Duel statistics

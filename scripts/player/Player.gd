@@ -5881,8 +5881,10 @@ func _start_logout_timer() -> void:
 	logout_timer_active = true
 	logout_time_remaining = LOGOUT_TIMER_DURATION
 
-	# Notify server to start their camp timer (EQ-style - character stays in world)
+	# Sync current state to server FIRST - server will use this when timer expires
 	if NetworkManager and NetworkManager.is_authenticated and not NetworkManager.is_host:
+		NetworkManager.client_sync_state()
+		print("[Player] Synced state to server before logout timer")
 		NetworkManager.request_logout.rpc_id(1)
 		print("[Player] Requested server-side camp timer")
 
@@ -6028,57 +6030,12 @@ func _cancel_logout() -> void:
 
 func _quit_now() -> void:
 	"""Quit game immediately - character stays in-game on server for remaining camp time.
-	EQ-style: If you get killed while camping, you lose your stuff!"""
-	# Save sound settings before leaving
+	EQ-style: If you get killed while camping, you lose your stuff!
+	Syncs to backend API before quitting so data is saved."""
 	_save_sound_settings()
 
-	# Sync to backend FIRST (persistent save) - bypass rate limit for quit
-	if CharacterStats:
-		CharacterStats._last_backend_sync_time = 0.0  # Force bypass rate limit
-		CharacterStats.sync_to_backend()
-		print("[Player] Quit Now - synced to backend")
-		# Brief delay to let backend sync start (fire and forget - we're quitting anyway)
-		await get_tree().create_timer(0.5).timeout
-
-	# Sync current state to game server (inventory, stats, etc.)
-	# Server will merge this with live character state when camp timer expires
-	# This ensures inventory/stat changes are captured, but HP will be from the live character
-	if NetworkManager and NetworkManager.is_authenticated and not NetworkManager.is_host:
-		print("[Player] Quit Now - syncing to game server...")
-		NetworkManager.client_sync_state()
-		# Brief delay to let sync RPC arrive
-		await get_tree().create_timer(0.3).timeout
-
-	# Disconnect - server keeps character in world for remaining camp time
-	# Character can still be attacked/killed! Final save happens when timer expires.
-	if NetworkManager:
-		NetworkManager.close_connection()
-
-	# Exit the game completely
-	get_tree().quit()
-
-func _complete_logout() -> void:
-	"""Actually disconnect after timer completes"""
-	logout_timer_active = false
-
-	# Clean up logout overlay
-	if logout_timer_overlay and is_instance_valid(logout_timer_overlay):
-		logout_timer_overlay.queue_free()
-		logout_timer_overlay = null
-
-	# Stop in-game music before leaving (prevents overlap with armory music)
-	if SoundManager:
-		SoundManager.stop_game_music()
-
-	# Save sound settings before leaving
-	_save_sound_settings()
-
-	# Save character appearance to backend for Armory preview
+	# Sync to backend API (source of truth for login data)
 	if AshbaneAuth and AshbaneAuth.is_authenticated:
-		var appearance = get_appearance_data()
-		AshbaneAuth.save_appearance(appearance)
-
-		# Full character sync to backend - persistent world save
 		var inventory_data = []
 		for item in InventorySystem.inventory_items:
 			if item != null:
@@ -6094,53 +6051,98 @@ func _complete_logout() -> void:
 		if CharacterStats.equipped_weapon_data and not CharacterStats.equipped_weapon_data.is_empty():
 			equipped_weapon_id = CharacterStats.equipped_weapon_data.get("id", CharacterStats.equipped_weapon_data.get("name", ""))
 
-		# Start the sync and WAIT for it to complete before changing scenes
-		# This prevents inventory changes from being lost if user quickly re-enters
+		# Get weapon skills
+		var weapon_skills_data = {}
+		if WeaponSkillManager:
+			weapon_skills_data = WeaponSkillManager.get_save_data().get("weapon_skills", {})
+
+		print("[Player] Syncing to backend before quit...")
 		AshbaneAuth.sync_character_to_backend(
 			CharacterStats.level,
 			CharacterStats.experience,
 			CharacterStats.gold,
 			inventory_data,
 			equipped_weapon_id,
-			equipped_armor_data
+			equipped_armor_data,
+			weapon_skills_data
 		)
+		# Brief delay to let HTTP request start
+		await get_tree().create_timer(0.3).timeout
 
-		# Wait for sync to complete (with short timeout - backend now trusts client inventory)
-		var sync_completed = false
-		var sync_timeout = 2.0  # Max 2 seconds for HTTP roundtrip
-		var sync_start = Time.get_ticks_msec()
-
-		# Connect to completion signal temporarily
-		var on_sync_done = func(_success: bool, _response: Dictionary):
-			sync_completed = true
-
-		if not AshbaneAuth.character_sync_completed.is_connected(on_sync_done):
-			AshbaneAuth.character_sync_completed.connect(on_sync_done, CONNECT_ONE_SHOT)
-
-		# Wait for completion or timeout
-		while not sync_completed and (Time.get_ticks_msec() - sync_start) < sync_timeout * 1000:
-			await get_tree().create_timer(0.1).timeout
-
-		if sync_completed:
-			print("[Player] Character sync completed successfully")
-		else:
-			print("[Player] Character sync timed out after %.1fs" % sync_timeout)
-
-	# Sync state to server before disconnecting (give RPC time to complete)
+	# Also sync to game server
 	if NetworkManager and NetworkManager.is_authenticated and not NetworkManager.is_host:
 		NetworkManager.client_sync_state()
+		print("[Player] Synced state to game server")
+		await get_tree().create_timer(0.2).timeout
 
-	# Small delay to let network RPC complete
-	await get_tree().create_timer(0.3).timeout
-
-	# Close connection and return to Armory (pre-game hub)
-	# User can then logout from Armory to go back to MainMenu login screen
 	if NetworkManager:
 		NetworkManager.close_connection()
 
-	var tree = get_tree()
-	if tree:
-		tree.change_scene_to_file("res://scenes/ui/Armory.tscn")
+	get_tree().quit()
+
+func _complete_logout() -> void:
+	"""Disconnect after camp timer completes and return to Armory.
+	Syncs to backend API (source of truth for login) before transitioning."""
+	logout_timer_active = false
+
+	var scene_tree = get_tree()
+	if not scene_tree:
+		push_error("[Player] _complete_logout: No scene tree available!")
+		return
+
+	# Clean up logout overlay
+	if logout_timer_overlay and is_instance_valid(logout_timer_overlay):
+		logout_timer_overlay.queue_free()
+		logout_timer_overlay = null
+
+	# Stop in-game music before leaving
+	if SoundManager:
+		SoundManager.stop_game_music()
+
+	_save_sound_settings()
+
+	# Sync to backend API (source of truth for login data)
+	if AshbaneAuth and AshbaneAuth.is_authenticated:
+		var appearance = get_appearance_data()
+		AshbaneAuth.save_appearance(appearance)
+
+		# Build inventory and equipment data
+		var inventory_data = []
+		for item in InventorySystem.inventory_items:
+			if item != null:
+				inventory_data.append(item)
+
+		var equipped_armor_data = {}
+		for slot in CharacterStats.equipped_armor:
+			var armor_item = CharacterStats.equipped_armor[slot]
+			if armor_item != null:
+				equipped_armor_data[slot] = armor_item
+
+		var equipped_weapon_id = ""
+		if CharacterStats.equipped_weapon_data and not CharacterStats.equipped_weapon_data.is_empty():
+			equipped_weapon_id = CharacterStats.equipped_weapon_data.get("id", CharacterStats.equipped_weapon_data.get("name", ""))
+
+		# Get weapon skills
+		var weapon_skills_data = {}
+		if WeaponSkillManager:
+			weapon_skills_data = WeaponSkillManager.get_save_data().get("weapon_skills", {})
+
+		print("[Player] Syncing to backend before logout...")
+		AshbaneAuth.sync_character_to_backend(
+			CharacterStats.level,
+			CharacterStats.experience,
+			CharacterStats.gold,
+			inventory_data,
+			equipped_weapon_id,
+			equipped_armor_data,
+			weapon_skills_data
+		)
+
+	if NetworkManager:
+		NetworkManager.close_connection()
+
+	print("[Player] Transitioning to Armory...")
+	scene_tree.change_scene_to_file("res://scenes/ui/Armory.tscn")
 
 func _process_logout_timer(delta: float, input_direction: Vector2) -> void:
 	"""Process logout countdown - cancel if player moves or takes damage"""
