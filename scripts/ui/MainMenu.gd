@@ -893,7 +893,15 @@ func _on_cancel_connect_pressed() -> void:
 
 func _on_authentication_required():
 	"""Server requested authentication - use Ashbane auth if logged in, otherwise guest"""
-	# Check if user is authenticated with Ashbane
+	# Debug: Log auth state
+	var has_ashbane = AshbaneAuth != null
+	var is_logged = AshbaneAuth.is_logged_in() if has_ashbane else false
+	var is_guest_mode = AshbaneAuth.is_guest if has_ashbane else true
+	print("[MainMenu] Auth required - AshbaneAuth=%s, is_logged_in=%s, is_guest=%s, state=%s" % [has_ashbane, is_logged, is_guest_mode, MenuState.keys()[current_state]])
+	LogManager.info("Auth required: AshbaneAuth=%s, logged=%s, guest=%s, state=%s" % [has_ashbane, is_logged, is_guest_mode, MenuState.keys()[current_state]], "network")
+
+	# Check if user is authenticated with Ashbane - ALWAYS check this first, regardless of menu state
+	# Even if user clicked "Play as Guest", if they're Ashbane authenticated, use that for persistence
 	if AshbaneAuth and AshbaneAuth.is_logged_in() and not AshbaneAuth.is_guest:
 		# Use Ashbane authentication for persistent data
 		var username = AshbaneAuth.username
@@ -901,6 +909,7 @@ func _on_authentication_required():
 		var display_name = AshbaneAuth.display_name if AshbaneAuth.display_name else username
 		if server_status_label:
 			server_status_label.text = "Authenticating as %s..." % display_name
+		print("[MainMenu] Using Ashbane auth: %s (id: %d)" % [display_name, user_id])
 		LogManager.info("Using Ashbane auth: %s (id: %d)" % [display_name, user_id], "network")
 		NetworkManager.send_ashbane_login(username, user_id, display_name)
 	elif current_state == MenuState.GUEST_SERVER_SELECT:
@@ -910,6 +919,8 @@ func _on_authentication_required():
 			guest_name = "Guest"  # Server adds suffix if needed for conflicts
 		if server_status_label:
 			server_status_label.text = "Joining as guest..."
+		print("[MainMenu] Using GUEST mode: %s (Ashbane auth check failed or not available)" % guest_name)
+		LogManager.info("Using guest mode: %s" % guest_name, "network")
 		NetworkManager.send_guest_login(guest_name)
 	else:
 		# Normal mode - show auth panel

@@ -800,85 +800,63 @@ func handle_ashbane_auth_request(username: String, user_id: int, display_name: S
 
 	var peer_id = multiplayer.get_remote_sender_id()
 
-	# Sanitize username (use as unique identifier for persistence)
-	username = username.strip_edges()
-	if username.is_empty():
-		rpc_id(peer_id, "receive_login_response", false, "Invalid username", {})
-		return
+	# Use Ashbane user_id as the storage key (guaranteed unique and valid format)
+	# This avoids issues with email addresses or special characters in usernames
+	var storage_key = "ashbane_%d" % user_id
 
 	# Use display_name for in-game name, fallback to username
 	var player_name = display_name if not display_name.is_empty() else username
 	player_name = _sanitize_guest_name(player_name)  # Sanitize for safety
 
-	LogManager.info("Ashbane auth request from peer %d: %s (user_id: %d)" % [peer_id, player_name, user_id], "network")
+	print("[Server] Ashbane auth: peer=%d, user_id=%d, storage_key=%s, display=%s" % [peer_id, user_id, storage_key, player_name])
+	LogManager.info("Ashbane auth request from peer %d: %s (user_id: %d, key: %s)" % [peer_id, player_name, user_id, storage_key], "network")
 
 	# Check if this Ashbane user has existing data in database
 	var player_data: Dictionary = {}
 	if DatabaseManager:
-		# Try to get existing data by username
-		var existing = DatabaseManager.get_player_data(username)
+		# Try to get existing data by storage key
+		var existing = DatabaseManager.get_player_data(storage_key)
 		if not existing.is_empty():
 			# Existing user - load their data
 			player_data = existing
-			player_data["character_name"] = player_name  # Update display name
-			LogManager.info("Loaded existing Ashbane user data: %s" % username, "database")
+			player_data["character_name"] = player_name  # Update display name in case it changed
+			print("[Server] Loaded existing Ashbane user: %s, level=%d, xp=%d" % [storage_key, player_data.get("level", 1), player_data.get("xp", 0)])
+			LogManager.info("Loaded existing Ashbane user data: %s (level %d)" % [storage_key, player_data.get("level", 1)], "database")
 		else:
 			# New Ashbane user - create entry with default data
-			# Create account without password (Ashbane-only auth)
-			var create_result = DatabaseManager.create_account(username, "ashbane_auth_%d" % user_id)
+			# Use storage_key as username (guaranteed valid: alphanumeric + underscore)
+			var create_result = DatabaseManager.create_account(storage_key, "ashbane_auth_%d" % user_id)
 			if create_result.success:
-				player_data = DatabaseManager.get_player_data(username)
-				if player_data.is_empty():
-					# Initialize with defaults
-					player_data = {
-						"id": user_id,
-						"username": username,
-						"character_name": player_name,
-						"gender": "male",
-						"level": 1,
-						"xp": 0,
-						"gold": 100,
-						"strength": 10,
-						"agility": 10,
-						"dexterity": 10,
-						"intelligence": 10,
-						"wisdom": 10,
-						"vitality": 10,
-						"current_hp": 100.0,
-						"max_hp": 100.0,
-						"position_x": -2000.0,
-						"position_y": 0.0,
-						"inventory": [],
-						"equipment": {},
-						"appearance": {}
-					}
-				LogManager.info("Created new Ashbane user: %s" % username, "database")
+				player_data = DatabaseManager.get_player_data(storage_key)
+				# Update character name to display name
+				if not player_data.is_empty():
+					player_data["character_name"] = player_name
+					DatabaseManager.save_player_data(storage_key, player_data)
+				print("[Server] Created new Ashbane user: %s" % storage_key)
+				LogManager.info("Created new Ashbane user: %s" % storage_key, "database")
 			else:
-				# Account exists but couldn't retrieve - try direct login
-				player_data = DatabaseManager.get_player_data(username)
-				if player_data.is_empty():
-					LogManager.warn("Failed to create/retrieve Ashbane user: %s" % username, "database")
-	else:
-		# No database - create temporary data
-		player_data = {
-			"id": user_id,
-			"username": username,
-			"character_name": player_name,
-			"gender": "male",
-			"level": 1,
-			"xp": 0,
-			"gold": 100
-		}
+				# This shouldn't happen with sanitized storage key, but handle it
+				print("[Server] ERROR: Failed to create Ashbane account: %s - %s" % [storage_key, create_result.get("error", "unknown")])
+				LogManager.error("Failed to create Ashbane account: %s - %s" % [storage_key, create_result.get("error", "unknown")], "database")
+				rpc_id(peer_id, "receive_login_response", false, "Failed to create account", {})
+				return
+
+	# If we still don't have player data, something is wrong
+	if player_data.is_empty():
+		print("[Server] ERROR: No player data for Ashbane user: %s" % storage_key)
+		LogManager.error("No player data for Ashbane user: %s" % storage_key, "database")
+		rpc_id(peer_id, "receive_login_response", false, "Failed to load player data", {})
+		return
 
 	# Ensure player_data has required fields
-	player_data["username"] = username
+	player_data["username"] = storage_key  # Use storage key for persistence
 	player_data["character_name"] = player_name
 	if not player_data.has("id"):
 		player_data["id"] = user_id
 
 	# Add to authenticated players (NOT guest!)
 	authenticated_players[peer_id] = {
-		"username": username,
+		"username": storage_key,  # Use storage key for save/load
 		"player_data": player_data,
 		"is_guest": false  # IMPORTANT: Ashbane users are NOT guests
 	}
@@ -896,13 +874,14 @@ func handle_ashbane_auth_request(username: String, user_id: int, display_name: S
 	LogManager.debug("Emitting player_authenticated for Ashbane peer %d: '%s'" % [peer_id, player_name], "network")
 	player_authenticated.emit(peer_id, player_name)
 
-	# Start auto-save for this user
-	if DatabaseManager:
-		DatabaseManager.start_auto_save(username)
+	# NOTE: Server uses _server_save_timer to save all players periodically.
+	# Don't call DatabaseManager.start_auto_save on server - it's for client-side only.
+	print("[Server] Player %s registered for server-side auto-save" % storage_key)
 
 	# Send success to client
 	rpc_id(peer_id, "receive_login_response", true, "", player_data)
-	LogManager.info("Ashbane user %s (peer %d) authenticated and joined" % [player_name, peer_id], "player")
+	print("[Server] Ashbane auth SUCCESS: %s (peer %d) - level %d, xp %d" % [player_name, peer_id, player_data.get("level", 1), player_data.get("xp", 0)])
+	LogManager.info("Ashbane user %s (peer %d) authenticated - level %d" % [player_name, peer_id, player_data.get("level", 1)], "player")
 
 
 # --- Client-side auth response handlers ---
@@ -918,9 +897,9 @@ func receive_login_response(success: bool, error: String, player_data: Dictionar
 		var ashbane_auth = get_node_or_null("/root/AshbaneAuth")
 		if ashbane_auth and ashbane_auth.is_authenticated and not ashbane_auth.is_guest:
 			is_guest = false
-			# Use Ashbane username for persistence
-			player_data["username"] = ashbane_auth.username
-			LogManager.info("Ashbane-authenticated user: %s (overriding guest status)" % ashbane_auth.username, "network")
+			# NOTE: Do NOT override player_data["username"] - server uses storage_key (ashbane_XXXX)
+			# for persistence. Keep the server-assigned username for save/load consistency.
+			LogManager.info("Ashbane-authenticated user (storage: %s)" % player_data.get("username", "?"), "network")
 		else:
 			is_guest = player_data.get("id", 0) < 0  # Negative ID = guest
 
@@ -929,10 +908,12 @@ func receive_login_response(success: bool, error: String, player_data: Dictionar
 		player_name = player_data.get("display_name", player_data.get("character_name", player_data.get("username", "Player")))
 
 		# Start auto-save for non-guest players
+		# This triggers periodic client->server state sync
 		if not is_guest and DatabaseManager:
-			var username = player_data.get("username", "")
-			if not username.is_empty():
-				DatabaseManager.start_auto_save(username)
+			var storage_key = player_data.get("username", "")
+			if not storage_key.is_empty():
+				DatabaseManager.start_auto_save(storage_key)
+				print("[Client] Auto-save started for storage_key: %s" % storage_key)
 				# Start session playtime tracking
 				CharacterStats.start_session()
 
@@ -1004,18 +985,30 @@ func _on_server_save_timer() -> void:
 	if not is_host or not DatabaseManager:
 		return
 
+	print("[Server] Auto-save timer fired. Authenticated players: %d" % authenticated_players.size())
 	var saved_count = 0
+	var skipped_guest = 0
+	var no_state = 0
+
 	for peer_id in authenticated_players:
 		var auth_info = authenticated_players[peer_id]
 		if auth_info.is_guest:
+			skipped_guest += 1
 			continue
 
 		var username = auth_info.username
 		if _client_player_states.has(peer_id):
 			var state = _client_player_states[peer_id]
+			print("[Server] Saving peer %d (%s): level=%d, xp=%d" % [peer_id, username, state.get("level", 0), state.get("xp", 0)])
 			if DatabaseManager.save_player_data(username, state):
 				saved_count += 1
+			else:
+				print("[Server] ERROR: Failed to save %s" % username)
+		else:
+			no_state += 1
+			print("[Server] No cached state for peer %d (%s)" % [peer_id, username])
 
+	print("[Server] Auto-save complete: saved=%d, guests=%d, no_state=%d" % [saved_count, skipped_guest, no_state])
 	if saved_count > 0:
 		LogManager.info("Server auto-saved %d player(s)" % saved_count, "database")
 
@@ -1052,7 +1045,7 @@ func sync_player_state_to_server(state_data: Dictionary) -> void:
 
 	# Store the state
 	_client_player_states[peer_id] = state_data
-	# print("📀 [NetworkManager] Received state from peer %d" % peer_id)  # Uncomment for debug
+	print("[Server] Received state sync from peer %d: level=%d, xp=%d" % [peer_id, state_data.get("level", 0), state_data.get("xp", 0)])
 
 func _validate_player_state(state: Dictionary) -> bool:
 	"""Validate that player state has reasonable values"""

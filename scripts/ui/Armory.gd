@@ -10975,14 +10975,25 @@ func _on_server_connected() -> void:
 		NetworkManager.login_failed.connect(_on_login_failed)
 
 	# Send authentication request to server
-	var player_name = "Guest"
-	if AshbaneAuth:
-		if not AshbaneAuth.display_name.is_empty():
-			player_name = AshbaneAuth.display_name
-		elif not AshbaneAuth.username.is_empty():
-			player_name = AshbaneAuth.username
-	LogManager.info("Sending guest authentication as: %s" % player_name, "armory")
-	NetworkManager.send_guest_login(player_name)
+	# Use Ashbane auth for persistent data if available, otherwise guest
+	if AshbaneAuth and AshbaneAuth.is_logged_in() and not AshbaneAuth.is_guest:
+		var username = AshbaneAuth.username
+		var user_id = AshbaneAuth.user_id
+		var display_name = AshbaneAuth.display_name if not AshbaneAuth.display_name.is_empty() else username
+		LogManager.info("Sending Ashbane authentication: %s (id: %d)" % [display_name, user_id], "armory")
+		print("[Armory] Sending Ashbane auth: %s (user_id: %d)" % [display_name, user_id])
+		NetworkManager.send_ashbane_login(username, user_id, display_name)
+	else:
+		# Fallback to guest mode
+		var player_name = "Guest"
+		if AshbaneAuth:
+			if not AshbaneAuth.display_name.is_empty():
+				player_name = AshbaneAuth.display_name
+			elif not AshbaneAuth.username.is_empty():
+				player_name = AshbaneAuth.username
+		LogManager.info("Sending guest authentication as: %s" % player_name, "armory")
+		print("[Armory] Sending GUEST auth: %s" % player_name)
+		NetworkManager.send_guest_login(player_name)
 
 func _on_login_success(_player_data: Dictionary) -> void:
 	"""Called when server authentication succeeds"""
