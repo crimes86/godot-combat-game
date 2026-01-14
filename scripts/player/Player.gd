@@ -5881,6 +5881,11 @@ func _start_logout_timer() -> void:
 	logout_timer_active = true
 	logout_time_remaining = LOGOUT_TIMER_DURATION
 
+	# Notify server to start their camp timer (EQ-style - character stays in world)
+	if NetworkManager and NetworkManager.is_authenticated and not NetworkManager.is_host:
+		NetworkManager.request_logout.rpc_id(1)
+		print("[Player] Requested server-side camp timer")
+
 	# Create overlay
 	logout_timer_overlay = CanvasLayer.new()
 	logout_timer_overlay.name = "LogoutTimerOverlay"
@@ -6012,26 +6017,32 @@ func _cancel_logout() -> void:
 		logout_timer_overlay.queue_free()
 		logout_timer_overlay = null
 
+	# Notify server to cancel their camp timer
+	if NetworkManager and NetworkManager.is_authenticated and not NetworkManager.is_host:
+		NetworkManager.cancel_logout.rpc_id(1)
+		print("[Player] Cancelled server-side camp timer")
+
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager and sound_manager.has_method("play_button_click_sound"):
 		sound_manager.play_button_click_sound()
 
 func _quit_now() -> void:
-	"""Quit game immediately - client exits but character stays in-game for full 10s"""
+	"""Quit game immediately - character stays in-game on server for remaining camp time.
+	EQ-style: If you get killed while camping, you lose your stuff!"""
 	# Save sound settings before leaving
 	_save_sound_settings()
 
-	# Sync state to server before disconnecting (gives RPC time to arrive)
-	# This ensures inventory changes are saved even on quick quit
+	# Sync current state to server (inventory, stats, etc.)
+	# Server will merge this with live character state when camp timer expires
+	# This ensures inventory/stat changes are captured, but HP will be from the live character
 	if NetworkManager and NetworkManager.is_authenticated and not NetworkManager.is_host:
-		print("[Player] Quit Now - syncing state to server before disconnect...")
+		print("[Player] Quit Now - syncing inventory/stats before disconnect...")
 		NetworkManager.client_sync_state()
-		# Give server time to receive and save the sync (increased from 0.3s)
-		await get_tree().create_timer(0.8).timeout
-		print("[Player] Quit Now - sync delay complete, disconnecting...")
+		# Brief delay to let sync RPC arrive
+		await get_tree().create_timer(0.3).timeout
 
-	# Disconnect - server will keep character for remaining logout timer
-	# (Server-side logout timer continues even after client disconnects)
+	# Disconnect - server keeps character in world for remaining camp time
+	# Character can still be attacked/killed! Final save happens when timer expires.
 	if NetworkManager:
 		NetworkManager.close_connection()
 

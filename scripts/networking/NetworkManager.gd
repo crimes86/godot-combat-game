@@ -83,6 +83,10 @@ var _client_player_states: Dictionary = {}  # peer_id -> {position, inventory, s
 var _server_save_timer: Timer = null
 const SERVER_SAVE_INTERVAL: float = 120.0  # Save all connected players every 2 minutes
 
+# EQ-style camp/logout system - character stays in world after disconnect
+var _pending_logouts: Dictionary = {}  # peer_id -> {timer: Timer, username: String, player_node: Node}
+const LOGOUT_TIMER_SECONDS: float = 10.0  # Character stays in world for 10s after logout request
+
 func _ready():
 	# Set this as singleton
 	set_process(false)
@@ -270,7 +274,37 @@ func _on_player_connected(id: int):
 func _on_player_disconnected(id: int):
 	LogManager.info("Player disconnected: %d" % id, "network")
 
-	# Handle logout for authenticated players (server-side)
+	# Check if this player has a pending logout timer (EQ-style camp)
+	if _pending_logouts.has(id):
+		# Player quit early - let the timer continue, character stays in world
+		LogManager.info("Player %d quit early - character camping for remaining time" % id, "network")
+		print("[Server] Player %d quit early during logout timer - character stays in world" % id)
+		# Don't clean up yet - the timer will handle it
+		# Just remove from connected_players so they can't receive RPCs
+		if connected_players.has(id):
+			connected_players.erase(id)
+		return
+
+	# No pending logout - this is an unexpected disconnect (crash, force quit, etc.)
+	# Start a logout timer to keep character in world (prevents combat logging)
+	if is_host and authenticated_players.has(id):
+		var auth_info = authenticated_players[id]
+		if not auth_info.is_guest:
+			# Find the player's character node
+			var player_node = _find_player_node(id)
+			if player_node:
+				LogManager.info("Unexpected disconnect for %s - starting camp timer" % auth_info.username, "network")
+				print("[Server] Unexpected disconnect for peer %d - character camping for %.0fs" % [id, LOGOUT_TIMER_SECONDS])
+				_start_logout_timer(id, auth_info.username, player_node)
+				if connected_players.has(id):
+					connected_players.erase(id)
+				return
+
+	# Guest or no player node - clean up immediately
+	_cleanup_disconnected_player(id)
+
+func _cleanup_disconnected_player(id: int) -> void:
+	"""Clean up a disconnected player immediately (no camp timer)"""
 	if is_host and authenticated_players.has(id):
 		var auth_info = authenticated_players[id]
 		if not auth_info.is_guest and DatabaseManager:
@@ -285,17 +319,22 @@ func _on_player_disconnected(id: int):
 		authenticated_players.erase(id)
 		if DatabaseManager:
 			DatabaseManager.clear_rate_limit(id)
-		# Clean up chat rate limit tracking
 		_chat_rate_limits.erase(id)
 
 	if connected_players.has(id):
 		connected_players.erase(id)
-
-		# Notify remaining players
 		if is_host:
 			rpc("player_left", id)
 
 	player_disconnected.emit(id)
+
+func _find_player_node(peer_id: int) -> Node:
+	"""Find a player's character node by their peer ID"""
+	var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	for player in players:
+		if player.get_multiplayer_authority() == peer_id:
+			return player
+	return null
 
 # Called when we connect to server (client only)
 func _on_connected_to_server():
@@ -1017,6 +1056,141 @@ func save_all_players() -> void:
 	if not is_host:
 		return
 	_on_server_save_timer()
+
+# ═══════════════════════════════════════════════════════════════════════════
+# EQ-STYLE CAMP/LOGOUT SYSTEM
+# Character stays in world after disconnect, vulnerable to attack
+# ═══════════════════════════════════════════════════════════════════════════
+
+@rpc("any_peer", "reliable")
+func request_logout() -> void:
+	"""Client requests to start logout timer (EQ-style camp)"""
+	if not is_host:
+		return
+
+	var peer_id = multiplayer.get_remote_sender_id()
+	if not authenticated_players.has(peer_id):
+		return
+
+	var auth_info = authenticated_players[peer_id]
+	if auth_info.is_guest:
+		# Guests can logout immediately
+		return
+
+	var player_node = _find_player_node(peer_id)
+	if not player_node:
+		return
+
+	# Start the logout timer
+	_start_logout_timer(peer_id, auth_info.username, player_node)
+	LogManager.info("Player %s started logout timer (%.0fs)" % [auth_info.username, LOGOUT_TIMER_SECONDS], "network")
+	print("[Server] Player %s (peer %d) started camp timer - %.0fs" % [auth_info.username, peer_id, LOGOUT_TIMER_SECONDS])
+
+@rpc("any_peer", "reliable")
+func cancel_logout() -> void:
+	"""Client cancels their logout timer"""
+	if not is_host:
+		return
+
+	var peer_id = multiplayer.get_remote_sender_id()
+	if _pending_logouts.has(peer_id):
+		var logout_info = _pending_logouts[peer_id]
+		if logout_info.timer and is_instance_valid(logout_info.timer):
+			logout_info.timer.stop()
+			logout_info.timer.queue_free()
+		_pending_logouts.erase(peer_id)
+		LogManager.info("Player cancelled logout", "network")
+		print("[Server] Peer %d cancelled logout timer" % peer_id)
+
+func _start_logout_timer(peer_id: int, username: String, player_node: Node) -> void:
+	"""Start server-side logout timer - character stays in world"""
+	# Cancel any existing timer
+	if _pending_logouts.has(peer_id):
+		var existing = _pending_logouts[peer_id]
+		if existing.timer and is_instance_valid(existing.timer):
+			existing.timer.stop()
+			existing.timer.queue_free()
+
+	# Create timer
+	var timer = Timer.new()
+	timer.name = "LogoutTimer_%d" % peer_id
+	timer.one_shot = true
+	timer.timeout.connect(_complete_player_logout.bind(peer_id))
+	add_child(timer)
+	timer.start(LOGOUT_TIMER_SECONDS)
+
+	# Store pending logout info
+	_pending_logouts[peer_id] = {
+		"timer": timer,
+		"username": username,
+		"player_node": player_node
+	}
+
+func _complete_player_logout(peer_id: int) -> void:
+	"""Called when logout timer expires - save character state and remove from world"""
+	if not _pending_logouts.has(peer_id):
+		return
+
+	var logout_info = _pending_logouts[peer_id]
+	var username = logout_info.username
+	var player_node = logout_info.player_node
+
+	print("[Server] Camp timer complete for %s (peer %d) - saving and removing character" % [username, peer_id])
+	LogManager.info("Logout complete for %s - saving character" % username, "network")
+
+	# Save the player's CURRENT state from the node (not cached - they may have died!)
+	if player_node and is_instance_valid(player_node) and DatabaseManager:
+		var state = _build_state_from_player_node(player_node, peer_id)
+		if not state.is_empty():
+			DatabaseManager.save_player_data(username, state)
+			print("[Server] Saved %s: level=%d, hp=%.0f, dead=%s" % [
+				username,
+				state.get("level", 1),
+				state.get("current_hp", 0),
+				str(state.get("current_hp", 0) <= 0)
+			])
+		DatabaseManager.logout_player(username)
+
+	# Remove player from world
+	if player_node and is_instance_valid(player_node):
+		player_node.queue_free()
+
+	# Clean up timer
+	if logout_info.timer and is_instance_valid(logout_info.timer):
+		logout_info.timer.queue_free()
+
+	# Clean up tracking
+	_pending_logouts.erase(peer_id)
+	authenticated_players.erase(peer_id)
+	_client_player_states.erase(peer_id)
+	_chat_rate_limits.erase(peer_id)
+	if DatabaseManager:
+		DatabaseManager.clear_rate_limit(peer_id)
+
+	# Notify remaining players
+	rpc("player_left", peer_id)
+	player_disconnected.emit(peer_id)
+
+func _build_state_from_player_node(player_node: Node, peer_id: int) -> Dictionary:
+	"""Build save state directly from player node (for logout after disconnect)"""
+	var state = {}
+
+	# Position and health from the actual node
+	if player_node and is_instance_valid(player_node):
+		state["position_x"] = player_node.global_position.x
+		state["position_y"] = player_node.global_position.y
+		if "current_health" in player_node:
+			state["current_hp"] = player_node.current_health
+
+	# Try to get from cached state first (has inventory, stats, etc.)
+	if _client_player_states.has(peer_id):
+		var cached = _client_player_states[peer_id]
+		# Merge cached data but override position/hp with current values
+		for key in cached:
+			if not state.has(key):
+				state[key] = cached[key]
+
+	return state
 
 # --- Client → Server: Sync player state ---
 
