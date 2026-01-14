@@ -6032,11 +6032,19 @@ func _quit_now() -> void:
 	# Save sound settings before leaving
 	_save_sound_settings()
 
-	# Sync current state to server (inventory, stats, etc.)
+	# Sync to backend FIRST (persistent save) - bypass rate limit for quit
+	if CharacterStats:
+		CharacterStats._last_backend_sync_time = 0.0  # Force bypass rate limit
+		CharacterStats.sync_to_backend()
+		print("[Player] Quit Now - synced to backend")
+		# Brief delay to let backend sync start (fire and forget - we're quitting anyway)
+		await get_tree().create_timer(0.5).timeout
+
+	# Sync current state to game server (inventory, stats, etc.)
 	# Server will merge this with live character state when camp timer expires
 	# This ensures inventory/stat changes are captured, but HP will be from the live character
 	if NetworkManager and NetworkManager.is_authenticated and not NetworkManager.is_host:
-		print("[Player] Quit Now - syncing inventory/stats before disconnect...")
+		print("[Player] Quit Now - syncing to game server...")
 		NetworkManager.client_sync_state()
 		# Brief delay to let sync RPC arrive
 		await get_tree().create_timer(0.3).timeout

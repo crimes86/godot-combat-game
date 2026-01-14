@@ -756,6 +756,10 @@ func _on_auto_save_timeout() -> void:
 			NetworkManager.client_sync_state()
 			auto_save_triggered.emit()
 			LogManager.debug("Synced state to server", "database")
+
+			# Also sync to backend (authoritative persistent save)
+			if CharacterStats:
+				CharacterStats.sync_to_backend()
 		else:
 			# Host or single player: save locally
 			LogManager.debug("Auto-save triggered...", "database")
@@ -888,28 +892,34 @@ func apply_player_data_to_systems(username: String, player: Node = null) -> void
 			LogManager.info("Synced %d forged items to inventory after load" % synced, "forge")
 
 	# Apply character stats (full blob first, then individual fields as fallback)
-	var stats_json = data.get("character_stats", "")
-	if stats_json is String and not stats_json.is_empty():
-		var stats_data = JSON.parse_string(stats_json)
-		if stats_data:
-			CharacterStats.load_save_data(stats_data)
-			LogManager.debug("Loaded character stats for: %s" % username, "database")
+	# IMPORTANT: For Ashbane-authenticated users, the backend is authoritative for level/XP/gold.
+	# If we already loaded level/gold from backend (in Armory), preserve those values.
+	var backend_stats_loaded = backend_already_loaded and (CharacterStats.level > 1 or CharacterStats.gold != 100)
+	if backend_stats_loaded:
+		LogManager.info("Skipping local stats load - using backend values (level=%d, gold=%d)" % [CharacterStats.level, CharacterStats.gold], "database")
 	else:
-		# Fallback: load individual fields if full blob not available (already validated)
-		# 6-stat system: STR, AGI, DEX, INT, WIS, VIT
-		var fallback_stats = {
-			"level": data.get("level", 1),
-			"experience": data.get("xp", 0),
-			"gold": data.get("gold", 100),
-			"strength": data.get("strength", 10),
-			"agility": data.get("agility", 10),
-			"dexterity": data.get("dexterity", 10),
-			"intelligence": data.get("intelligence", 10),
-			"wisdom": data.get("wisdom", 10),
-			"vitality": data.get("vitality", 10),
-			"total_playtime": data.get("total_playtime_seconds", 0)
-		}
-		CharacterStats.load_save_data(fallback_stats)
+		var stats_json = data.get("character_stats", "")
+		if stats_json is String and not stats_json.is_empty():
+			var stats_data = JSON.parse_string(stats_json)
+			if stats_data:
+				CharacterStats.load_save_data(stats_data)
+				LogManager.debug("Loaded character stats for: %s" % username, "database")
+		else:
+			# Fallback: load individual fields if full blob not available (already validated)
+			# 6-stat system: STR, AGI, DEX, INT, WIS, VIT
+			var fallback_stats = {
+				"level": data.get("level", 1),
+				"experience": data.get("xp", 0),
+				"gold": data.get("gold", 100),
+				"strength": data.get("strength", 10),
+				"agility": data.get("agility", 10),
+				"dexterity": data.get("dexterity", 10),
+				"intelligence": data.get("intelligence", 10),
+				"wisdom": data.get("wisdom", 10),
+				"vitality": data.get("vitality", 10),
+				"total_playtime": data.get("total_playtime_seconds", 0)
+			}
+			CharacterStats.load_save_data(fallback_stats)
 
 	# NOTE: Position is NOT restored here - game_world.gd handles spawn position correctly
 	# before calling this function (it uses hub return position or saved position as appropriate)

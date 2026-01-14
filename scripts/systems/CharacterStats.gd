@@ -1135,11 +1135,56 @@ func load_save_data(data: Dictionary) -> void:
 
 	print("📊 Character data loaded: Level %d, Gold %d, Playtime %.0fs" % [level, gold, total_playtime])
 
+var _last_backend_sync_time: float = 0.0
+const BACKEND_SYNC_COOLDOWN: float = 30.0  # Minimum 30 seconds between backend syncs
+
 func _sync_to_server() -> void:
-	"""Sync current state to server immediately (for XP/level changes)"""
+	"""Sync current state to game server immediately (for XP/level changes)"""
 	var network_manager = get_node_or_null("/root/NetworkManager")
 	if network_manager and network_manager.is_authenticated and not network_manager.is_host and not network_manager.is_guest:
 		network_manager.client_sync_state()
+
+func sync_to_backend() -> void:
+	"""Sync current state to backend API (with rate limiting)"""
+	var current_time = Time.get_unix_time_from_system()
+	if current_time - _last_backend_sync_time < BACKEND_SYNC_COOLDOWN:
+		return  # Rate limited
+
+	var ashbane_auth = get_node_or_null("/root/AshbaneAuth")
+	if not ashbane_auth or not ashbane_auth.is_authenticated:
+		return
+
+	_last_backend_sync_time = current_time
+
+	# Build inventory data
+	var inventory_system = get_node_or_null("/root/InventorySystem")
+	var inventory_data = []
+	if inventory_system:
+		for item in inventory_system.inventory_items:
+			if item != null:
+				inventory_data.append(item)
+
+	# Build equipped armor data
+	var equipped_armor_data = {}
+	for slot in equipped_armor:
+		var armor_item = equipped_armor[slot]
+		if armor_item != null:
+			equipped_armor_data[slot] = armor_item
+
+	# Get equipped weapon ID
+	var equipped_weapon_id = ""
+	if equipped_weapon_data and not equipped_weapon_data.is_empty():
+		equipped_weapon_id = equipped_weapon_data.get("id", equipped_weapon_data.get("name", ""))
+
+	print("[CharacterStats] Syncing to backend: level=%d, xp=%d, gold=%d" % [level, experience, gold])
+	ashbane_auth.sync_character_to_backend(
+		level,
+		experience,
+		gold,
+		inventory_data,
+		equipped_weapon_id,
+		equipped_armor_data
+	)
 
 func _initial_server_sync() -> void:
 	"""Called shortly after session start to sync initial state to server"""
