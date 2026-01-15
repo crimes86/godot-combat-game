@@ -957,10 +957,21 @@ func apply_player_data_to_systems(username: String, player: Node = null) -> void
 
 	# Apply character stats (full blob first, then individual fields as fallback)
 	# IMPORTANT: For Ashbane-authenticated users, the backend is authoritative for level/XP/gold.
-	# If we already loaded level/gold from backend (in Armory), preserve those values.
-	var backend_stats_loaded = backend_already_loaded and (CharacterStats.level > 1 or CharacterStats.gold != 100)
-	if backend_stats_loaded:
-		LogManager.info("Skipping local stats load - using backend values (level=%d, gold=%d)" % [CharacterStats.level, CharacterStats.gold], "database")
+	# Skip local stats load entirely - backend values were already set in Armory._load_character_from_backend()
+	var backend_is_authoritative = AshbaneAuth and AshbaneAuth.is_authenticated
+	if backend_is_authoritative:
+		LogManager.info("Skipping local stats load - backend is authoritative (level=%d, gold=%d, xp=%d)" % [CharacterStats.level, CharacterStats.gold, CharacterStats.experience], "database")
+
+		# However, if backend didn't have quests, try loading from local save as fallback
+		# This handles the transition period where user hasn't logged out with new code yet
+		var has_backend_quests = QuestManager and not QuestManager.quest_states.is_empty()
+		if not has_backend_quests:
+			var stats_json = data.get("character_stats", "")
+			if stats_json is String and not stats_json.is_empty():
+				var stats_data = JSON.parse_string(stats_json)
+				if stats_data and stats_data.has("quests") and not stats_data.get("quests", {}).is_empty():
+					QuestManager.load_save_data(stats_data.get("quests", {}))
+					LogManager.info("Loaded quest progress from local save (backend had none)", "database")
 	else:
 		var stats_json = data.get("character_stats", "")
 		if stats_json is String and not stats_json.is_empty():

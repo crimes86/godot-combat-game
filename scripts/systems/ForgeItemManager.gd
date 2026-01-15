@@ -121,16 +121,28 @@ func _is_debug_build() -> bool:
 
 func debug_reset_all_claims() -> void:
 	"""DEBUG: Reset ALL forge claims so items can be reclaimed for testing.
-	This clears: inventory forged items, claimed_in_game flags, and playtest claims."""
+	This clears: inventory forged items, claimed_in_game flags, and playtest claims.
+	Also marks items as locally deleted so they won't re-sync on next login."""
 	if not _is_debug_build():
 		push_warning("[ForgeItemManager] debug_reset_all_claims blocked in release build")
 		return
 
-	# 1. Clear forged items from inventory
+	# 1. Clear forged items from inventory AND mark them as locally deleted
 	var inv_cleared = 0
+	var current_time = Time.get_unix_time_from_system()
 	for i in range(InventorySystem.inventory_items.size()):
 		var item = InventorySystem.inventory_items[i]
 		if item and item.get("is_forged", false):
+			# Mark as locally deleted to prevent re-sync on next login
+			var token_id = item.get("token_id", 0)
+			var item_id = item.get("item_id", item.get("forged_item_id", ""))
+			var forged_id = item.get("forged_id", "")
+			if token_id:
+				_locally_deleted_items[str(int(token_id))] = current_time
+			if item_id != "":
+				_locally_deleted_items[item_id] = current_time
+			if forged_id != "":
+				_locally_deleted_items[str(forged_id)] = current_time
 			InventorySystem.inventory_items[i] = null
 			inv_cleared += 1
 
@@ -156,6 +168,7 @@ func debug_reset_all_claims() -> void:
 	print("   Inventory cleared: %d forged items" % inv_cleared)
 	print("   Claim flags reset: %d items" % flags_reset)
 	print("   Playtest claims cleared: %d" % playtest_count)
+	print("   Locally deleted items: %d (persists to backend)" % _locally_deleted_items.size())
 	print("   Debug claims cleared flag: SET (sync will skip)")
 	print("═══════════════════════════════════════════════════════════")
 

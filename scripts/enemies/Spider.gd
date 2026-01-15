@@ -437,6 +437,7 @@ func die() -> void:
 			print("🕷️ [Spider.die] Already dying, returning early - name: %s" % name)
 		return
 	is_dying = true
+	current_animation = "die"  # Sync death state to clients (play_animation is skipped on server)
 
 	if OS.is_debug_build():
 		var is_server = multiplayer.has_multiplayer_peer() and multiplayer.is_server()

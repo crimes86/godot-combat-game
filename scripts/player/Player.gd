@@ -6072,7 +6072,12 @@ func _quit_now() -> void:
 		if DatabaseManager and NetworkManager:
 			tutorial_done = DatabaseManager.has_completed_tutorial(NetworkManager.local_player_data.get("username", ""))
 
-		print("[Player] Syncing to backend before quit... equipped_weapon_id='%s'" % equipped_weapon_id)
+		# Get deleted forged items (prevents re-sync on login)
+		var deleted_forged = {}
+		if ForgeItemManager:
+			deleted_forged = ForgeItemManager.get_locally_deleted_items()
+
+		print("[Player] Syncing to backend before quit... equipped_weapon_id='%s', pos=(%s, %s)" % [equipped_weapon_id, global_position.x, global_position.y])
 		AshbaneAuth.sync_character_to_backend(
 			CharacterStats.level,
 			CharacterStats.experience,
@@ -6082,7 +6087,10 @@ func _quit_now() -> void:
 			equipped_armor_data,
 			weapon_skills_data,
 			quest_data,
-			tutorial_done
+			tutorial_done,
+			deleted_forged,
+			global_position.x,
+			global_position.y
 		)
 		# Brief delay to let HTTP request start
 		await get_tree().create_timer(0.3).timeout
@@ -6092,6 +6100,10 @@ func _quit_now() -> void:
 		NetworkManager.client_sync_state()
 		print("[Player] Synced state to game server")
 		await get_tree().create_timer(0.2).timeout
+
+	# Also save to local database as backup
+	if DatabaseManager:
+		DatabaseManager.save_current_player_state()
 
 	if NetworkManager:
 		NetworkManager.close_connection()
@@ -6161,7 +6173,12 @@ func _complete_logout() -> void:
 		if DatabaseManager and NetworkManager:
 			tutorial_done = DatabaseManager.has_completed_tutorial(NetworkManager.local_player_data.get("username", ""))
 
-		print("[Player] Syncing to backend before logout... equipped_weapon_id='%s'" % equipped_weapon_id)
+		# Get deleted forged items (prevents re-sync on login)
+		var deleted_forged = {}
+		if ForgeItemManager:
+			deleted_forged = ForgeItemManager.get_locally_deleted_items()
+
+		print("[Player] Syncing to backend before logout... equipped_weapon_id='%s', pos=(%s, %s)" % [equipped_weapon_id, global_position.x, global_position.y])
 		AshbaneAuth.sync_character_to_backend(
 			CharacterStats.level,
 			CharacterStats.experience,
@@ -6171,8 +6188,15 @@ func _complete_logout() -> void:
 			equipped_armor_data,
 			weapon_skills_data,
 			quest_data,
-			tutorial_done
+			tutorial_done,
+			deleted_forged,
+			global_position.x,
+			global_position.y
 		)
+
+	# Also save to local database as backup
+	if DatabaseManager:
+		DatabaseManager.save_current_player_state()
 
 	if NetworkManager:
 		NetworkManager.close_connection()

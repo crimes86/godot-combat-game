@@ -11195,6 +11195,44 @@ func _load_character_from_backend() -> void:
 			DatabaseManager.set_tutorial_completed(storage_key)
 			LogManager.info("Loaded tutorial_completed=true from backend", "armory")
 
+	# Load deleted forged items from backend (prevents re-sync of items user deleted)
+	if character.has("deleted_forged_items") and character.deleted_forged_items is Dictionary:
+		if ForgeItemManager and not character.deleted_forged_items.is_empty():
+			ForgeItemManager.set_locally_deleted_items(character.deleted_forged_items)
+			LogManager.info("Loaded %d deleted forged items from backend" % character.deleted_forged_items.size(), "armory")
+
+			# Remove any forged items that were re-synced but should be deleted
+			# This handles the timing issue where sync_to_inventory runs before this load
+			if InventorySystem:
+				var removed_count = 0
+				for key in character.deleted_forged_items:
+					# Try to find and remove items by forged_id, item_id, or token_id
+					for i in range(InventorySystem.inventory_items.size() - 1, -1, -1):
+						var item = InventorySystem.inventory_items[i]
+						if item == null:
+							continue
+						var item_forged_id = item.get("forged_id", item.get("forged_item_id", ""))
+						var item_id = item.get("item_id", "")
+						var token_id = str(item.get("token_id", 0))
+						if item_forged_id == key or item_id == key or token_id == key:
+							InventorySystem.inventory_items[i] = null
+							removed_count += 1
+							break
+				if removed_count > 0:
+					InventorySystem.inventory_changed.emit()
+					LogManager.info("Removed %d re-synced forged items that should be deleted" % removed_count, "armory")
+
+	# Load position from backend and store in local database for game_world.gd to access
+	if character.has("position_x") and character.has("position_y"):
+		var pos_x = character.get("position_x", 0.0)
+		var pos_y = character.get("position_y", 0.0)
+		if (pos_x != 0.0 or pos_y != 0.0) and DatabaseManager:
+			var storage_key = "ashbane_%d" % AshbaneAuth.user_id
+			if DatabaseManager.players_data.has(storage_key):
+				DatabaseManager.players_data[storage_key]["position_x"] = pos_x
+				DatabaseManager.players_data[storage_key]["position_y"] = pos_y
+				LogManager.info("Loaded position from backend: (%s, %s)" % [pos_x, pos_y], "armory")
+
 	LogManager.info("Loaded character from backend: Level %d, %d gold, %d items" % [
 		character.get("level", 1),
 		character.get("gold", 0),

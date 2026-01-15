@@ -1197,6 +1197,12 @@ func sync_to_backend() -> void:
 		if not storage_key.is_empty():
 			tutorial_done = db_mgr.has_completed_tutorial(storage_key)
 
+	# Get deleted forged items (prevents re-sync on login)
+	var deleted_forged = {}
+	var forge_mgr = get_node_or_null("/root/ForgeItemManager")
+	if forge_mgr:
+		deleted_forged = forge_mgr.get_locally_deleted_items()
+
 	print("[CharacterStats] Syncing to backend: level=%d, xp=%d, gold=%d" % [level, experience, gold])
 	ashbane_auth.sync_character_to_backend(
 		level,
@@ -1207,7 +1213,8 @@ func sync_to_backend() -> void:
 		equipped_armor_data,
 		weapon_skills_data,
 		quest_data,
-		tutorial_done
+		tutorial_done,
+		deleted_forged
 	)
 
 func _initial_server_sync() -> void:

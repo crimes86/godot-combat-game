@@ -553,6 +553,9 @@ class LogoutSyncRequest(BaseModel):
     weapon_skills: dict = {}  # category -> skill value (0.0 to 300.0)
     quests: dict = {}  # {states: {}, progress: {}, active: []} - quest progress
     tutorial_completed: bool = False  # whether player has completed the tutorial
+    deleted_forged_items: dict = {}  # item_id/token_id -> timestamp (items cleared from inventory)
+    position_x: float = 0.0  # world position X coordinate
+    position_y: float = 0.0  # world position Y coordinate
 
 
 class LogoutSyncResponse(BaseModel):
@@ -598,6 +601,9 @@ async def logout_sync(
     data["weapon_skills"] = payload.weapon_skills  # Weapon skill mastery
     data["quests"] = payload.quests  # Quest progress (states, progress, active)
     data["tutorial_completed"] = payload.tutorial_completed  # Tutorial completion flag
+    data["deleted_forged_items"] = payload.deleted_forged_items  # Deleted forged items (prevents re-sync)
+    data["position_x"] = payload.position_x  # World position X
+    data["position_y"] = payload.position_y  # World position Y
 
     # Trust client inventory - user is authenticated, respect their sales/deletions
     # But preserve purchased_at metadata from server for provenance tracking
@@ -774,6 +780,9 @@ async def initialize_character(
                 "weapon_skills": char_data.get("weapon_skills", {}),
                 "quests": char_data.get("quests", {}),
                 "tutorial_completed": char_data.get("tutorial_completed", False),
+                "deleted_forged_items": char_data.get("deleted_forged_items", {}),
+                "position_x": char_data.get("position_x", 0.0),
+                "position_y": char_data.get("position_y", 0.0),
                 "is_new": False
             }
         )
@@ -828,6 +837,9 @@ async def initialize_character(
             "weapon_skills": {},
             "quests": {},
             "tutorial_completed": False,
+            "deleted_forged_items": {},
+            "position_x": 0.0,
+            "position_y": 0.0,
             "is_new": True
         }
     )
