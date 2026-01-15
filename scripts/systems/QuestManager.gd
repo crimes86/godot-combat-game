@@ -682,11 +682,17 @@ func load_save_data(data: Dictionary) -> void:
 		if all_quests.has(quest_id):
 			quest_states[quest_id] = saved_states[quest_id]
 
-	# Load progress
+	# Load progress - convert string keys back to integers (JSON serialization converts int keys to strings)
 	var saved_progress = data.get("progress", {})
 	for quest_id in saved_progress:
 		if all_quests.has(quest_id):
-			quest_progress[quest_id] = saved_progress[quest_id]
+			var obj_progress = saved_progress[quest_id]
+			quest_progress[quest_id] = {}
+			# Convert string keys like "0", "1" back to integer keys 0, 1
+			for key in obj_progress:
+				var int_key = int(key) if key is String else key
+				quest_progress[quest_id][int_key] = obj_progress[key]
+			print("📜 Loaded progress for %s: %s" % [quest_id, quest_progress[quest_id]])
 
 	# Load active quests
 	var saved_active = data.get("active", [])
