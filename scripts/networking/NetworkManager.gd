@@ -1055,6 +1055,18 @@ func _finalize_ashbane_auth(peer_id: int, player_data: Dictionary) -> void:
 	LogManager.debug("Emitting player_authenticated for Ashbane peer %d: '%s'" % [peer_id, player_name], "network")
 	player_authenticated.emit(peer_id, player_name)
 
+	# Cache initial state for disconnect handling (before client sends state sync)
+	# This prevents data loss if player disconnects immediately after login
+	_client_player_states[peer_id] = {
+		"level": player_data.get("level", 1),
+		"xp": player_data.get("xp", player_data.get("experience", 0)),
+		"gold": player_data.get("gold", 0),
+		"inventory": player_data.get("inventory", "[]"),
+		"equipped_weapon": player_data.get("equipped_weapon", ""),
+		"equipped_armor": player_data.get("equipped_armor", {}),
+		"weapon_skills": player_data.get("weapon_skills", "{}")
+	}
+
 	print("[Server] Player %s registered for server-side auto-save" % storage_key)
 
 	# Send success to client
@@ -1551,6 +1563,10 @@ func _build_local_player_state() -> Dictionary:
 	state["wisdom"] = stats_data.get("wisdom", 10)
 	state["vitality"] = stats_data.get("vitality", 10)
 	state["character_stats"] = JSON.stringify(stats_data)
+
+	# Get equipped items from CharacterStats
+	state["equipped_weapon"] = stats_data.get("equipped_weapon", {})
+	state["equipped_armor"] = stats_data.get("equipped_armor", {})
 
 	# Get inventory - send items array, not stringified
 	var inv_data = InventorySystem.get_save_data()
