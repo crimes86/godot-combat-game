@@ -238,23 +238,24 @@ func find_weapon_by_id(weapon_id: String) -> Dictionary:
 			continue
 
 		# Check if it's a weapon
-		if item.get("type", "") != "weapon":
+		var item_type = str(item.get("type", ""))
+		if item_type != "weapon":
 			continue
 
 		# Match by forged_id (preferred for forged items)
-		if item.get("forged_id", "") == weapon_id:
+		if str(item.get("forged_id", "")) == weapon_id:
 			return item
 
 		# Match by item_id
-		if item.get("item_id", "") == weapon_id:
+		if str(item.get("item_id", "")) == weapon_id:
 			return item
 
 		# Match by forged_item_id (legacy field)
-		if item.get("forged_item_id", "") == weapon_id:
+		if str(item.get("forged_item_id", "")) == weapon_id:
 			return item
 
 		# Match by name (fallback)
-		if item.get("name", "") == weapon_id:
+		if str(item.get("name", "")) == weapon_id:
 			return item
 
 	return {}
