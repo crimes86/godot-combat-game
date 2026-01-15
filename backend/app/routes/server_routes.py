@@ -74,6 +74,25 @@ class ServerCharacterSyncResponse(BaseModel):
     message: Optional[str] = None
 
 
+class ServerCharacterFetchResponse(BaseModel):
+    """Response for character fetch."""
+    success: bool
+    user_id: int
+    gold: int
+    level: int
+    experience: int
+    inventory: list
+    equipped_weapon: str
+    equipped_armor: dict
+    weapon_skills: dict
+    strength: int
+    agility: int
+    dexterity: int
+    intelligence: int
+    wisdom: int
+    vitality: int
+
+
 # =============================================================================
 # ENDPOINTS
 # =============================================================================
@@ -165,6 +184,64 @@ async def server_character_sync(
         gold=character.gold,
         level=character.level,
         message="Character synced from game server"
+    )
+
+
+@router.get("/character/{user_id}", response_model=ServerCharacterFetchResponse)
+async def server_fetch_character(
+    user_id: int,
+    db: DbSession = Depends(get_db),
+    _: bool = Depends(verify_server_key)
+):
+    """
+    Fetch character data for a user from backend.
+
+    Called when an Ashbane user connects to the game server.
+    The server uses this to get authoritative character data
+    instead of relying on stale local JSON cache.
+
+    Authentication: X-Server-Key header (server-to-server auth)
+    """
+    # Find user by Ashbane user_id
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        logger.warning(f"Server fetch for unknown user_id: {user_id}")
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Get active character
+    character = db.query(Character).filter(
+        Character.user_id == user.id,
+        Character.is_active == True
+    ).first()
+
+    if not character:
+        logger.warning(f"Server fetch - no active character for user {user.id}")
+        raise HTTPException(status_code=404, detail="No active character")
+
+    # Extract character data
+    data = character.character_data or {}
+
+    logger.info(
+        f"[SERVER_FETCH] user={user.id} ({user.username}) "
+        f"level={character.level} gold={character.gold}"
+    )
+
+    return ServerCharacterFetchResponse(
+        success=True,
+        user_id=user.id,
+        gold=character.gold,
+        level=character.level,
+        experience=data.get("experience", 0),
+        inventory=data.get("inventory", []),
+        equipped_weapon=data.get("equipped_weapon", ""),
+        equipped_armor=data.get("equipped_armor", {}),
+        weapon_skills=data.get("weapon_skills", {}),
+        strength=data.get("strength", 10),
+        agility=data.get("agility", 10),
+        dexterity=data.get("dexterity", 10),
+        intelligence=data.get("intelligence", 10),
+        wisdom=data.get("wisdom", 10),
+        vitality=data.get("vitality", 10)
     )
 
 

@@ -838,10 +838,13 @@ func handle_guest_request(guest_name: String) -> void:
 	LogManager.info("Guest %s (peer %d) joined" % [guest_name, peer_id], "player")
 
 
+# Pending Ashbane auth requests (while waiting for backend fetch)
+var _pending_ashbane_auth: Dictionary = {}  # peer_id -> {user_id, username, display_name, storage_key}
+
 @rpc("any_peer", "reliable")
 func handle_ashbane_auth_request(username: String, user_id: int, display_name: String) -> void:
 	"""Server handles Ashbane-authenticated user login.
-	The server trusts the client's Ashbane auth and creates/retrieves their player data."""
+	The server fetches character data from backend API (authoritative source)."""
 	if not multiplayer:
 		return
 
@@ -851,65 +854,192 @@ func handle_ashbane_auth_request(username: String, user_id: int, display_name: S
 	var peer_id = multiplayer.get_remote_sender_id()
 
 	# Use Ashbane user_id as the storage key (guaranteed unique and valid format)
-	# This avoids issues with email addresses or special characters in usernames
 	var storage_key = "ashbane_%d" % user_id
 
 	# Use display_name for in-game name, fallback to username
 	var player_name = display_name if not display_name.is_empty() else username
-	player_name = _sanitize_guest_name(player_name)  # Sanitize for safety
+	player_name = _sanitize_guest_name(player_name)
 
 	print("[Server] Ashbane auth: peer=%d, user_id=%d, storage_key=%s, display=%s" % [peer_id, user_id, storage_key, player_name])
 	LogManager.info("Ashbane auth request from peer %d: %s (user_id: %d, key: %s)" % [peer_id, player_name, user_id, storage_key], "network")
 
-	# Check if this Ashbane user has existing data in database
+	# Store pending auth info
+	_pending_ashbane_auth[peer_id] = {
+		"user_id": user_id,
+		"username": username,
+		"display_name": player_name,
+		"storage_key": storage_key
+	}
+
+	# Fetch character data from backend API (authoritative source)
+	if not SERVER_API_KEY.is_empty():
+		_fetch_character_from_backend(peer_id, user_id)
+	else:
+		# No API key configured - fall back to local storage
+		print("[Server] No SERVER_API_KEY - using local storage for %s" % storage_key)
+		_complete_ashbane_auth_with_local_data(peer_id)
+
+
+func _fetch_character_from_backend(peer_id: int, user_id: int) -> void:
+	"""Fetch character data from backend API."""
+	var url = BACKEND_API_BASE + "/api/server/character/%d" % user_id
+	var headers = PackedStringArray([
+		"X-Server-Key: " + SERVER_API_KEY,
+		"Content-Type: application/json"
+	])
+
+	var http = HTTPRequest.new()
+	http.timeout = 5.0  # 5 second timeout
+	add_child(http)
+	http.request_completed.connect(_on_backend_fetch_completed.bind(peer_id, http))
+
+	var error = http.request(url, headers, HTTPClient.METHOD_GET)
+	if error != OK:
+		print("[Server] Failed to start backend fetch for peer %d: error %d" % [peer_id, error])
+		http.queue_free()
+		# Fall back to local storage
+		_complete_ashbane_auth_with_local_data(peer_id)
+
+
+func _on_backend_fetch_completed(result: int, code: int, _headers: PackedStringArray,
+								body: PackedByteArray, peer_id: int, http: HTTPRequest) -> void:
+	"""Handle backend character fetch response."""
+	http.queue_free()
+
+	if not _pending_ashbane_auth.has(peer_id):
+		print("[Server] Backend fetch completed but peer %d no longer pending" % peer_id)
+		return
+
+	var auth_info = _pending_ashbane_auth[peer_id]
+	var storage_key = auth_info.storage_key
+
+	if result == HTTPRequest.RESULT_SUCCESS and code == 200:
+		# Parse backend response
+		var body_text = body.get_string_from_utf8()
+		var backend_data = JSON.parse_string(body_text)
+
+		if backend_data and backend_data.get("success", false):
+			print("[Server] Backend fetch SUCCESS for %s: level=%d, gold=%d" % [
+				storage_key, backend_data.get("level", 1), backend_data.get("gold", 0)
+			])
+			_complete_ashbane_auth_with_backend_data(peer_id, backend_data)
+			return
+		else:
+			print("[Server] Backend returned invalid data for %s" % storage_key)
+	else:
+		var body_text = body.get_string_from_utf8() if body.size() > 0 else ""
+		print("[Server] Backend fetch FAILED for %s: result=%d, code=%d, body=%s" % [
+			storage_key, result, code, body_text.substr(0, 200)
+		])
+
+	# Fall back to local storage on any error
+	_complete_ashbane_auth_with_local_data(peer_id)
+
+
+func _complete_ashbane_auth_with_backend_data(peer_id: int, backend_data: Dictionary) -> void:
+	"""Complete auth using data from backend API."""
+	if not _pending_ashbane_auth.has(peer_id):
+		return
+
+	var auth_info = _pending_ashbane_auth[peer_id]
+	var storage_key = auth_info.storage_key
+	var player_name = auth_info.display_name
+	var user_id = auth_info.user_id
+
+	# Build player_data from backend response
+	var player_data = {
+		"username": storage_key,
+		"character_name": player_name,
+		"id": user_id,
+		"level": backend_data.get("level", 1),
+		"xp": backend_data.get("experience", 0),
+		"gold": backend_data.get("gold", 100),
+		"strength": backend_data.get("strength", 10),
+		"agility": backend_data.get("agility", 10),
+		"dexterity": backend_data.get("dexterity", 10),
+		"intelligence": backend_data.get("intelligence", 10),
+		"wisdom": backend_data.get("wisdom", 10),
+		"vitality": backend_data.get("vitality", 10),
+		"inventory": JSON.stringify(backend_data.get("inventory", [])),
+		"equipped_weapon": backend_data.get("equipped_weapon", ""),
+		"equipped_armor": backend_data.get("equipped_armor", {}),
+		"weapon_skills": JSON.stringify(backend_data.get("weapon_skills", {}))
+	}
+
+	# Save to local database for future reference
+	if DatabaseManager:
+		if not DatabaseManager.player_exists(storage_key):
+			DatabaseManager.create_account(storage_key, "ashbane_auth_%d" % user_id)
+		DatabaseManager.save_player_data(storage_key, player_data)
+
+	_finalize_ashbane_auth(peer_id, player_data)
+
+
+func _complete_ashbane_auth_with_local_data(peer_id: int) -> void:
+	"""Complete auth using local database (fallback when backend unavailable)."""
+	if not _pending_ashbane_auth.has(peer_id):
+		return
+
+	var auth_info = _pending_ashbane_auth[peer_id]
+	var storage_key = auth_info.storage_key
+	var player_name = auth_info.display_name
+	var user_id = auth_info.user_id
+
 	var player_data: Dictionary = {}
 	if DatabaseManager:
-		# Try to get existing data by storage key
 		var existing = DatabaseManager.get_player_data(storage_key)
 		if not existing.is_empty():
-			# Existing user - load their data
 			player_data = existing
-			player_data["character_name"] = player_name  # Update display name in case it changed
-			print("[Server] Loaded existing Ashbane user: %s, level=%d, xp=%d" % [storage_key, player_data.get("level", 1), player_data.get("xp", 0)])
-			LogManager.info("Loaded existing Ashbane user data: %s (level %d)" % [storage_key, player_data.get("level", 1)], "database")
+			player_data["character_name"] = player_name
+			print("[Server] Loaded from LOCAL storage: %s, level=%d" % [storage_key, player_data.get("level", 1)])
 		else:
-			# New Ashbane user - create entry with default data
-			# Use storage_key as username (guaranteed valid: alphanumeric + underscore)
+			# New user - create with defaults
 			var create_result = DatabaseManager.create_account(storage_key, "ashbane_auth_%d" % user_id)
 			if create_result.success:
 				player_data = DatabaseManager.get_player_data(storage_key)
-				# Update character name to display name
 				if not player_data.is_empty():
 					player_data["character_name"] = player_name
 					DatabaseManager.save_player_data(storage_key, player_data)
-				print("[Server] Created new Ashbane user: %s" % storage_key)
-				LogManager.info("Created new Ashbane user: %s" % storage_key, "database")
+				print("[Server] Created new Ashbane user (local): %s" % storage_key)
 			else:
-				# This shouldn't happen with sanitized storage key, but handle it
-				print("[Server] ERROR: Failed to create Ashbane account: %s - %s" % [storage_key, create_result.get("error", "unknown")])
-				LogManager.error("Failed to create Ashbane account: %s - %s" % [storage_key, create_result.get("error", "unknown")], "database")
+				print("[Server] ERROR: Failed to create account: %s" % storage_key)
 				rpc_id(peer_id, "receive_login_response", false, "Failed to create account", {})
+				_pending_ashbane_auth.erase(peer_id)
 				return
 
-	# If we still don't have player data, something is wrong
 	if player_data.is_empty():
-		print("[Server] ERROR: No player data for Ashbane user: %s" % storage_key)
-		LogManager.error("No player data for Ashbane user: %s" % storage_key, "database")
+		print("[Server] ERROR: No player data for: %s" % storage_key)
 		rpc_id(peer_id, "receive_login_response", false, "Failed to load player data", {})
+		_pending_ashbane_auth.erase(peer_id)
 		return
 
-	# Ensure player_data has required fields
-	player_data["username"] = storage_key  # Use storage key for persistence
+	player_data["username"] = storage_key
 	player_data["character_name"] = player_name
 	if not player_data.has("id"):
 		player_data["id"] = user_id
 
+	_finalize_ashbane_auth(peer_id, player_data)
+
+
+func _finalize_ashbane_auth(peer_id: int, player_data: Dictionary) -> void:
+	"""Finalize Ashbane authentication after data is loaded."""
+	if not _pending_ashbane_auth.has(peer_id):
+		return
+
+	var auth_info = _pending_ashbane_auth[peer_id]
+	var storage_key = auth_info.storage_key
+	var player_name = auth_info.display_name
+	var user_id = auth_info.user_id
+
+	# Clean up pending auth
+	_pending_ashbane_auth.erase(peer_id)
+
 	# Add to authenticated players (NOT guest!)
 	authenticated_players[peer_id] = {
-		"username": storage_key,  # Use storage key for save/load
+		"username": storage_key,
 		"player_data": player_data,
-		"is_guest": false,  # IMPORTANT: Ashbane users are NOT guests
-		"user_id": user_id  # Ashbane user ID for backend sync
+		"is_guest": false,
+		"user_id": user_id
 	}
 
 	# Add to connected players
@@ -925,8 +1055,6 @@ func handle_ashbane_auth_request(username: String, user_id: int, display_name: S
 	LogManager.debug("Emitting player_authenticated for Ashbane peer %d: '%s'" % [peer_id, player_name], "network")
 	player_authenticated.emit(peer_id, player_name)
 
-	# NOTE: Server uses _server_save_timer to save all players periodically.
-	# Don't call DatabaseManager.start_auto_save on server - it's for client-side only.
 	print("[Server] Player %s registered for server-side auto-save" % storage_key)
 
 	# Send success to client
