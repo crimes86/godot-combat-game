@@ -1525,14 +1525,14 @@ func _build_local_player_state() -> Dictionary:
 	state["vitality"] = stats_data.get("vitality", 10)
 	state["character_stats"] = JSON.stringify(stats_data)
 
-	# Get inventory
+	# Get inventory - send items array, not stringified
 	var inv_data = InventorySystem.get_save_data()
-	state["inventory"] = JSON.stringify(inv_data)
+	state["inventory"] = inv_data.get("items", [])
 
-	# Get weapon skills
+	# Get weapon skills - send dict, not stringified
 	if WeaponSkillManager:
 		var ws_data = WeaponSkillManager.get_save_data()
-		state["weapon_skills"] = JSON.stringify(ws_data.get("weapon_skills", {}))
+		state["weapon_skills"] = ws_data.get("weapon_skills", {})
 
 	# Playtime
 	state["total_playtime_seconds"] = stats_data.get("total_playtime", 0)
