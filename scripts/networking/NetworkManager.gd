@@ -1401,13 +1401,26 @@ func _sync_player_to_backend(user_id: int, username: String, state: Dictionary, 
 	elif typeof(weapon_skills_raw) == TYPE_DICTIONARY:
 		weapon_skills_data = weapon_skills_raw
 
+	# Extract weapon ID string from equipped_weapon dict
+	# Backend expects a string, not the full weapon object
+	var equipped_weapon_raw = state.get("equipped_weapon", "")
+	var equipped_weapon_str: String = ""
+	if typeof(equipped_weapon_raw) == TYPE_DICTIONARY and not equipped_weapon_raw.is_empty():
+		# Prefer forged_id for forged weapons, else weapon_name
+		if equipped_weapon_raw.get("is_forged", false) and equipped_weapon_raw.has("forged_id"):
+			equipped_weapon_str = equipped_weapon_raw.get("forged_id", "")
+		else:
+			equipped_weapon_str = equipped_weapon_raw.get("weapon_name", "")
+	elif typeof(equipped_weapon_raw) == TYPE_STRING:
+		equipped_weapon_str = equipped_weapon_raw
+
 	var payload = {
 		"user_id": user_id,
 		"gold": state.get("gold", 0),
 		"level": state.get("level", 1),
 		"experience": state.get("xp", 0),
 		"inventory": inventory_items,
-		"equipped_weapon": state.get("equipped_weapon", ""),
+		"equipped_weapon": equipped_weapon_str,
 		"equipped_armor": state.get("equipped_armor", {}),
 		"weapon_skills": weapon_skills_data,
 		"disconnect_reason": disconnect_reason
