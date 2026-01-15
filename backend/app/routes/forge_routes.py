@@ -176,7 +176,7 @@ async def destroy_forged_item(
     log_backend_event(
         db=db,
         user_id=current_user.id,
-        character_id=0,
+        character_id=None,
         event_type="forged_item_destroy",
         event_data={
             "token_id": forged.token_id,

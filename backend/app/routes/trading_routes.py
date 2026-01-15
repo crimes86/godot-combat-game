@@ -307,7 +307,7 @@ async def record_direct_trade(
     log_backend_event(
         db=db,
         user_id=current_user.id,
-        character_id=0,  # Trading is user-level, not character-level
+        character_id=None,  # Trading is user-level, not character-level
         event_type="forged_item_trade",
         event_data={
             "token_id": forged.token_id,
