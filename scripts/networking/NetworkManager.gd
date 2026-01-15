@@ -889,7 +889,7 @@ func _fetch_character_from_backend(peer_id: int, user_id: int) -> void:
 	])
 
 	var http = HTTPRequest.new()
-	http.timeout = 5.0  # 5 second timeout
+	http.timeout = 5  # 5 second timeout
 	add_child(http)
 	http.request_completed.connect(_on_backend_fetch_completed.bind(peer_id, http))
 
@@ -1409,7 +1409,7 @@ func _sync_player_to_backend(user_id: int, username: String, state: Dictionary, 
 
 	# Create HTTP request for this sync
 	var http = HTTPRequest.new()
-	http.timeout = 10.0
+	http.timeout = 10
 	add_child(http)
 	http.request_completed.connect(_on_backend_sync_completed.bind(username, http))
 
