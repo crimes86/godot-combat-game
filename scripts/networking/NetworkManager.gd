@@ -911,7 +911,7 @@ func _on_backend_fetch_completed(result: int, code: int, _headers: PackedStringA
 		return
 
 	var auth_info = _pending_ashbane_auth[peer_id]
-	var storage_key = auth_info.storage_key
+	var storage_key = auth_info.get("storage_key", "")
 
 	if result == HTTPRequest.RESULT_SUCCESS and code == 200:
 		# Parse backend response
@@ -942,9 +942,9 @@ func _complete_ashbane_auth_with_backend_data(peer_id: int, backend_data: Dictio
 		return
 
 	var auth_info = _pending_ashbane_auth[peer_id]
-	var storage_key = auth_info.storage_key
-	var player_name = auth_info.display_name
-	var user_id = auth_info.user_id
+	var storage_key: String = auth_info.get("storage_key", "")
+	var player_name: String = auth_info.get("display_name", "")
+	var user_id: int = auth_info.get("user_id", 0)
 
 	# Build player_data from backend response
 	var player_data = {
@@ -981,9 +981,9 @@ func _complete_ashbane_auth_with_local_data(peer_id: int) -> void:
 		return
 
 	var auth_info = _pending_ashbane_auth[peer_id]
-	var storage_key = auth_info.storage_key
-	var player_name = auth_info.display_name
-	var user_id = auth_info.user_id
+	var storage_key: String = auth_info.get("storage_key", "")
+	var player_name: String = auth_info.get("display_name", "")
+	var user_id: int = auth_info.get("user_id", 0)
 
 	var player_data: Dictionary = {}
 	if DatabaseManager:
@@ -1027,9 +1027,9 @@ func _finalize_ashbane_auth(peer_id: int, player_data: Dictionary) -> void:
 		return
 
 	var auth_info = _pending_ashbane_auth[peer_id]
-	var storage_key = auth_info.storage_key
-	var player_name = auth_info.display_name
-	var user_id = auth_info.user_id
+	var storage_key: String = auth_info.get("storage_key", "")
+	var player_name: String = auth_info.get("display_name", "")
+	var user_id: int = auth_info.get("user_id", 0)
 
 	# Clean up pending auth
 	_pending_ashbane_auth.erase(peer_id)
