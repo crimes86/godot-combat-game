@@ -1192,8 +1192,10 @@ func sync_to_backend() -> void:
 	var tutorial_done = false
 	var db_mgr = get_node_or_null("/root/DatabaseManager")
 	var network_mgr = get_node_or_null("/root/NetworkManager")
-	if db_mgr and network_mgr:
-		tutorial_done = db_mgr.has_completed_tutorial(network_mgr.get_storage_key())
+	if db_mgr and network_mgr and network_mgr.local_player_data:
+		var storage_key = network_mgr.local_player_data.get("username", "")
+		if not storage_key.is_empty():
+			tutorial_done = db_mgr.has_completed_tutorial(storage_key)
 
 	print("[CharacterStats] Syncing to backend: level=%d, xp=%d, gold=%d" % [level, experience, gold])
 	ashbane_auth.sync_character_to_backend(

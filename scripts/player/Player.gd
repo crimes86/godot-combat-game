@@ -6070,7 +6070,7 @@ func _quit_now() -> void:
 		# Get tutorial completion state
 		var tutorial_done = false
 		if DatabaseManager and NetworkManager:
-			tutorial_done = DatabaseManager.has_completed_tutorial(NetworkManager.get_storage_key())
+			tutorial_done = DatabaseManager.has_completed_tutorial(NetworkManager.local_player_data.get("username", ""))
 
 		print("[Player] Syncing to backend before quit... equipped_weapon_id='%s'" % equipped_weapon_id)
 		AshbaneAuth.sync_character_to_backend(
@@ -6159,7 +6159,7 @@ func _complete_logout() -> void:
 		# Get tutorial completion state
 		var tutorial_done = false
 		if DatabaseManager and NetworkManager:
-			tutorial_done = DatabaseManager.has_completed_tutorial(NetworkManager.get_storage_key())
+			tutorial_done = DatabaseManager.has_completed_tutorial(NetworkManager.local_player_data.get("username", ""))
 
 		print("[Player] Syncing to backend before logout... equipped_weapon_id='%s'" % equipped_weapon_id)
 		AshbaneAuth.sync_character_to_backend(
