@@ -1362,15 +1362,42 @@ func _sync_player_to_backend(user_id: int, username: String, state: Dictionary, 
 		print("[Server] Cannot sync %s to backend - no user_id" % username)
 		return
 
+	# Parse inventory from JSON string and extract items array
+	# Client stores as JSON.stringify({items: [...], equipped_axe: {...}, ...})
+	var inventory_raw = state.get("inventory", "[]")
+	var inventory_items: Array = []
+	if typeof(inventory_raw) == TYPE_STRING and inventory_raw != "":
+		var json = JSON.new()
+		if json.parse(inventory_raw) == OK:
+			var parsed = json.get_data()
+			if typeof(parsed) == TYPE_DICTIONARY:
+				inventory_items = parsed.get("items", [])
+			elif typeof(parsed) == TYPE_ARRAY:
+				inventory_items = parsed
+	elif typeof(inventory_raw) == TYPE_ARRAY:
+		inventory_items = inventory_raw
+
+	# Parse weapon_skills from JSON string
+	var weapon_skills_raw = state.get("weapon_skills", "{}")
+	var weapon_skills_data: Dictionary = {}
+	if typeof(weapon_skills_raw) == TYPE_STRING and weapon_skills_raw != "":
+		var json = JSON.new()
+		if json.parse(weapon_skills_raw) == OK:
+			var parsed = json.get_data()
+			if typeof(parsed) == TYPE_DICTIONARY:
+				weapon_skills_data = parsed
+	elif typeof(weapon_skills_raw) == TYPE_DICTIONARY:
+		weapon_skills_data = weapon_skills_raw
+
 	var payload = {
 		"user_id": user_id,
 		"gold": state.get("gold", 0),
 		"level": state.get("level", 1),
 		"experience": state.get("xp", 0),
-		"inventory": state.get("inventory", []),
+		"inventory": inventory_items,
 		"equipped_weapon": state.get("equipped_weapon", ""),
 		"equipped_armor": state.get("equipped_armor", {}),
-		"weapon_skills": state.get("weapon_skills", {}),
+		"weapon_skills": weapon_skills_data,
 		"disconnect_reason": disconnect_reason
 	}
 
