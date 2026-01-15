@@ -86,12 +86,37 @@ func expand_slots_if_needed() -> bool:
 # INVENTORY MANAGEMENT
 # ============================================
 
+func _unwrap_item(item: Dictionary) -> Dictionary:
+	"""Unwrap nested item structure from save format.
+	Items can get wrapped in {"slot": X, "item": {...}} layers during save/load cycles.
+	This recursively unwraps to get the actual item data."""
+	if item.is_empty():
+		return item
+
+	var result = item
+	var max_iterations = 50  # Safety limit to prevent infinite loops
+	var iterations = 0
+
+	while result.has("item") and result.get("item") is Dictionary and iterations < max_iterations:
+		result = result.get("item")
+		iterations += 1
+
+	if iterations > 0:
+		if DEBUG_EQUIP:
+			print("[InventorySystem] Unwrapped item through %d layers: %s" % [iterations, result.get("name", "Unknown")])
+
+	return result
+
+
 func add_item(item: Dictionary) -> bool:
 	"""Add an item to inventory (stacks if possible)"""
-	var item_name = item.get("name", "Unknown")
-	var is_stackable = item.get("stackable", false)
-	var quantity = item.get("quantity", 1)
-	var max_stack = item.get("max_stack", 1)
+	# Unwrap item if it's in save format (nested {"item": {...}} layers)
+	var clean_item = _unwrap_item(item)
+
+	var item_name = clean_item.get("name", "Unknown")
+	var is_stackable = clean_item.get("stackable", false)
+	var quantity = clean_item.get("quantity", 1)
+	var max_stack = clean_item.get("max_stack", 1)
 
 	# If stackable, try to add to existing stack first
 	if is_stackable:
@@ -106,7 +131,7 @@ func add_item(item: Dictionary) -> bool:
 					existing_item["quantity"] = current_quantity + amount_to_add
 					if not suppress_signals:
 						# Emit item_added with the amount that was added (for quest tracking)
-						var added_item = item.duplicate()
+						var added_item = clean_item.duplicate()
 						added_item["quantity"] = amount_to_add
 						item_added.emit(added_item)
 						inventory_changed.emit()
@@ -122,7 +147,7 @@ func add_item(item: Dictionary) -> bool:
 	for i in range(inventory_items.size()):
 		if inventory_items[i] == null:
 			# Create new item with remaining quantity
-			var new_item = item.duplicate()
+			var new_item = clean_item.duplicate()
 			new_item["quantity"] = quantity
 			inventory_items[i] = new_item
 			if not suppress_signals:
@@ -137,7 +162,7 @@ func add_item(item: Dictionary) -> bool:
 		# Retry adding to new slots
 		for i in range(inventory_items.size()):
 			if inventory_items[i] == null:
-				var new_item = item.duplicate()
+				var new_item = clean_item.duplicate()
 				new_item["quantity"] = quantity
 				inventory_items[i] = new_item
 				if not suppress_signals:
@@ -233,31 +258,46 @@ func find_weapon_by_id(weapon_id: String) -> Dictionary:
 	if weapon_id.is_empty():
 		return {}
 
+	print("[InventorySystem] Searching for weapon: '%s' in %d items" % [weapon_id, inventory_items.size()])
+	var weapon_count = 0
 	for item in inventory_items:
 		if item == null:
 			continue
 
+		# Unwrap nested item structure (bug: items can get wrapped in {"item": {...}} layers)
+		var actual_item = item
+		while actual_item.has("item") and actual_item.get("item") is Dictionary:
+			actual_item = actual_item.get("item")
+
 		# Check if it's a weapon
-		var item_type = str(item.get("type", ""))
+		var item_type = str(actual_item.get("type", ""))
 		if item_type != "weapon":
 			continue
 
+		weapon_count += 1
+		var item_name = str(actual_item.get("name", ""))
+
 		# Match by forged_id (preferred for forged items)
-		if str(item.get("forged_id", "")) == weapon_id:
-			return item
+		if str(actual_item.get("forged_id", "")) == weapon_id:
+			print("[InventorySystem]   -> MATCH '%s' by forged_id!" % item_name)
+			return actual_item
 
 		# Match by item_id
-		if str(item.get("item_id", "")) == weapon_id:
-			return item
+		if str(actual_item.get("item_id", "")) == weapon_id:
+			print("[InventorySystem]   -> MATCH '%s' by item_id!" % item_name)
+			return actual_item
 
 		# Match by forged_item_id (legacy field)
-		if str(item.get("forged_item_id", "")) == weapon_id:
-			return item
+		if str(actual_item.get("forged_item_id", "")) == weapon_id:
+			print("[InventorySystem]   -> MATCH '%s' by forged_item_id!" % item_name)
+			return actual_item
 
 		# Match by name (fallback)
-		if str(item.get("name", "")) == weapon_id:
-			return item
+		if item_name == weapon_id:
+			print("[InventorySystem]   -> MATCH '%s' by name!" % item_name)
+			return actual_item
 
+	print("[InventorySystem]   No match found for '%s' (checked %d weapons)" % [weapon_id, weapon_count])
 	return {}
 
 
@@ -293,6 +333,32 @@ func clear_all() -> void:
 	equipped_pickaxe = {}
 
 	inventory_changed.emit()
+
+
+func cleanup_corrupted_items() -> int:
+	"""Fix corrupted items with nested {"item": {...}} structure.
+	Returns the number of items that were cleaned up."""
+	var fixed_count = 0
+
+	for i in range(inventory_items.size()):
+		var item = inventory_items[i]
+		if item == null:
+			continue
+
+		# Check if item is nested
+		if item.has("item") and item.get("item") is Dictionary:
+			var clean_item = _unwrap_item(item)
+			if clean_item != item:
+				inventory_items[i] = clean_item
+				fixed_count += 1
+				print("[InventorySystem] Fixed corrupted item at slot %d: %s" % [i, clean_item.get("name", "Unknown")])
+
+	if fixed_count > 0:
+		print("[InventorySystem] Cleaned up %d corrupted items" % fixed_count)
+		inventory_changed.emit()
+
+	return fixed_count
+
 
 func has_space() -> bool:
 	"""Check if there's room for at least one more item"""
@@ -453,15 +519,18 @@ func get_equipped_axe_tier() -> int:
 func get_save_data() -> Dictionary:
 	"""Serialize inventory state for database storage"""
 	# Convert inventory to saveable format (filter out nulls, keep indices)
+	# IMPORTANT: Unwrap items to prevent nested {"item": {...}} accumulation
 	var items_data: Array = []
 	var forged_count = 0
 	for i in range(inventory_items.size()):
 		if inventory_items[i] != null:
+			# Unwrap any nested structure before saving
+			var clean_item = _unwrap_item(inventory_items[i])
 			items_data.append({
 				"slot": i,
-				"item": inventory_items[i].duplicate()
+				"item": clean_item.duplicate()
 			})
-			if inventory_items[i].get("is_forged", false):
+			if clean_item.get("is_forged", false):
 				forged_count += 1
 
 	print("[InventorySystem] Saving %d items (%d forged)" % [items_data.size(), forged_count])
@@ -482,13 +551,20 @@ func load_save_data(data: Dictionary) -> void:
 	var items_data = data.get("items", [])
 	var forged_count = 0
 	var max_slot = 0
+	var wrapped_count = 0
 	for item_entry in items_data:
 		var item = item_entry.get("item", {})
+		# Check if item needs unwrapping
+		if item.has("item") and item.get("item") is Dictionary:
+			wrapped_count += 1
+			item = _unwrap_item(item)
 		var slot = item_entry.get("slot", 0)
 		if slot > max_slot:
 			max_slot = slot
 		if item.get("is_forged", false):
 			forged_count += 1
+	if wrapped_count > 0:
+		print("[InventorySystem] Found %d wrapped items - will unwrap during load" % wrapped_count)
 	print("[InventorySystem] Loading %d items (%d forged) from save, max slot: %d" % [items_data.size(), forged_count, max_slot])
 
 	# Suppress signals during bulk load
@@ -513,7 +589,9 @@ func load_save_data(data: Dictionary) -> void:
 		var slot = item_entry.get("slot", -1)
 		var item = item_entry.get("item", {})
 		if slot >= 0 and slot < inventory_items.size() and not item.is_empty():
-			inventory_items[slot] = item.duplicate()
+			# Unwrap nested items that may be corrupted from previous save cycles
+			var clean_item = _unwrap_item(item)
+			inventory_items[slot] = clean_item.duplicate()
 
 	# Migration: Mark items as forged if they match ForgeItemDB entries but aren't flagged
 	_migrate_forged_items()

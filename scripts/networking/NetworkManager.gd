@@ -1103,6 +1103,13 @@ func receive_login_response(success: bool, error: String, player_data: Dictionar
 		if not is_guest and DatabaseManager:
 			var storage_key = player_data.get("username", "")
 			if not storage_key.is_empty():
+				# CRITICAL: Save backend player_data to client's local storage BEFORE apply_player_data_to_systems runs
+				# This ensures equipped_weapon and other backend data is available for restoration
+				if not DatabaseManager.player_exists(storage_key):
+					DatabaseManager.create_account(storage_key, "client_local_%d" % player_data.get("id", 0))
+				DatabaseManager.save_player_data(storage_key, player_data)
+				print("[Client] Saved backend data to local storage for: %s (equipped_weapon: %s)" % [storage_key, player_data.get("equipped_weapon", "")])
+
 				DatabaseManager.start_auto_save(storage_key)
 				print("[Client] Auto-save started for storage_key: %s" % storage_key)
 				# Start session playtime tracking
@@ -1404,6 +1411,7 @@ func _sync_player_to_backend(user_id: int, username: String, state: Dictionary, 
 	# Extract weapon ID string from equipped_weapon dict
 	# Backend expects a string, not the full weapon object
 	var equipped_weapon_raw = state.get("equipped_weapon", "")
+	print("[Server] Backend sync - equipped_weapon_raw type=%d, value=%s" % [typeof(equipped_weapon_raw), str(equipped_weapon_raw).substr(0, 200)])
 	var equipped_weapon_str: String = ""
 	if typeof(equipped_weapon_raw) == TYPE_DICTIONARY and not equipped_weapon_raw.is_empty():
 		# Prefer forged_id for forged weapons, else weapon_name
@@ -1411,8 +1419,12 @@ func _sync_player_to_backend(user_id: int, username: String, state: Dictionary, 
 			equipped_weapon_str = equipped_weapon_raw.get("forged_id", "")
 		else:
 			equipped_weapon_str = equipped_weapon_raw.get("weapon_name", "")
+		print("[Server] Backend sync - extracted weapon ID: '%s' (is_forged=%s)" % [equipped_weapon_str, equipped_weapon_raw.get("is_forged", false)])
 	elif typeof(equipped_weapon_raw) == TYPE_STRING:
 		equipped_weapon_str = equipped_weapon_raw
+		print("[Server] Backend sync - weapon was already a string: '%s'" % equipped_weapon_str)
+	else:
+		print("[Server] Backend sync - no equipped weapon found (type=%d)" % typeof(equipped_weapon_raw))
 
 	var payload = {
 		"user_id": user_id,
@@ -1492,7 +1504,8 @@ func sync_player_state_to_server(state_data: Dictionary) -> void:
 
 	# Store the state
 	_client_player_states[peer_id] = state_data
-	print("[Server] Received state sync from peer %d: level=%d, xp=%d" % [peer_id, state_data.get("level", 0), state_data.get("xp", 0)])
+	var weapon_info = state_data.get("equipped_weapon", {})
+	print("[Server] Received state sync from peer %d: level=%d, xp=%d, equipped_weapon=%s" % [peer_id, state_data.get("level", 0), state_data.get("xp", 0), str(weapon_info).substr(0, 150)])
 
 	# Immediately save to database (don't wait for auto-save timer)
 	# This ensures quit-now doesn't lose data
@@ -1580,6 +1593,7 @@ func _build_local_player_state() -> Dictionary:
 	# Get equipped items from CharacterStats
 	state["equipped_weapon"] = stats_data.get("equipped_weapon", {})
 	state["equipped_armor"] = stats_data.get("equipped_armor", {})
+	print("[Client] Building state - equipped_weapon: %s" % str(state["equipped_weapon"]).substr(0, 200))
 
 	# Get inventory - send items array, not stringified
 	var inv_data = InventorySystem.get_save_data()

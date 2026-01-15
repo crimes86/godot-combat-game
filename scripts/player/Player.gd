@@ -6039,7 +6039,9 @@ func _quit_now() -> void:
 		var inventory_data = []
 		for item in InventorySystem.inventory_items:
 			if item != null:
-				inventory_data.append(item)
+				# Unwrap nested items to prevent corruption accumulation
+				var clean_item = InventorySystem._unwrap_item(item)
+				inventory_data.append(clean_item)
 
 		var equipped_armor_data = {}
 		for slot in CharacterStats.equipped_armor:
@@ -6049,14 +6051,18 @@ func _quit_now() -> void:
 
 		var equipped_weapon_id = ""
 		if CharacterStats.equipped_weapon_data and not CharacterStats.equipped_weapon_data.is_empty():
-			equipped_weapon_id = CharacterStats.equipped_weapon_data.get("id", CharacterStats.equipped_weapon_data.get("name", ""))
+			# For forged weapons, use forged_id; for regular weapons, use weapon_name
+			if CharacterStats.equipped_weapon_data.get("is_forged", false):
+				equipped_weapon_id = CharacterStats.equipped_weapon_data.get("forged_id", "")
+			else:
+				equipped_weapon_id = CharacterStats.equipped_weapon_data.get("weapon_name", CharacterStats.equipped_weapon_data.get("name", ""))
 
 		# Get weapon skills
 		var weapon_skills_data = {}
 		if WeaponSkillManager:
 			weapon_skills_data = WeaponSkillManager.get_save_data().get("weapon_skills", {})
 
-		print("[Player] Syncing to backend before quit...")
+		print("[Player] Syncing to backend before quit... equipped_weapon_id='%s'" % equipped_weapon_id)
 		AshbaneAuth.sync_character_to_backend(
 			CharacterStats.level,
 			CharacterStats.experience,
@@ -6110,7 +6116,9 @@ func _complete_logout() -> void:
 		var inventory_data = []
 		for item in InventorySystem.inventory_items:
 			if item != null:
-				inventory_data.append(item)
+				# Unwrap nested items to prevent corruption accumulation
+				var clean_item = InventorySystem._unwrap_item(item)
+				inventory_data.append(clean_item)
 
 		var equipped_armor_data = {}
 		for slot in CharacterStats.equipped_armor:
@@ -6120,14 +6128,18 @@ func _complete_logout() -> void:
 
 		var equipped_weapon_id = ""
 		if CharacterStats.equipped_weapon_data and not CharacterStats.equipped_weapon_data.is_empty():
-			equipped_weapon_id = CharacterStats.equipped_weapon_data.get("id", CharacterStats.equipped_weapon_data.get("name", ""))
+			# For forged weapons, use forged_id; for regular weapons, use weapon_name
+			if CharacterStats.equipped_weapon_data.get("is_forged", false):
+				equipped_weapon_id = CharacterStats.equipped_weapon_data.get("forged_id", "")
+			else:
+				equipped_weapon_id = CharacterStats.equipped_weapon_data.get("weapon_name", CharacterStats.equipped_weapon_data.get("name", ""))
 
 		# Get weapon skills
 		var weapon_skills_data = {}
 		if WeaponSkillManager:
 			weapon_skills_data = WeaponSkillManager.get_save_data().get("weapon_skills", {})
 
-		print("[Player] Syncing to backend before logout...")
+		print("[Player] Syncing to backend before logout... equipped_weapon_id='%s'" % equipped_weapon_id)
 		AshbaneAuth.sync_character_to_backend(
 			CharacterStats.level,
 			CharacterStats.experience,

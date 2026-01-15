@@ -512,6 +512,10 @@ func save_player_data(username: String, data: Dictionary) -> bool:
 		"character_stats",
 		# Weapon skill mastery
 		"weapon_skills",
+		# Equipped weapon ID for restoration on login
+		"equipped_weapon",
+		# Equipped armor
+		"equipped_armor",
 		# Duel statistics
 		"duel_wins", "duel_losses", "duel_daily_opponents",
 		# Allegiance/PvP state
@@ -524,6 +528,10 @@ func save_player_data(username: String, data: Dictionary) -> bool:
 		if data.has(field):
 			players_data[username][field] = data[field]
 
+	# Debug: log equipped_weapon save
+	if data.has("equipped_weapon"):
+		print("[DatabaseManager] Saved equipped_weapon for %s: '%s'" % [username, data.get("equipped_weapon", "")])
+
 	return save_database()
 
 func get_player_data(username: String) -> Dictionary:
@@ -535,6 +543,10 @@ func get_player_data(username: String) -> Dictionary:
 	safe_data.erase("password_hash")
 	safe_data.erase("salt")
 	return safe_data
+
+func player_exists(username: String) -> bool:
+	"""Check if a player exists in the database"""
+	return players_data.has(username)
 
 func reset_all_online_status() -> void:
 	"""Reset online status for all players (call on server startup to clean crashed sessions)"""
@@ -921,11 +933,27 @@ func apply_player_data_to_systems(username: String, player: Node = null) -> void
 		if synced > 0:
 			LogManager.info("Synced %d forged items to inventory after load" % synced, "forge")
 
-	# Restore equipped weapon from saved ID
-	# The backend returns equipped_weapon as a string ID (forged_id or weapon name)
-	var equipped_weapon_id = data.get("equipped_weapon", "")
-	if equipped_weapon_id is String and not equipped_weapon_id.is_empty():
-		_restore_equipped_weapon(equipped_weapon_id)
+	# Cleanup any corrupted items with nested {"item": {...}} structure
+	var cleaned = InventorySystem.cleanup_corrupted_items()
+	if cleaned > 0:
+		LogManager.info("Cleaned up %d corrupted inventory items" % cleaned, "inventory")
+
+	# Restore equipped weapon from saved data
+	# Can be either:
+	# - String ID (from backend API): forged_id or weapon name
+	# - Dictionary (from server local JSON): full weapon data from CharacterStats.get_save_data()
+	var equipped_weapon_value = data.get("equipped_weapon", "")
+	print("[DatabaseManager] Checking equipped_weapon in data: '%s' (type: %s)" % [str(equipped_weapon_value).substr(0, 100), typeof(equipped_weapon_value)])
+
+	if equipped_weapon_value is String and not equipped_weapon_value.is_empty():
+		# String ID - use the restoration function
+		_restore_equipped_weapon(equipped_weapon_value)
+	elif equipped_weapon_value is Dictionary and not equipped_weapon_value.is_empty():
+		# Dictionary from server - can directly restore via CharacterStats
+		print("[DatabaseManager] Restoring equipped_weapon from dictionary data")
+		_restore_equipped_weapon_from_dict(equipped_weapon_value, data.get("equipped_weapon_data", {}))
+	else:
+		print("[DatabaseManager] No equipped_weapon to restore (empty or wrong type)")
 
 	# Apply character stats (full blob first, then individual fields as fallback)
 	# IMPORTANT: For Ashbane-authenticated users, the backend is authoritative for level/XP/gold.
@@ -1081,16 +1109,53 @@ func save_all_player_data_for_user(username: String) -> bool:
 func _restore_equipped_weapon(weapon_id: String) -> void:
 	"""Restore equipped weapon from saved ID after inventory is loaded.
 	The backend saves equipped_weapon as a string ID (forged_id or weapon name).
-	We need to find the weapon in inventory and equip it."""
+	We need to find the weapon in ForgeItemDB (for forged items) or inventory."""
 	if weapon_id.is_empty():
 		return
 
 	print("[DatabaseManager] Restoring equipped weapon: %s" % weapon_id)
 
-	# Find the weapon in inventory
-	var weapon_item = InventorySystem.find_weapon_by_id(weapon_id)
+	var weapon_item: Dictionary = {}
+
+	# FIRST: Check ForgeItemDB for forged items (they may not be in inventory because equipping removes them)
+	var forge_item_db = Engine.get_singleton("ForgeItemDB") if Engine.has_singleton("ForgeItemDB") else null
+	if forge_item_db == null and has_node("/root/ForgeItemDB"):
+		forge_item_db = get_node("/root/ForgeItemDB")
+
+	if forge_item_db:
+		var forge_data = forge_item_db.get_item_by_id(weapon_id)
+		if not forge_data.is_empty():
+			print("[DatabaseManager] Found forged weapon in ForgeItemDB: %s" % forge_data.get("item_name", weapon_id))
+			# Check if user owns this forged item via ForgeItemManager
+			var forge_manager = Engine.get_singleton("ForgeItemManager") if Engine.has_singleton("ForgeItemManager") else null
+			if forge_manager == null and has_node("/root/ForgeItemManager"):
+				forge_manager = get_node("/root/ForgeItemManager")
+
+			if forge_manager and forge_manager.has_method("get_forged_item"):
+				var owned_item = forge_manager.get_forged_item(weapon_id)
+				if not owned_item.is_empty():
+					print("[DatabaseManager] User owns forged weapon: %s" % weapon_id)
+					# Convert forged item to inventory format
+					if forge_manager.has_method("_convert_to_inventory_format"):
+						weapon_item = forge_manager._convert_to_inventory_format(owned_item)
+					else:
+						# Manual conversion fallback
+						weapon_item = _convert_forge_data_to_weapon_item(forge_data, owned_item)
+				else:
+					# ForgeItemManager doesn't have it (playtest items, etc) - use ForgeItemDB data directly
+					print("[DatabaseManager] ForgeItemManager doesn't have '%s' - using ForgeItemDB data" % weapon_id)
+					weapon_item = _convert_forge_data_to_weapon_item(forge_data, {})
+			else:
+				# No ForgeItemManager - try manual conversion from ForgeItemDB data
+				weapon_item = _convert_forge_data_to_weapon_item(forge_data, {})
+				print("[DatabaseManager] Converted ForgeItemDB data to weapon_item for: %s" % weapon_id)
+
+	# SECOND: If not found in ForgeItemDB, search inventory (for regular weapons)
 	if weapon_item.is_empty():
-		print("[DatabaseManager] Could not find weapon '%s' in inventory" % weapon_id)
+		weapon_item = InventorySystem.find_weapon_by_id(weapon_id)
+
+	if weapon_item.is_empty():
+		print("[DatabaseManager] Could not find weapon '%s' in ForgeItemDB or inventory" % weapon_id)
 		return
 
 	# Create Weapon resource from item data
@@ -1178,6 +1243,167 @@ func _restore_equipped_weapon(weapon_id: String) -> void:
 	# Equip the weapon
 	CharacterStats.equip_weapon(weapon, weapon_item)
 	print("[DatabaseManager] Successfully equipped weapon: %s (forged=%s)" % [weapon.weapon_name, weapon.is_forged])
+
+
+func _restore_equipped_weapon_from_dict(weapon_data: Dictionary, weapon_item_data: Dictionary) -> void:
+	"""Restore equipped weapon from dictionary data (from CharacterStats.get_save_data()).
+	This handles the case where the server stores the full weapon dict instead of just the ID."""
+	if weapon_data.is_empty():
+		print("[DatabaseManager] Empty weapon_data dict - nothing to restore")
+		return
+
+	# weapon_data comes from CharacterStats.get_save_data()["equipped_weapon"]
+	# It has format: weapon_name, weapon_type, base_damage, attack_speed_bonus, etc.
+	var weapon_name = weapon_data.get("weapon_name", "")
+	if weapon_name.is_empty():
+		print("[DatabaseManager] No weapon_name in dict - nothing to restore")
+		return
+
+	print("[DatabaseManager] Restoring equipped weapon from dict: %s" % weapon_name)
+
+	# Create Weapon resource
+	var Weapon = load("res://scripts/resources/Weapon.gd")
+	var weapon = Weapon.new()
+	weapon.weapon_name = weapon_name
+	weapon.weapon_type = weapon_data.get("weapon_type", "sword")
+	weapon.base_damage = float(weapon_data.get("base_damage", 5.0))
+	weapon.attack_speed_bonus = float(weapon_data.get("attack_speed_bonus", 0.0))
+	weapon.crit_chance_bonus = float(weapon_data.get("crit_chance_bonus", 0.0))
+	weapon.required_level = weapon_data.get("required_level", 1)
+	weapon.description = weapon_data.get("description", "")
+	weapon.can_trade = weapon_data.get("can_trade", true)
+
+	# Rarity is stored as int enum value
+	var rarity = weapon_data.get("rarity", 0)
+	if rarity is int:
+		weapon.rarity = rarity
+	elif rarity is String:
+		match rarity.to_lower():
+			"common": weapon.rarity = 0
+			"uncommon": weapon.rarity = 1
+			"rare": weapon.rarity = 2
+			"epic": weapon.rarity = 3
+			"legendary": weapon.rarity = 4
+			"artifact": weapon.rarity = 5
+			_: weapon.rarity = 0
+
+	# Gun weapon properties
+	weapon.gun_radius = weapon_data.get("gun_radius", 28.0)
+	weapon.gun_range = weapon_data.get("gun_range", 550.0)
+	weapon.gun_subtype = weapon_data.get("gun_subtype", "railgun")
+	weapon.burst_count = weapon_data.get("burst_count", 1)
+	weapon.burst_delay = weapon_data.get("burst_delay", 0.10)
+
+	# Healing weapon properties
+	weapon.attack_mode = weapon_data.get("attack_mode", "melee")
+	weapon.healing_power = weapon_data.get("healing_power", 0.0)
+	weapon.heal_radius = weapon_data.get("heal_radius", 80.0)
+
+	# Two-handed property
+	var is_two_handed_type = weapon.weapon_type in ["gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle", "bow", "crossbow"]
+	weapon.is_two_handed = weapon_data.get("is_two_handed", is_two_handed_type)
+
+	# Forged weapon properties
+	weapon.is_forged = weapon_data.get("is_forged", false)
+	weapon.forged_id = weapon_data.get("forged_id", "")
+
+	# Use weapon_item_data (the original inventory item dict) if available, otherwise convert weapon_data to item format
+	var item_data: Dictionary = {}
+	if not weapon_item_data.is_empty():
+		item_data = weapon_item_data.duplicate(true)
+	else:
+		# Convert weapon_data format to inventory item format
+		item_data = {
+			"name": weapon_name,
+			"type": "weapon",
+			"slot": "mainhand",
+			"weapon_type": weapon.weapon_type,
+			"base_damage": weapon.base_damage,
+			"attack_speed_bonus": weapon.attack_speed_bonus,
+			"crit_chance_bonus": weapon.crit_chance_bonus,
+			"required_level": weapon.required_level,
+			"description": weapon.description,
+			"can_trade": weapon.can_trade,
+			"is_forged": weapon.is_forged,
+			"forged_id": weapon.forged_id,
+			"item_id": weapon.forged_id,
+			"forged_item_id": weapon.forged_id
+		}
+		# Add gun properties if applicable
+		if weapon.is_gun_weapon():
+			item_data["gun_radius"] = weapon.gun_radius
+			item_data["gun_range"] = weapon.gun_range
+			item_data["gun_subtype"] = weapon.gun_subtype
+			item_data["burst_count"] = weapon.burst_count
+			item_data["burst_delay"] = weapon.burst_delay
+
+	# Equip the weapon
+	CharacterStats.equip_weapon(weapon, item_data)
+	print("[DatabaseManager] Successfully equipped weapon from dict: %s (forged=%s)" % [weapon.weapon_name, weapon.is_forged])
+
+
+func _convert_forge_data_to_weapon_item(forge_db_data: Dictionary, owned_data: Dictionary) -> Dictionary:
+	"""Convert ForgeItemDB data + owned item data to inventory item format for weapons."""
+	var item_id = forge_db_data.get("item_id", "")
+	var item_name = forge_db_data.get("item_name", "Unknown Weapon")
+	var weapon_type = forge_db_data.get("weapon_type", "sword")
+	var rarity = forge_db_data.get("rarity", 0)
+
+	# Map rarity enum to string
+	var rarity_names = ["common", "uncommon", "rare", "epic", "legendary", "artifact"]
+	var rarity_str = rarity_names[rarity] if rarity >= 0 and rarity < rarity_names.size() else "common"
+
+	# Get damage from forge_db_data or default
+	var base_damage = forge_db_data.get("base_damage", 5.0)
+	if base_damage is Dictionary:
+		var dmg_min = base_damage.get("min", 5)
+		var dmg_max = base_damage.get("max", 5)
+		base_damage = (dmg_min + dmg_max) / 2.0
+
+	var weapon_item = {
+		"name": item_name,
+		"type": "weapon",
+		"slot": "mainhand",
+		"weapon_type": weapon_type,
+		"base_damage": base_damage,
+		"attack_speed": "medium",
+		"crit_chance": 0.0,
+		"rarity": rarity_str,
+		"required_level": 1,
+		"description": forge_db_data.get("description", ""),
+		"can_trade": true,
+		"stackable": false,
+		"quantity": 1,
+		"is_forged": true,
+		"forged_id": item_id,
+		"item_id": item_id,
+		"forged_item_id": item_id
+	}
+
+	# Add gun weapon properties if it's a gun
+	if weapon_type in ["gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle"]:
+		weapon_item["gun_radius"] = forge_db_data.get("gun_radius", 28.0)
+		weapon_item["gun_range"] = forge_db_data.get("gun_range", 550.0)
+		weapon_item["gun_subtype"] = forge_db_data.get("gun_subtype", "railgun")
+		weapon_item["burst_count"] = forge_db_data.get("burst_count", 1)
+		weapon_item["burst_delay"] = forge_db_data.get("burst_delay", 0.10)
+		weapon_item["is_two_handed"] = true
+
+	# Add visuals from forge_db_data
+	var visuals = forge_db_data.get("visuals", {})
+	if not visuals.is_empty():
+		weapon_item["glow_color"] = visuals.get("glow_color", "")
+		weapon_item["effect_name"] = visuals.get("effect", "")
+
+	weapon_item["theme"] = forge_db_data.get("theme", "")
+	weapon_item["sprites"] = forge_db_data.get("sprites", {})
+
+	# Merge any owned_data fields
+	if not owned_data.is_empty():
+		weapon_item["id"] = owned_data.get("id", 0)
+		weapon_item["item_rarity"] = owned_data.get("item_rarity", rarity_str)
+
+	return weapon_item
 
 
 # ═══════════════════════════════════════════════════════════════════════════

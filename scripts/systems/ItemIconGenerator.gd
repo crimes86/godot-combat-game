@@ -7,7 +7,7 @@ extends Node
 # DEBUG SETTINGS - Set to true to enable verbose logging
 # ============================================
 const DEBUG_FORGED_ICONS: bool = false  # Debug forged item icon loading
-const DEBUG_ICON_LOADING: bool = true  # Debug all icon loading (enable to trace failures)
+const DEBUG_ICON_LOADING: bool = false  # Debug all icon loading (enable to trace failures)
 
 # ============================================
 # ENHANCED ICONS - 256x256 upscaled versions
@@ -81,10 +81,10 @@ func get_item_icon(item: Dictionary) -> Texture2D:
 		if forged_icon:
 			return forged_icon
 
-	var item_type = item.get("type", "")
-	var item_name = item.get("name", "")
-	var sprite_name = item.get("sprite_name", "")
-	var slot = item.get("slot", "")
+	var item_type = str(item.get("type", ""))
+	var item_name = str(item.get("name", ""))
+	var sprite_name = str(item.get("sprite_name", ""))
+	var slot = str(item.get("slot", ""))
 
 	# Known weapon types - if type field contains one of these, treat as weapon
 	var known_weapon_types = ["sword", "katana", "scimitar", "dagger", "mace", "spear", "bow", "staff",
@@ -160,7 +160,8 @@ func get_item_icon(item: Dictionary) -> Texture2D:
 	# Fallback: Determine the sprite path based on item type
 	var sprite_path = _get_sprite_path(item_type, sprite_name, item)
 	if sprite_path.is_empty():
-		if DEBUG_ICON_LOADING or true:  # Always show this warning
+		# Only warn for actual items (not empty slots)
+		if DEBUG_ICON_LOADING and not item_name.is_empty() and not item_type.is_empty():
 			print("⚠️ [IconGen] No sprite path for: %s (type=%s, sprite_name=%s, slot=%s)" % [item_name, item_type, sprite_name, slot])
 		return null
 
