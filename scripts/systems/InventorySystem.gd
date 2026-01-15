@@ -226,6 +226,40 @@ func has_item_by_name(item_name: String) -> bool:
 			return true
 	return false
 
+
+func find_weapon_by_id(weapon_id: String) -> Dictionary:
+	"""Find a weapon in inventory by forged_id, item_id, or name.
+	Returns the item dict if found, empty dict otherwise."""
+	if weapon_id.is_empty():
+		return {}
+
+	for item in inventory_items:
+		if item == null:
+			continue
+
+		# Check if it's a weapon
+		if item.get("type", "") != "weapon":
+			continue
+
+		# Match by forged_id (preferred for forged items)
+		if item.get("forged_id", "") == weapon_id:
+			return item
+
+		# Match by item_id
+		if item.get("item_id", "") == weapon_id:
+			return item
+
+		# Match by forged_item_id (legacy field)
+		if item.get("forged_item_id", "") == weapon_id:
+			return item
+
+		# Match by name (fallback)
+		if item.get("name", "") == weapon_id:
+			return item
+
+	return {}
+
+
 # ============================================
 # GOLD ACCESS (Proxy to CharacterStats)
 # ============================================
