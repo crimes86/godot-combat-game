@@ -6527,7 +6527,7 @@ func _setup_equipped_cape(sprite: SimpleLPCSprite) -> void:
 	var equipped_cape: Dictionary = {}
 	for slot in range(InventorySystem.inventory_items.size()):
 		var item = InventorySystem.inventory_items[slot]
-		if item and (item.get("slot") == "back" or item.get("type") == "cape"):
+		if item and (str(item.get("slot", "")) == "back" or str(item.get("type", "")) == "cape"):
 			# Check if item is equipped (in equipment slot)
 			if item.get("equipped", false) or item.get("is_equipped", false):
 				equipped_cape = item
