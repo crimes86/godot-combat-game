@@ -11182,6 +11182,19 @@ func _load_character_from_backend() -> void:
 			WeaponSkillManager.load_save_data({"weapon_skills": character.weapon_skills})
 			LogManager.info("Loaded weapon skills from backend", "armory")
 
+	# Load quest progress from backend
+	if character.has("quests") and character.quests is Dictionary and not character.quests.is_empty():
+		if QuestManager:
+			QuestManager.load_save_data(character.quests)
+			LogManager.info("Loaded quest progress from backend", "armory")
+
+	# Load tutorial completion state from backend
+	if character.has("tutorial_completed") and character.tutorial_completed == true:
+		var storage_key = "ashbane_%d" % AshbaneAuth.user_id
+		if DatabaseManager:
+			DatabaseManager.set_tutorial_completed(storage_key)
+			LogManager.info("Loaded tutorial_completed=true from backend", "armory")
+
 	LogManager.info("Loaded character from backend: Level %d, %d gold, %d items" % [
 		character.get("level", 1),
 		character.get("gold", 0),

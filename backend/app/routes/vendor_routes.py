@@ -551,6 +551,8 @@ class LogoutSyncRequest(BaseModel):
     equipped_weapon: str = ""
     equipped_armor: dict = {}  # slot -> armor_id mapping
     weapon_skills: dict = {}  # category -> skill value (0.0 to 300.0)
+    quests: dict = {}  # {states: {}, progress: {}, active: []} - quest progress
+    tutorial_completed: bool = False  # whether player has completed the tutorial
 
 
 class LogoutSyncResponse(BaseModel):
@@ -594,6 +596,8 @@ async def logout_sync(
     data["equipped_weapon"] = payload.equipped_weapon
     data["equipped_armor"] = payload.equipped_armor
     data["weapon_skills"] = payload.weapon_skills  # Weapon skill mastery
+    data["quests"] = payload.quests  # Quest progress (states, progress, active)
+    data["tutorial_completed"] = payload.tutorial_completed  # Tutorial completion flag
 
     # Trust client inventory - user is authenticated, respect their sales/deletions
     # But preserve purchased_at metadata from server for provenance tracking
@@ -768,6 +772,8 @@ async def initialize_character(
                 "equipped_weapon": char_data.get("equipped_weapon", ""),
                 "equipped_armor": char_data.get("equipped_armor", {}),
                 "weapon_skills": char_data.get("weapon_skills", {}),
+                "quests": char_data.get("quests", {}),
+                "tutorial_completed": char_data.get("tutorial_completed", False),
                 "is_new": False
             }
         )
@@ -816,6 +822,12 @@ async def initialize_character(
             "gold": character.gold,
             "level": character.level,
             "experience": capped_xp,
+            "inventory": [],
+            "equipped_weapon": "",
+            "equipped_armor": {},
+            "weapon_skills": {},
+            "quests": {},
+            "tutorial_completed": False,
             "is_new": True
         }
     )

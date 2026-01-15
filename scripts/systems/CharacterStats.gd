@@ -1176,6 +1176,25 @@ func sync_to_backend() -> void:
 	if equipped_weapon_data and not equipped_weapon_data.is_empty():
 		equipped_weapon_id = equipped_weapon_data.get("id", equipped_weapon_data.get("name", ""))
 
+	# Get weapon skills
+	var weapon_skills_data = {}
+	var weapon_skill_mgr = get_node_or_null("/root/WeaponSkillManager")
+	if weapon_skill_mgr:
+		weapon_skills_data = weapon_skill_mgr.get_save_data().get("weapon_skills", {})
+
+	# Get quest data
+	var quest_data = {}
+	var quest_mgr = get_node_or_null("/root/QuestManager")
+	if quest_mgr:
+		quest_data = quest_mgr.get_save_data()
+
+	# Get tutorial completion state
+	var tutorial_done = false
+	var db_mgr = get_node_or_null("/root/DatabaseManager")
+	var network_mgr = get_node_or_null("/root/NetworkManager")
+	if db_mgr and network_mgr:
+		tutorial_done = db_mgr.has_completed_tutorial(network_mgr.get_storage_key())
+
 	print("[CharacterStats] Syncing to backend: level=%d, xp=%d, gold=%d" % [level, experience, gold])
 	ashbane_auth.sync_character_to_backend(
 		level,
@@ -1183,7 +1202,10 @@ func sync_to_backend() -> void:
 		gold,
 		inventory_data,
 		equipped_weapon_id,
-		equipped_armor_data
+		equipped_armor_data,
+		weapon_skills_data,
+		quest_data,
+		tutorial_done
 	)
 
 func _initial_server_sync() -> void:

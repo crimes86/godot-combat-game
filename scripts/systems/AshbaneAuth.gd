@@ -1003,10 +1003,10 @@ func _on_vendor_sell_response(result: int, response_code: int, _headers: PackedS
 
 signal character_sync_completed(success: bool, response: Dictionary)
 
-func sync_character_to_backend(level: int, experience: int, gold: int, inventory: Array, equipped_weapon: String, equipped_armor: Dictionary, weapon_skills: Dictionary = {}) -> void:
+func sync_character_to_backend(level: int, experience: int, gold: int, inventory: Array, equipped_weapon: String, equipped_armor: Dictionary, weapon_skills: Dictionary = {}, quests: Dictionary = {}, tutorial_completed: bool = false) -> void:
 	"""
 	Full character sync to backend on logout - persistent world save.
-	Saves gold, level, XP, inventory, equipped items, and weapon skills.
+	Saves gold, level, XP, inventory, equipped items, weapon skills, quests, and tutorial state.
 	Emits character_sync_completed when done.
 	"""
 	if not is_authenticated or auth_token == "":
@@ -1028,7 +1028,9 @@ func sync_character_to_backend(level: int, experience: int, gold: int, inventory
 		"inventory": inventory,
 		"equipped_weapon": equipped_weapon,
 		"equipped_armor": equipped_armor,
-		"weapon_skills": weapon_skills
+		"weapon_skills": weapon_skills,
+		"quests": quests,
+		"tutorial_completed": tutorial_completed
 	})
 
 	var request = HTTPRequest.new()

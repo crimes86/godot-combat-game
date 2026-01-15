@@ -6062,6 +6062,16 @@ func _quit_now() -> void:
 		if WeaponSkillManager:
 			weapon_skills_data = WeaponSkillManager.get_save_data().get("weapon_skills", {})
 
+		# Get quest data
+		var quest_data = {}
+		if QuestManager:
+			quest_data = QuestManager.get_save_data()
+
+		# Get tutorial completion state
+		var tutorial_done = false
+		if DatabaseManager and NetworkManager:
+			tutorial_done = DatabaseManager.has_completed_tutorial(NetworkManager.get_storage_key())
+
 		print("[Player] Syncing to backend before quit... equipped_weapon_id='%s'" % equipped_weapon_id)
 		AshbaneAuth.sync_character_to_backend(
 			CharacterStats.level,
@@ -6070,7 +6080,9 @@ func _quit_now() -> void:
 			inventory_data,
 			equipped_weapon_id,
 			equipped_armor_data,
-			weapon_skills_data
+			weapon_skills_data,
+			quest_data,
+			tutorial_done
 		)
 		# Brief delay to let HTTP request start
 		await get_tree().create_timer(0.3).timeout
@@ -6139,6 +6151,16 @@ func _complete_logout() -> void:
 		if WeaponSkillManager:
 			weapon_skills_data = WeaponSkillManager.get_save_data().get("weapon_skills", {})
 
+		# Get quest data
+		var quest_data = {}
+		if QuestManager:
+			quest_data = QuestManager.get_save_data()
+
+		# Get tutorial completion state
+		var tutorial_done = false
+		if DatabaseManager and NetworkManager:
+			tutorial_done = DatabaseManager.has_completed_tutorial(NetworkManager.get_storage_key())
+
 		print("[Player] Syncing to backend before logout... equipped_weapon_id='%s'" % equipped_weapon_id)
 		AshbaneAuth.sync_character_to_backend(
 			CharacterStats.level,
@@ -6147,7 +6169,9 @@ func _complete_logout() -> void:
 			inventory_data,
 			equipped_weapon_id,
 			equipped_armor_data,
-			weapon_skills_data
+			weapon_skills_data,
+			quest_data,
+			tutorial_done
 		)
 
 	if NetworkManager:
