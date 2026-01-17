@@ -3392,20 +3392,36 @@ func create_player_sprite() -> void:
 				shirt_walk_tex = load(sprites["walk"])
 			if sprites.has(attack_key) and ResourceLoader.exists(sprites[attack_key]):
 				shirt_slash_tex = load(sprites[attack_key])
+				if DEBUG_EQUIP:
+					print("[ForgedArmor] Loaded chest %s: %s" % [attack_key, sprites[attack_key]])
 			elif sprites.has("slash") and ResourceLoader.exists(sprites["slash"]):
 				shirt_slash_tex = load(sprites["slash"])
+				if DEBUG_EQUIP:
+					print("[ForgedArmor] Loaded chest slash (fallback): %s" % sprites["slash"])
+			elif DEBUG_EQUIP:
+				# Debug: print why attack texture didn't load
+				print("[ForgedArmor] FAILED to load chest %s for %s" % [attack_key, forged_item_id])
+				print("  sprites.has('%s')=%s" % [attack_key, sprites.has(attack_key)])
+				if sprites.has(attack_key):
+					print("  ResourceLoader.exists('%s')=%s" % [sprites[attack_key], ResourceLoader.exists(sprites[attack_key])])
 
 			# Method 2: Construct path (chest at armor/chest/)
-			if shirt_walk_tex == null:
+			# Run if walk OR attack texture is still missing
+			if shirt_walk_tex == null or shirt_slash_tex == null:
 				var forged_path = "res://assets/equipment/forged/armor/chest/" + forged_item_id + "/"
-				if ResourceLoader.exists(forged_path + "walk.png"):
+				if shirt_walk_tex == null and ResourceLoader.exists(forged_path + "walk.png"):
 					shirt_walk_tex = load(forged_path + "walk.png")
+					if DEBUG_EQUIP:
+						print("[ForgedArmor] Loaded chest walk from folder: %s" % forged_path)
+				if shirt_slash_tex == null:
 					if ResourceLoader.exists(forged_path + attack_key + ".png"):
 						shirt_slash_tex = load(forged_path + attack_key + ".png")
+						if DEBUG_EQUIP:
+							print("[ForgedArmor] Loaded chest %s from folder: %s" % [attack_key, forged_path])
 					elif ResourceLoader.exists(forged_path + "slash.png"):
 						shirt_slash_tex = load(forged_path + "slash.png")
-					if DEBUG_EQUIP:
-						print("[ForgedArmor] Loaded chest from folder: %s" % forged_path)
+						if DEBUG_EQUIP:
+							print("[ForgedArmor] Loaded chest slash from folder (fallback): %s" % forged_path)
 
 			if DEBUG_EQUIP and shirt_walk_tex:
 				print("[ForgedArmor] Loaded forged chest armor: %s" % forged_item_id)
