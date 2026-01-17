@@ -780,17 +780,9 @@ func purchase_weapon(index: int) -> void:
 		return
 
 	if CharacterStats.spend_gold(price):
-		# Add weapon to inventory
-		var rarity_str = Weapon.Rarity.keys()[weapon.rarity] if weapon.rarity < Weapon.Rarity.size() else "COMMON"
-		var weapon_data = {
-			"name": weapon.weapon_name,
-			"type": "weapon",
-			"weapon_type": weapon.weapon_type,
-			"slot": "mainhand",
-			"rarity": rarity_str,
-			"damage": weapon.base_damage,
-			"value": int(price * 0.5)
-		}
+		# Add weapon to inventory using the same conversion as authenticated path
+		var weapon_data = vendor.weapon_to_dict(weapon, price)
+		var rarity_str = weapon_data.get("rarity", "COMMON")
 		InventorySystem.add_item(weapon_data)
 		_show_purchase_notification("+ " + weapon.weapon_name, rarity_str)
 		item_purchased.emit(weapon.weapon_name, price)

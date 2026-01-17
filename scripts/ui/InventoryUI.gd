@@ -7,7 +7,7 @@ extends CanvasLayer
 # ============================================
 # DEBUG SETTINGS - Set to true to enable verbose logging
 # ============================================
-const DEBUG_EQUIP: bool = true  # Debug equipping items from inventory
+const DEBUG_EQUIP: bool = false  # Debug equipping items from inventory
 const DEBUG_FORGED_DISPLAY: bool = false  # Debug forged item display in inventory
 
 var is_visible: bool = false
@@ -823,8 +823,17 @@ func _equip_or_use_item(slot_index: int) -> void:
 				refresh_all()
 		# Check if it's a weapon
 		elif item.get("type", "") == "weapon" and item.get("slot", "") == "mainhand":
+			if DEBUG_EQUIP:
+				print("[Equip] Item dict attack_mode: %s, healing_power: %s" % [
+					item.get("attack_mode", "NOT SET"),
+					item.get("healing_power", "NOT SET")
+				])
 			var weapon = dict_to_weapon(item)
 			if weapon:
+				if DEBUG_EQUIP:
+					print("[Equip] Created weapon attack_mode: %s, is_healing: %s" % [
+						weapon.attack_mode, weapon.is_healing_weapon()
+					])
 				# If there's already a weapon equipped, do a direct swap
 				if CharacterStats.equipped_weapon:
 					if DEBUG_EQUIP:
