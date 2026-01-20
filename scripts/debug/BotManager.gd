@@ -302,8 +302,8 @@ func spawn_visible_bots(count: int, behavior: String = "wander", position: Vecto
 			"sync_timer": 0.0
 		}
 
-		# Call game_world's spawn_player with our fake bot ID
-		game_world.spawn_player(
+		# Call game_world's spawn_player via RPC to broadcast to all clients
+		game_world.spawn_player.rpc(
 			bot_id,
 			spawn_pos,
 			gender,
