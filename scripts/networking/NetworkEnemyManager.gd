@@ -16,15 +16,19 @@ var _gold_loot_queue: Array = []  # Array of {amount: int, position: Vector2}
 var _gold_loot_timer: float = 0.0
 const GOLD_LOOT_STAGGER_DELAY: float = 0.08  # 80ms between each notification
 
-# Position sync rate
-const POSITION_SYNC_RATE: float = 0.05  # 20Hz (was 10Hz - increased for smoother movement)
+# Position sync rate (default - DynamicTickRateManager may override)
+const POSITION_SYNC_RATE_DEFAULT: float = 0.05  # 20Hz (was 10Hz - increased for smoother movement)
 var position_sync_timer: float = 0.0
 
 # Interest Management - only sync enemies near each player (reduces bandwidth ~80%)
-const SYNC_RADIUS_FULL: float = 1500.0      # Full 20Hz sync for nearby enemies
-const SYNC_RADIUS_REDUCED: float = 3000.0   # 5Hz sync for mid-range enemies
-const SYNC_RADIUS_MAX: float = 4000.0       # Beyond this, don't sync at all
-var reduced_sync_counter: int = 0           # Counter to throttle reduced-rate syncs
+# NOTE: These are defaults - DynamicTickRateManager overrides at runtime for scaling
+const SYNC_RADIUS_FULL_DEFAULT: float = 1500.0      # Full sync for nearby enemies
+const SYNC_RADIUS_REDUCED_DEFAULT: float = 3000.0   # Reduced sync for mid-range enemies
+const SYNC_RADIUS_MAX: float = 4000.0               # Beyond this, don't sync at all
+var reduced_sync_counter: int = 0                   # Counter to throttle reduced-rate syncs
+
+# Dynamic tick rate manager reference
+var _tick_rate_manager: Node = null
 
 # Interest Management for SPAWNING - clients only load enemies within this radius
 # Uses same radius as position sync for consistency
@@ -160,6 +164,9 @@ func _ready():
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 
+	# Get dynamic tick rate manager (for scaling under load)
+	_tick_rate_manager = get_node_or_null("/root/DynamicTickRateManager")
+
 func _on_peer_disconnected(peer_id: int) -> void:
 	"""Clean up all per-player tracking when a player disconnects"""
 	attack_cooldowns.erase(peer_id)
@@ -234,9 +241,12 @@ func _process(delta):
 		return
 
 	if multiplayer.is_server():
-		# Periodically sync enemy positions to clients
+		# Periodically sync enemy positions to clients (rate controlled by DynamicTickRateManager)
 		position_sync_timer += delta
-		if position_sync_timer >= POSITION_SYNC_RATE:
+		var sync_rate = POSITION_SYNC_RATE_DEFAULT
+		if _tick_rate_manager:
+			sync_rate = _tick_rate_manager.get_enemy_sync_interval()
+		if position_sync_timer >= sync_rate:
 			position_sync_timer = 0.0
 			_sync_enemy_positions()
 
@@ -994,6 +1004,13 @@ func _sync_enemy_positions() -> void:
 	if enemies.is_empty():
 		return
 
+	# Get dynamic radii from tick rate manager (scales with battle intensity)
+	var sync_radius_full = SYNC_RADIUS_FULL_DEFAULT
+	var sync_radius_reduced = SYNC_RADIUS_REDUCED_DEFAULT
+	if _tick_rate_manager:
+		sync_radius_full = _tick_rate_manager.get_enemy_sync_radius_full()
+		sync_radius_reduced = _tick_rate_manager.get_enemy_sync_radius_reduced()
+
 	# Increment reduced sync counter (for 5Hz throttling of mid-range enemies)
 	reduced_sync_counter = (reduced_sync_counter + 1) % 4  # Every 4th tick = 5Hz
 	var include_reduced_range = (reduced_sync_counter == 0)
@@ -1044,13 +1061,13 @@ func _sync_enemy_positions() -> void:
 			var enemy_info = all_enemy_data[enemy_id]
 			var distance = player_pos.distance_to(enemy_info.world_pos)
 
-			# Full sync for nearby enemies (every tick = 20Hz)
-			if distance <= SYNC_RADIUS_FULL:
+			# Full sync for nearby enemies (every tick at current rate)
+			if distance <= sync_radius_full:
 				positions_for_player[enemy_id] = enemy_info.data
-			# Reduced sync for mid-range enemies (every 4th tick = 5Hz)
-			elif distance <= SYNC_RADIUS_REDUCED and include_reduced_range:
+			# Reduced sync for mid-range enemies (every 4th tick)
+			elif distance <= sync_radius_reduced and include_reduced_range:
 				positions_for_player[enemy_id] = enemy_info.data
-			# Beyond SYNC_RADIUS_MAX: don't sync at all (client doesn't need it)
+			# Beyond max radius: don't sync at all (client doesn't need it)
 
 		# Send to this specific player if they have any nearby enemies
 		if not positions_for_player.is_empty():
@@ -1064,14 +1081,16 @@ func _sync_enemy_positions() -> void:
 			var player_pos = player_positions[peer_id]
 			var count = 0
 			for enemy_id in all_enemy_data:
-				if player_pos.distance_to(all_enemy_data[enemy_id].world_pos) <= SYNC_RADIUS_REDUCED:
+				if player_pos.distance_to(all_enemy_data[enemy_id].world_pos) <= sync_radius_reduced:
 					count += 1
 			avg_synced += count
 		if player_positions.size() > 0:
 			avg_synced = avg_synced / player_positions.size()
-		LogManager.debug("[Interest Mgmt] %d players, %d total enemies, avg %.0f synced/player (%.0f%% reduction)" % [
+		var intensity_name = _tick_rate_manager.get_intensity_name() if _tick_rate_manager else "Normal"
+		LogManager.debug("[Interest Mgmt] %d players, %d total enemies, avg %.0f synced/player (%.0f%% reduction) [%s]" % [
 			player_positions.size(), total_enemies, avg_synced,
-			100.0 * (1.0 - float(avg_synced) / max(total_enemies, 1))
+			100.0 * (1.0 - float(avg_synced) / max(total_enemies, 1)),
+			intensity_name
 		], "network")
 
 @rpc("authority", "unreliable_ordered")
@@ -1093,7 +1112,7 @@ func _client_sync_positions(positions: Dictionary) -> void:
 			# This ensures we reach the target before next update arrives
 			var distance = old_target.distance_to(data.pos)
 			# Move at speed that covers distance in ~80% of sync interval (allows for jitter)
-			var target_time = POSITION_SYNC_RATE * 0.8
+			var target_time = POSITION_SYNC_RATE_DEFAULT * 0.8
 			enemy_interpolation_speeds[id] = distance / target_time if target_time > 0 else 200.0
 
 			# Sync health

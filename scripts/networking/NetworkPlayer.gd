@@ -27,11 +27,18 @@ var calculated_move_speed: float = 200.0  # Calculated speed based on distance/t
 
 # AOI (Area of Interest) for massive battle optimization
 # Only sync position updates to players within this radius
-const AOI_RADIUS: float = 2000.0
+# NOTE: This is the default - DynamicTickRateManager may override at runtime
+const AOI_RADIUS_DEFAULT: float = 2000.0
+
+# Dynamic tick rate reference (set on ready)
+var _tick_rate_manager: Node = null
 
 func _ready():
 	name = "Player_" + str(player_id)
 	set_multiplayer_authority(player_id)
+
+	# Get dynamic tick rate manager (may not exist in older builds)
+	_tick_rate_manager = get_node_or_null("/root/DynamicTickRateManager")
 
 	# Spawn the actual player
 	player_instance = player_scene.instantiate()
@@ -90,8 +97,11 @@ func _physics_process(delta):
 		return
 
 	if is_local:
-		# Send our position to others at 30Hz for smoother remote player movement
-		if Time.get_ticks_msec() - last_sync_time > 33:  # 30Hz update rate (was 20Hz)
+		# Send our position to others (rate controlled by DynamicTickRateManager)
+		var sync_interval_ms = 33  # Default 30Hz
+		if _tick_rate_manager:
+			sync_interval_ms = _tick_rate_manager.get_player_sync_interval_ms()
+		if Time.get_ticks_msec() - last_sync_time > sync_interval_ms:
 			_send_position_update()
 			last_sync_time = Time.get_ticks_msec()
 	else:
@@ -148,7 +158,10 @@ func _send_position_update():
 	# AOI optimization: Only send position to nearby players
 	# This reduces O(n²) broadcasts to O(nearby) - crucial for 100+ player battles
 	var my_peer_id = multiplayer.get_unique_id()
-	var nearby_peers = SpatialGrid.get_nearby_peers_fast(pos, AOI_RADIUS)
+	var aoi_radius = AOI_RADIUS_DEFAULT
+	if _tick_rate_manager:
+		aoi_radius = _tick_rate_manager.get_aoi_radius()
+	var nearby_peers = SpatialGrid.get_nearby_peers_fast(pos, aoi_radius)
 
 	for peer_id in nearby_peers:
 		if peer_id != my_peer_id:
@@ -164,8 +177,11 @@ func receive_position_update(pos: Vector2, anim: String, health: int, max_hp: in
 	if player_instance:
 		var old_target = target_position if target_position != Vector2.ZERO else player_instance.global_position
 		var distance = old_target.distance_to(pos)
-		# At 30Hz, updates arrive every ~33ms. Move at speed to cover distance in ~25ms (75% of interval)
-		var target_time = 0.025
+		# Move at speed to cover distance in 75% of the sync interval (smoother arrival)
+		var sync_interval = 0.033  # Default 30Hz
+		if _tick_rate_manager:
+			sync_interval = _tick_rate_manager.get_player_sync_interval()
+		var target_time = sync_interval * 0.75  # 75% of interval
 		calculated_move_speed = distance / target_time if target_time > 0 else 200.0
 
 	# Set target position for interpolation

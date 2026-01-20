@@ -138,6 +138,9 @@ var _loot_aware_combat := false
 var behavior_tree: Node = null  # BehaviorTreeAI instance
 var _bt_last_status: Dictionary = {}
 
+# BotManager for stress testing (server-side)
+var bot_manager: Node = null
+
 func _ready():
 	# Only run in debug builds
 	if not OS.is_debug_build():
@@ -156,6 +159,9 @@ func _ready():
 	add_child(behavior_tree)
 	behavior_tree.setup(self)
 	print("[MCPBridge] Behavior Tree AI initialized")
+
+	# Get BotManager reference (only exists on server)
+	bot_manager = get_node_or_null("/root/BotManager")
 
 func _process(delta):
 	_accept_connections()
@@ -586,7 +592,14 @@ func _handle_command(cmd: Dictionary) -> Dictionary:
 			if behavior_tree:
 				return behavior_tree.analyze_performance()
 			return {error = "Behavior tree not initialized"}
-		
+
+		# ═══════════════════════════════════════════════════════════════════
+		# BOT MANAGER COMMANDS (stress testing)
+		# ═══════════════════════════════════════════════════════════════════
+
+		"bots_spawn", "bots_despawn", "bots_behavior", "bots_ramp", "bots_stop_ramp", "bots_status", "bots_metrics":
+			return _forward_to_bot_manager(cmd)
+
 		_:
 			return {error = "Unknown action: %s" % cmd.get("action", "")}
 
@@ -3467,3 +3480,21 @@ func _update_human_loot(delta: float) -> void:
 func is_human_looting() -> bool:
 	"""Check if currently in human loot process"""
 	return _human_loot_state != LootState.NONE
+
+# ═══════════════════════════════════════════════════════════════════
+# BOT MANAGER INTEGRATION (stress testing)
+# ═══════════════════════════════════════════════════════════════════
+
+func _forward_to_bot_manager(cmd: Dictionary) -> Dictionary:
+	"""Forward commands to BotManager for stress testing"""
+	# Try to get BotManager if we don't have it
+	if not bot_manager:
+		bot_manager = get_node_or_null("/root/BotManager")
+
+	if not bot_manager:
+		return {error = "BotManager not available (only runs on server)"}
+
+	if not bot_manager.has_method("handle_mcp_command"):
+		return {error = "BotManager does not support MCP commands"}
+
+	return bot_manager.handle_mcp_command(cmd)

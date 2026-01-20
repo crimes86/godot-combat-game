@@ -18,7 +18,11 @@ signal register_failed(error: String)
 signal authentication_required()  # Emitted when client connects and needs to auth
 
 const DEFAULT_PORT = 7777
-const MAX_PLAYERS = 50  # Target for 3-chunk playtest (single instance)
+
+# Player capacity - can be overridden via --max-players CLI arg for scaling tests
+# Default 50 for normal play, can scale to 200+ for large battles
+const MAX_PLAYERS_DEFAULT = 50
+var max_players: int = MAX_PLAYERS_DEFAULT
 
 # Version for client/server compatibility checking
 # Git hash for debugging/logging (auto-generated at export)
@@ -101,10 +105,25 @@ func _ready():
 	GIT_HASH = _get_git_commit_hash()
 	LogManager.info("Version %s" % NETWORK_VERSION, "network")
 
+	# Parse CLI args for server configuration
+	_parse_cli_args()
+
 	# Load server API key from environment (for dedicated servers)
 	SERVER_API_KEY = OS.get_environment("SERVER_API_KEY")
 	if not SERVER_API_KEY.is_empty():
 		LogManager.info("Server API key loaded from environment", "network")
+
+func _parse_cli_args():
+	"""Parse command line arguments for server configuration."""
+	var args = OS.get_cmdline_args()
+	for i in range(args.size()):
+		if args[i] == "--max-players" and i + 1 < args.size():
+			var value = args[i + 1].to_int()
+			if value >= 10 and value <= 500:  # Sanity limits
+				max_players = value
+				LogManager.info("Max players set to %d via CLI" % max_players, "network")
+			else:
+				LogManager.warn("Invalid --max-players value: %s (must be 10-500)" % args[i + 1], "network")
 
 	# Connect multiplayer signals
 	multiplayer.peer_connected.connect(_on_player_connected)
@@ -118,7 +137,7 @@ func host_game(port: int = DEFAULT_PORT, host_player_data: Dictionary = {}, is_d
 	peer = ENetMultiplayerPeer.new()
 	# Bind to IPv4 only to avoid IPv6 port conflicts on some systems
 	peer.set_bind_ip("0.0.0.0")
-	var error = peer.create_server(port, MAX_PLAYERS)
+	var error = peer.create_server(port, max_players)
 
 	if error == OK:
 		multiplayer.multiplayer_peer = peer
