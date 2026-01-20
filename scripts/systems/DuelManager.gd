@@ -121,6 +121,10 @@ func can_request_duel(target_id: int) -> Dictionary:
 	if target_id == my_id:
 		return {valid = false, reason = "Cannot duel yourself"}
 
+	# Can't duel bots (they have IDs >= 20000)
+	if target_id >= 20000:
+		return {valid = false, reason = "Cannot duel a bot"}
+
 	# Already in a duel
 	if is_dueling(my_id):
 		return {valid = false, reason = "You are already in a duel"}

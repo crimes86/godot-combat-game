@@ -80,6 +80,20 @@ func show_inspection(player_id: int, player_name: String, player_node: Node2D = 
 	if header_label:
 		header_label.text = "Inspecting: %s" % player_name
 
+	# Check if this is a bot (IDs >= 20000)
+	if player_id >= 20000:
+		_show_bot_info()
+		# Show panel
+		main_panel.visible = true
+		is_visible = true
+		# Fade in
+		main_panel.modulate.a = 0.0
+		var tween = create_tween()
+		tween.tween_property(main_panel, "modulate:a", 1.0, 0.15)
+		if SoundManager:
+			SoundManager.play_inventory_open_sound()
+		return
+
 	# Show loading state
 	_show_loading()
 
@@ -459,6 +473,16 @@ func _hide_loading() -> void:
 		equipment_container.visible = true
 	if stats_row:
 		stats_row.visible = true
+
+func _show_bot_info() -> void:
+	"""Show info for bot players (stress test bots)"""
+	if loading_label:
+		loading_label.text = "🤖 Stress Test Bot\n\nThis is an automated bot for\nserver load testing.\n\nBots cannot be dueled or traded with."
+		loading_label.visible = true
+	if equipment_container:
+		equipment_container.visible = false
+	if stats_row:
+		stats_row.visible = false
 
 func _display_equipment(data: Dictionary) -> void:
 	"""Display equipment from received data"""
