@@ -47,6 +47,85 @@ var current_behavior: BotBehavior = BotBehavior.IDLE
 var cluster_target: Vector2 = Vector2.ZERO
 var combat_enabled: bool = false
 
+# ═══════════════════════════════════════════════════════════════════════════
+# BOT ROLE SYSTEM - RPG class archetypes with appropriate tier 1 gear
+# ═══════════════════════════════════════════════════════════════════════════
+enum BotRole {
+	DPS,      # Damage dealers - light armor, offensive weapons
+	TANK,     # Defenders - heavy armor, defensive weapons
+	HEALER,   # Healers - cloth armor, staff
+	SUPPORT   # Buffers - mixed armor, utility focus
+}
+
+# Role distribution weights (total should = 100 for easy percentage)
+const ROLE_WEIGHTS = {
+	BotRole.DPS: 40,      # 40% DPS
+	BotRole.TANK: 25,     # 25% Tanks
+	BotRole.HEALER: 20,   # 20% Healers
+	BotRole.SUPPORT: 15   # 15% Support
+}
+
+# Role-specific name colors (for healthbar display)
+const ROLE_COLORS = {
+	BotRole.DPS: Color(1.0, 0.3, 0.3, 1.0),      # Red - damage dealers
+	BotRole.TANK: Color(0.3, 0.5, 1.0, 1.0),     # Blue - tanks
+	BotRole.HEALER: Color(0.3, 1.0, 0.4, 1.0),   # Green - healers
+	BotRole.SUPPORT: Color(0.9, 0.7, 0.2, 1.0)   # Gold - support
+}
+
+# Role-specific name prefixes
+const ROLE_PREFIXES = {
+	BotRole.DPS: "DPS",
+	BotRole.TANK: "Tank",
+	BotRole.HEALER: "Healer",
+	BotRole.SUPPORT: "Support"
+}
+
+# Role-specific tier 1 loadouts
+# Each role has multiple loadout variants for visual diversity
+const ROLE_LOADOUTS = {
+	BotRole.DPS: [
+		# Melee DPS - Sword fighter (light armor for agility)
+		{"weapon": "sword", "chest": "rawhide", "legs": "rawhide", "boots": "rawhide", "head": ""},
+		# Melee DPS - Axe berserker (minimal armor)
+		{"weapon": "axe", "chest": "linen", "legs": "linen", "boots": "", "head": ""},
+		# Ranged DPS - Archer (leather for mobility)
+		{"weapon": "bow", "chest": "rawhide", "legs": "rawhide", "boots": "rawhide", "head": "rawhide"},
+		# Melee DPS - Spear fighter (balanced)
+		{"weapon": "spear", "chest": "linen", "legs": "rawhide", "boots": "linen", "head": ""},
+	],
+	BotRole.TANK: [
+		# Heavy Tank - Full plate with sword
+		{"weapon": "sword", "chest": "copper_plate", "legs": "copper_plate", "boots": "copper_plate", "head": "copper_plate"},
+		# Armored Tank - Plate with axe
+		{"weapon": "axe", "chest": "copper_plate", "legs": "copper_plate", "boots": "copper_plate", "head": "copper_plate"},
+		# Off-tank - Mixed heavy armor
+		{"weapon": "sword", "chest": "copper_plate", "legs": "rawhide", "boots": "copper_plate", "head": "rawhide"},
+		# Spear Tank - Reach weapon with armor
+		{"weapon": "spear", "chest": "copper_plate", "legs": "copper_plate", "boots": "rawhide", "head": "copper_plate"},
+	],
+	BotRole.HEALER: [
+		# Cloth Healer - Traditional robes
+		{"weapon": "staff", "chest": "linen", "legs": "linen", "boots": "linen", "head": ""},
+		# Acolyte Healer - White robes
+		{"weapon": "staff", "chest": "white_shirt", "legs": "green_pants", "boots": "", "head": ""},
+		# Nature Healer - Hide and cloth mix
+		{"weapon": "staff", "chest": "linen", "legs": "rawhide", "boots": "", "head": "linen"},
+		# Mystic Healer - Full cloth
+		{"weapon": "staff", "chest": "linen", "legs": "linen", "boots": "linen", "head": "linen"},
+	],
+	BotRole.SUPPORT: [
+		# Buffer - Light mixed armor
+		{"weapon": "staff", "chest": "rawhide", "legs": "linen", "boots": "rawhide", "head": ""},
+		# Enchanter - Cloth with accents
+		{"weapon": "staff", "chest": "linen", "legs": "rawhide", "boots": "linen", "head": "rawhide"},
+		# Bard (unarmed) - Performer attire
+		{"weapon": "unarmed", "chest": "white_shirt", "legs": "green_pants", "boots": "linen", "head": ""},
+		# Tactician - Light plate support
+		{"weapon": "spear", "chest": "linen", "legs": "copper_plate", "boots": "rawhide", "head": "linen"},
+	]
+}
+
 # Patrol waypoints (shared across bots, or per-bot)
 var patrol_waypoints: Array[Vector2] = []
 var default_patrol_route: Array[Vector2] = [
@@ -277,6 +356,124 @@ func despawn_bots(count_or_all) -> Dictionary:
 # VISIBLE BOTS (actual player entities visible to clients)
 # ═══════════════════════════════════════════════════════════════════
 
+func _select_weighted_role() -> BotRole:
+	"""Select a role based on configured weights."""
+	var total_weight = 0
+	for weight in ROLE_WEIGHTS.values():
+		total_weight += weight
+
+	var roll = randi() % total_weight
+	var cumulative = 0
+
+	for role in ROLE_WEIGHTS:
+		cumulative += ROLE_WEIGHTS[role]
+		if roll < cumulative:
+			return role
+
+	return BotRole.DPS  # Fallback
+
+func _get_role_loadout(role: BotRole) -> Dictionary:
+	"""Get a random loadout for the specified role."""
+	var loadouts = ROLE_LOADOUTS[role]
+	return loadouts[randi() % loadouts.size()]
+
+func spawn_visible_bots_with_roles(count: int, behavior: String = "wander", position: Vector2 = Vector2.ZERO) -> Dictionary:
+	"""Spawn visible bot players with balanced RPG roles."""
+	if not game_world:
+		_find_game_world()
+	if not game_world or not game_world.has_method("spawn_player"):
+		return {error = "Game world not found or doesn't support spawn_player"}
+
+	var spawned = []
+	var behavior_enum = _parse_behavior(behavior)
+	var role_counts = {BotRole.DPS: 0, BotRole.TANK: 0, BotRole.HEALER: 0, BotRole.SUPPORT: 0}
+
+	for i in range(count):
+		var bot_id = next_visible_bot_id
+		next_visible_bot_id += 1
+
+		# Select role and loadout
+		var role = _select_weighted_role()
+		var loadout = _get_role_loadout(role)
+		role_counts[role] += 1
+
+		# Randomize spawn position
+		var spawn_pos = position
+		if spawn_pos == Vector2.ZERO:
+			spawn_pos = Vector2(randf_range(-500, 500), randf_range(-500, 500))
+		else:
+			spawn_pos += Vector2(randf_range(-100, 100), randf_range(-100, 100))
+
+		# Random gender
+		var gender = randi() % 2
+
+		# Get loadout details
+		var weapon = loadout.get("weapon", "unarmed")
+		var chest = loadout.get("chest", "white_shirt")
+		var pants = loadout.get("legs", "green_pants")
+		var boots = loadout.get("boots", "")
+		var head = loadout.get("head", "")
+
+		# Create display name with role prefix
+		var role_prefix = ROLE_PREFIXES[role]
+		var display_name = "%s_%d" % [role_prefix, bot_id]
+
+		# Pre-register bot data with role info
+		visible_bots[bot_id] = {
+			"player": null,
+			"behavior": behavior_enum,
+			"role": role,
+			"target_position": position if behavior_enum == BotBehavior.CLUSTER else Vector2.ZERO,
+			"wander_target": spawn_pos,
+			"attack_cooldown": 0.0,
+			"sync_timer": 0.0,
+			"wander_timer": 0.0
+		}
+
+		# Spawn with role-appropriate gear
+		game_world.spawn_player.rpc(
+			bot_id,
+			spawn_pos,
+			gender,
+			weapon,
+			boots,   # feet_sprite
+			pants,   # legs_sprite
+			chest,   # chest_sprite
+			"",      # arms_sprite
+			"",      # hands_sprite
+			head,    # head_sprite
+			"", "", "", "", "", "",  # forged IDs
+			"", "", "",              # weapon glow/effect/theme
+			false,                   # weapon_is_forged
+			"",                      # weapon_item_id
+			display_name,            # display_name
+			false,                   # is_guest
+			"initiate"               # ashbane_tier
+		)
+
+		call_deferred("_link_visible_bot_player", bot_id)
+		spawned.append(bot_id)
+
+	_notify_player_count_changed()
+
+	# Log role distribution
+	print("[BotManager] Spawned %d role-based bots: DPS=%d Tank=%d Healer=%d Support=%d" % [
+		count, role_counts[BotRole.DPS], role_counts[BotRole.TANK],
+		role_counts[BotRole.HEALER], role_counts[BotRole.SUPPORT]
+	])
+
+	return {
+		ok = true,
+		spawned = spawned,
+		total = visible_bots.size(),
+		roles = {
+			"dps": role_counts[BotRole.DPS],
+			"tank": role_counts[BotRole.TANK],
+			"healer": role_counts[BotRole.HEALER],
+			"support": role_counts[BotRole.SUPPORT]
+		}
+	}
+
 func spawn_visible_bots(count: int, behavior: String = "wander", position: Vector2 = Vector2.ZERO) -> Dictionary:
 	"""Spawn visible bot players that clients can see."""
 	if not game_world:
@@ -361,11 +558,12 @@ func _link_visible_bot_player(bot_id: int):
 	if not visible_bots.has(bot_id):
 		return
 
+	var bot_data = visible_bots[bot_id]
 	var player = game_world.players.get(bot_id) if game_world and "players" in game_world else null
 	if player:
 		# Set server as multiplayer authority so we can control it
 		player.set_multiplayer_authority(1)
-		visible_bots[bot_id]["player"] = player
+		bot_data["player"] = player
 
 		# Make bots invulnerable by setting very high health (but display 100/100)
 		if "max_health" in player:
@@ -373,21 +571,35 @@ func _link_visible_bot_player(bot_id: int):
 		if "current_health" in player:
 			player.current_health = 999999
 
-		# Setup health bar display
+		# Setup health bar display with role-based colors
 		var health_bar = player.get_node_or_null("HealthBar")
 		if health_bar:
 			health_bar.visible = true
-			# Set bot name
+
+			# Get role info if available
+			var role = bot_data.get("role", null)
+			var display_name: String
+			var name_color: Color
+
+			if role != null:
+				# Role-based name and color
+				var role_prefix = ROLE_PREFIXES.get(role, "Bot")
+				display_name = "%s_%d" % [role_prefix, bot_id]
+				name_color = ROLE_COLORS.get(role, Color(1.0, 0.6, 0.2, 1.0))
+			else:
+				# Default for non-role bots
+				display_name = "Bot_%d" % bot_id
+				name_color = Color(1.0, 0.6, 0.2, 1.0)  # Orange
+
 			if health_bar.has_method("set_player_name"):
-				health_bar.set_player_name("Bot_%d" % bot_id)
-			# Set name color (orange for bots)
+				health_bar.set_player_name(display_name)
 			if health_bar.has_method("set_name_color"):
-				health_bar.set_name_color(Color(1.0, 0.6, 0.2, 1.0))  # Orange for bots
-			# Update health display (show as 100/100 for cleaner look)
+				health_bar.set_name_color(name_color)
 			if health_bar.has_method("update_health"):
 				health_bar.update_health(100, 100)
 
-		print("[BotManager] Linked visible bot %d to player node (invulnerable, healthbar configured)" % bot_id)
+		var role_str = BotRole.keys()[bot_data.get("role", BotRole.DPS)] if bot_data.has("role") else "none"
+		print("[BotManager] Linked bot %d (role=%s) to player node" % [bot_id, role_str])
 	else:
 		push_warning("[BotManager] Could not find player for visible bot %d" % bot_id)
 
@@ -1095,6 +1307,33 @@ func handle_mcp_command(cmd: Dictionary) -> Dictionary:
 			var x = cmd.get("x", 0.0)
 			var y = cmd.get("y", 0.0)
 			return spawn_visible_bots(count, behavior, Vector2(x, y))
+
+		"vbots_spawn_roles":
+			# Spawn bots with balanced RPG roles (DPS/Tank/Healer/Support)
+			var count = cmd.get("count", 10)
+			var behavior = cmd.get("behavior", "wander")
+			var x = cmd.get("x", 0.0)
+			var y = cmd.get("y", 0.0)
+			return spawn_visible_bots_with_roles(count, behavior, Vector2(x, y))
+
+		"vbots_roles_info":
+			# Get info about the role system
+			return {
+				ok = true,
+				roles = ["DPS", "TANK", "HEALER", "SUPPORT"],
+				weights = {
+					"dps": ROLE_WEIGHTS[BotRole.DPS],
+					"tank": ROLE_WEIGHTS[BotRole.TANK],
+					"healer": ROLE_WEIGHTS[BotRole.HEALER],
+					"support": ROLE_WEIGHTS[BotRole.SUPPORT]
+				},
+				colors = {
+					"dps": "red (damage dealers)",
+					"tank": "blue (defenders)",
+					"healer": "green (healers)",
+					"support": "gold (buffers)"
+				}
+			}
 
 		"vbots_despawn":
 			var count = cmd.get("count", "all")

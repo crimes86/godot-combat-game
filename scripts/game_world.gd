@@ -4203,7 +4203,17 @@ func _request_existing_players(_deprecated_id: int = 0):
 					p_tier = ashbane_data.get("tier", "initiate")
 				# Check if this is a bot (ID 20000-29999) and get name from BotManager
 				elif existing_id >= 20000 and existing_id < 30000:
-					p_name = "Bot_%d" % existing_id
+					# Try to get role-based name from BotManager
+					var bot_manager = get_node_or_null("/root/BotManager")
+					if bot_manager and bot_manager.visible_bots.has(existing_id):
+						var bot_data = bot_manager.visible_bots[existing_id]
+						var role = bot_data.get("role", null)
+						if role != null and bot_manager.ROLE_PREFIXES.has(role):
+							p_name = "%s_%d" % [bot_manager.ROLE_PREFIXES[role], existing_id]
+						else:
+							p_name = "Bot_%d" % existing_id
+					else:
+						p_name = "Bot_%d" % existing_id
 					p_is_guest = false  # Bots aren't guests
 				# Also check player's shield for current tier
 				if existing_player.has_node("AllegianceShield"):
