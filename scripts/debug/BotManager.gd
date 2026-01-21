@@ -275,7 +275,11 @@ func spawn_visible_bots(count: int, behavior: String = "wander", position: Vecto
 
 	# Random appearance options for variety
 	var genders = [0, 1]  # 0 = male, 1 = female
-	var weapon_types = ["unarmed", "sword", "axe", "bow"]
+	var weapon_types = ["unarmed", "sword", "axe", "bow", "spear", "staff"]
+	var chest_options = ["white_shirt", "copper_plate", "linen", "rawhide"]
+	var pants_options = ["green_pants", "copper_plate", "linen", "rawhide"]
+	var boots_options = ["", "copper_plate", "linen", "rawhide"]  # "" = barefoot
+	var head_options = ["", "copper_plate", "linen", "rawhide"]  # "" = no helmet
 
 	for i in range(count):
 		var bot_id = next_visible_bot_id
@@ -288,9 +292,13 @@ func spawn_visible_bots(count: int, behavior: String = "wander", position: Vecto
 		else:
 			spawn_pos += Vector2(randf_range(-100, 100), randf_range(-100, 100))
 
-		# Random appearance
+		# Random appearance - full variety
 		var gender = genders[randi() % genders.size()]
 		var weapon = weapon_types[randi() % weapon_types.size()]
+		var chest = chest_options[randi() % chest_options.size()]
+		var pants = pants_options[randi() % pants_options.size()]
+		var boots = boots_options[randi() % boots_options.size()]
+		var head = head_options[randi() % head_options.size()]
 
 		# Pre-register bot data (player reference will be set in deferred callback)
 		visible_bots[bot_id] = {
@@ -309,7 +317,12 @@ func spawn_visible_bots(count: int, behavior: String = "wander", position: Vecto
 			spawn_pos,
 			gender,
 			weapon,
-			"", "", "", "", "", "",  # sprite paths (default)
+			boots,  # feet_sprite
+			pants,  # legs_sprite
+			chest,  # chest_sprite
+			"",     # arms_sprite
+			"",     # hands_sprite
+			head,   # head_sprite
 			"", "", "", "", "", "",  # forged IDs
 			"", "", "",  # weapon glow/effect/theme
 			false,  # weapon_is_forged
@@ -684,17 +697,36 @@ func _find_nearest_enemy(pos: Vector2) -> Node:
 
 func _make_bot_attack(player: Node, target: Node):
 	"""Make a bot player attack a target."""
-	# Face the target
-	if "facing_direction" in player:
-		var dir = (target.global_position - player.global_position).normalized()
-		if abs(dir.x) > abs(dir.y):
-			player.facing_direction = "right" if dir.x > 0 else "left"
-		else:
-			player.facing_direction = "down" if dir.y > 0 else "up"
+	if not is_instance_valid(target):
+		return
 
-	# Trigger attack
-	if player.has_method("start_attack"):
-		player.start_attack()
+	# Calculate direction to target
+	var dir = (target.global_position - player.global_position).normalized()
+	var lpc_direction = "south"
+	if abs(dir.x) > abs(dir.y):
+		lpc_direction = "east" if dir.x > 0 else "west"
+	else:
+		lpc_direction = "south" if dir.y > 0 else "north"
+
+	# Play attack animation on bot
+	var character_sprite = player.get_node_or_null("CharacterSprite")
+	if character_sprite and character_sprite.has_method("play_lpc_animation"):
+		character_sprite.play_lpc_animation("slash", lpc_direction)
+
+	# Deal damage to target (base damage + some variance)
+	var base_damage = 15.0
+	var damage = base_damage * randf_range(0.8, 1.2)
+	var is_crit = randf() < 0.1  # 10% crit chance
+	if is_crit:
+		damage *= 2.0
+
+	if target.has_method("take_damage"):
+		target.take_damage(damage, is_crit, false)
+
+	# Broadcast attack animation to clients
+	if game_world:
+		var bot_id = player.name.get_slice("_", 1).to_int()
+		_broadcast_bot_position(bot_id, player.global_position, "slash_" + lpc_direction)
 
 # ═══════════════════════════════════════════════════════════════════
 # BEHAVIOR CONTROL
@@ -840,6 +872,17 @@ func get_current_metrics() -> Dictionary:
 		real_players = network_manager.connected_peer_ids.size()
 
 	var total_bots = bots.size() + visible_bots.size()
+	# Count enemies in the world
+	var enemy_count = get_tree().get_nodes_in_group("enemies").size()
+
+	# Get connected peer count more reliably
+	var mp = get_tree().get_multiplayer()
+	if mp and mp.has_multiplayer_peer():
+		var peers = mp.get_peers()
+		for pid in peers:
+			if pid < 20000 or pid >= 30000:  # Real peers only
+				real_players += 1
+
 	return {
 		timestamp = Time.get_unix_time_from_system(),
 		fps = fps,
@@ -849,6 +892,7 @@ func get_current_metrics() -> Dictionary:
 		bot_count = total_bots,
 		real_players = real_players,
 		total_players = real_players + total_bots,
+		enemy_count = enemy_count,
 		player_tick_rate = player_tick_rate,
 		enemy_tick_rate = enemy_tick_rate,
 		aoi_radius = aoi_radius,
@@ -857,7 +901,9 @@ func get_current_metrics() -> Dictionary:
 		behavior = BotBehavior.keys()[current_behavior],
 		ramp_active = ramp_active,
 		ramp_target = ramp_target if ramp_active else 0,
-		memory_mb = OS.get_static_memory_usage() / 1048576.0
+		memory_mb = OS.get_static_memory_usage() / 1048576.0,
+		process_time_ms = Performance.get_monitor(Performance.TIME_PROCESS) * 1000,
+		physics_time_ms = Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000
 	}
 
 func get_status() -> Dictionary:
