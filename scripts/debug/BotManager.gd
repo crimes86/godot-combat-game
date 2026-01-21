@@ -299,7 +299,8 @@ func spawn_visible_bots(count: int, behavior: String = "wander", position: Vecto
 			"target_position": position if behavior_enum == BotBehavior.CLUSTER else Vector2.ZERO,
 			"wander_target": spawn_pos,
 			"attack_cooldown": 0.0,
-			"sync_timer": 0.0
+			"sync_timer": 0.0,
+			"wander_timer": 0.0  # Separate timer for wander behavior
 		}
 
 		# Call game_world's spawn_player via RPC to broadcast to all clients
@@ -338,9 +339,48 @@ func _link_visible_bot_player(bot_id: int):
 		# Set server as multiplayer authority so we can control it
 		player.set_multiplayer_authority(1)
 		visible_bots[bot_id]["player"] = player
-		print("[BotManager] Linked visible bot %d to player node" % bot_id)
+
+		# Make bots invulnerable by setting very high health (but display 100/100)
+		if "max_health" in player:
+			player.max_health = 999999
+		if "current_health" in player:
+			player.current_health = 999999
+
+		# Setup health bar display
+		var health_bar = player.get_node_or_null("HealthBar")
+		if health_bar:
+			health_bar.visible = true
+			# Set bot name
+			if health_bar.has_method("set_player_name"):
+				health_bar.set_player_name("Bot_%d" % bot_id)
+			# Set name color (orange for bots)
+			if health_bar.has_method("set_name_color"):
+				health_bar.set_name_color(Color(1.0, 0.6, 0.2, 1.0))  # Orange for bots
+			# Update health display (show as 100/100 for cleaner look)
+			if health_bar.has_method("update_health"):
+				health_bar.update_health(100, 100)
+
+		print("[BotManager] Linked visible bot %d to player node (invulnerable, healthbar configured)" % bot_id)
 	else:
 		push_warning("[BotManager] Could not find player for visible bot %d" % bot_id)
+
+func _despawn_dead_bot(bot_id: int):
+	"""Remove a bot that has died."""
+	if not visible_bots.has(bot_id):
+		return
+
+	print("[BotManager] Despawning dead bot %d" % bot_id)
+
+	var bot_data = visible_bots[bot_id]
+	if bot_data.player and is_instance_valid(bot_data.player):
+		# Remove via game_world
+		if game_world and game_world.has_method("despawn_player"):
+			game_world.despawn_player(bot_id)
+		else:
+			bot_data.player.queue_free()
+
+	visible_bots.erase(bot_id)
+	_notify_player_count_changed()
 
 func despawn_visible_bots(count_or_all) -> Dictionary:
 	"""Despawn visible bots."""
@@ -389,35 +429,83 @@ func set_visible_bot_behavior(behavior: String, target_pos: Vector2 = Vector2.ZE
 	print("[BotManager] Set visible bot behavior to %s for %d bots" % [behavior, visible_bots.size()])
 	return {ok = true, behavior = behavior, bot_count = visible_bots.size()}
 
+var _debug_update_counter: int = 0
+
 func _update_visible_bots(delta: float):
 	"""Update AI for visible bots."""
+	_debug_update_counter += 1
+	# Log once per second (assuming ~60fps)
+	if _debug_update_counter >= 60:
+		_debug_update_counter = 0
+		print("[BotManager] _update_visible_bots: %d visible bots" % visible_bots.size())
+
 	for bot_id in visible_bots:
 		var bot_data = visible_bots[bot_id]
 		var player = bot_data.player
 
 		if not player or not is_instance_valid(player):
+			# Debug: try to re-link if player is missing
+			if not bot_data.get("link_warned", false):
+				print("[BotManager] Bot %d has no valid player reference, attempting re-link" % bot_id)
+				_link_visible_bot_player(bot_id)
+				bot_data["link_warned"] = true
 			continue
 
 		bot_data.attack_cooldown -= delta
 		bot_data.sync_timer += delta
+		bot_data.wander_timer += delta
 
 		var velocity = Vector2.ZERO
+		var animation = "idle_down"
+
+		# Track position jumps for debugging teleport issue
+		var last_pos = bot_data.get("last_server_pos", player.global_position)
+		var jump_dist = player.global_position.distance_to(last_pos)
+		if jump_dist > 100:  # Log any jump > 100 units
+			print("[BotManager] JUMP DETECTED: bot=%d jumped %.0f units from %s to %s" % [bot_id, jump_dist, last_pos, player.global_position])
+		bot_data["last_server_pos"] = player.global_position
+
+		# Debug log behavior once per bot
+		if not bot_data.get("behavior_logged", false):
+			print("[BotManager] Bot %d behavior=%d player_pos=%s" % [bot_id, bot_data.behavior, player.global_position])
+			bot_data["behavior_logged"] = true
 
 		match bot_data.behavior:
 			BotBehavior.IDLE:
 				velocity = Vector2.ZERO
 
 			BotBehavior.WANDER:
-				# Wander randomly
-				if player.global_position.distance_to(bot_data.wander_target) < 30 or bot_data.sync_timer > 3.0:
-					bot_data.wander_target = player.global_position + Vector2(
-						randf_range(-300, 300),
-						randf_range(-300, 300)
-					)
-					bot_data.sync_timer = 0.0
+				# Wander randomly - pick new target when reaching destination or after timeout
+				var dist_to_target = player.global_position.distance_to(bot_data.wander_target)
+				var time_limit = bot_data.get("wander_time_limit", 5.0)
 
-				var dir = (bot_data.wander_target - player.global_position).normalized()
-				velocity = dir * BOT_MOVE_SPEED * 0.5
+				if dist_to_target < 50 or bot_data.wander_timer > time_limit:
+					# Pick a new target within wander radius of current position
+					var wander_radius = 200.0
+					bot_data.wander_target = player.global_position + Vector2(
+						randf_range(-wander_radius, wander_radius),
+						randf_range(-wander_radius, wander_radius)
+					)
+					bot_data.wander_timer = 0.0
+					# Randomize time limit for natural feel (4-8 seconds)
+					bot_data["wander_time_limit"] = randf_range(4.0, 8.0)
+					# Maybe pause briefly (20% chance)
+					bot_data["wander_pause"] = randf() < 0.2
+					bot_data["wander_pause_time"] = randf_range(0.5, 1.5)
+
+				# Handle pause behavior
+				if bot_data.get("wander_pause", false):
+					bot_data["wander_pause_time"] = bot_data.get("wander_pause_time", 0) - delta
+					if bot_data["wander_pause_time"] <= 0:
+						bot_data["wander_pause"] = false
+					velocity = Vector2.ZERO
+				else:
+					var dir = (bot_data.wander_target - player.global_position).normalized()
+					# Vary speed slightly per bot for natural movement
+					var speed_mult = bot_data.get("speed_mult", randf_range(0.4, 0.6))
+					if not bot_data.has("speed_mult"):
+						bot_data["speed_mult"] = speed_mult
+					velocity = dir * BOT_MOVE_SPEED * speed_mult
 
 			BotBehavior.CLUSTER:
 				if bot_data.target_position != Vector2.ZERO:
@@ -454,11 +542,126 @@ func _update_visible_bots(delta: float):
 					else:
 						velocity = Vector2(randf_range(-30, 30), randf_range(-30, 30))
 
-		# Apply movement to player
-		if "velocity" in player:
-			player.velocity = velocity
+		# Check if bot is dead (is_dead property or low health)
+		var bot_is_dead = false
+		if "is_dead" in player:
+			bot_is_dead = player.is_dead
+		elif "current_health" in player and player.current_health <= 0:
+			bot_is_dead = true
+
+		if bot_is_dead:
+			# Bot died, despawn it
+			if not bot_data.get("death_handled", false):
+				bot_data["death_handled"] = true
+				print("[BotManager] Bot %d died (is_dead=%s), will despawn" % [bot_id, bot_is_dead])
+				call_deferred("_despawn_dead_bot", bot_id)
+			continue
+
+		# Move bot directly (server-side)
+		if velocity.length() > 0:
+			var new_pos = player.global_position + velocity * delta
+			player.global_position = new_pos
+
+			# Determine animation based on movement direction (LPC-style: north/south/east/west)
+			if abs(velocity.x) > abs(velocity.y):
+				animation = "walk_east" if velocity.x > 0 else "walk_west"
+			else:
+				animation = "walk_south" if velocity.y > 0 else "walk_north"
+
+			# Play animation on bot using LPC animation system
+			var character_sprite = player.get_node_or_null("CharacterSprite")
+			if character_sprite and character_sprite.has_method("play_lpc_animation"):
+				var parts = animation.split("_")
+				if parts.size() >= 2:
+					character_sprite.play_lpc_animation(parts[0], parts[1])
+
+		# Sync position to clients using dynamic tick rate from DynamicTickRateManager
+		var sync_rate = 20.0  # Default 20Hz
+		if tick_rate_manager and "current_player_tick_rate" in tick_rate_manager:
+			sync_rate = tick_rate_manager.current_player_tick_rate
+		var sync_interval = 1.0 / sync_rate if sync_rate > 0 else 0.05
+
+		if bot_data.sync_timer >= sync_interval:
+			bot_data.sync_timer = 0.0
+			# Debug: log periodically (roughly 1Hz)
+			if not bot_data.has("log_counter"):
+				bot_data["log_counter"] = 0
+			bot_data["log_counter"] += 1
+			if bot_data["log_counter"] >= int(sync_rate):
+				bot_data["log_counter"] = 0
+			_broadcast_bot_position(bot_id, player.global_position, animation)
 		elif player.has_method("set_velocity"):
 			player.set_velocity(velocity)
+
+var _broadcast_debug_counter: int = 0
+
+func _broadcast_bot_position(bot_id: int, pos: Vector2, animation: String):
+	"""Broadcast bot position to all connected clients."""
+	if not game_world:
+		return
+
+	# Update SpatialGrid for AOI queries
+	if spatial_grid:
+		spatial_grid.update_player(bot_id, pos)
+
+	# Get real connected client peer IDs (not bot IDs)
+	# Bot IDs are in range 20000-29999, real peer IDs are large random numbers
+	var real_peer_ids = []
+	var all_peer_ids = []
+
+	# Try multiplayer.get_peers() first (most reliable)
+	var mp = get_tree().get_multiplayer()
+	if mp and mp.has_multiplayer_peer():
+		all_peer_ids = mp.get_peers()
+		for pid in all_peer_ids:
+			if pid < 20000 or pid >= 30000:  # Real peers (not in bot range 20000-29999)
+				real_peer_ids.append(pid)
+	# Fallback to connected_players
+	elif network_manager and "connected_players" in network_manager:
+		all_peer_ids = network_manager.connected_players.keys()
+		for pid in all_peer_ids:
+			if pid < 20000 or pid >= 30000:
+				real_peer_ids.append(pid)
+
+	# Debug: log peer info periodically
+	_broadcast_debug_counter += 1
+	if _broadcast_debug_counter >= 50:
+		_broadcast_debug_counter = 0
+		print("[BotManager] PEERS: all=%s real=%s" % [all_peer_ids, real_peer_ids])
+
+	if real_peer_ids.is_empty():
+		# No real clients to broadcast to
+		return
+
+	# Bot health defaults (full health)
+	var health = 100
+	var max_health = 100
+	var dashing = false
+
+	# Log when we're actually broadcasting (with position for debugging teleport issue)
+	if _broadcast_debug_counter == 0:  # Just reset, so this is our periodic log
+		print("[BotManager] BROADCAST: bot=%d pos=%s to peers=%s" % [bot_id, pos, real_peer_ids])
+
+	# Use game_world's _receive_player_position RPC for position sync
+	# Server (peer 1) is explicitly allowed to relay positions for any player
+	var has_rpc = game_world.has_method("_receive_player_position")
+	if _broadcast_debug_counter == 0:
+		print("[BotManager] RPC CHECK: has_method=%s game_world=%s" % [has_rpc, game_world.name if game_world else "null"])
+
+	if has_rpc:
+		# Broadcast to all real peers using RPC
+		for peer_id in real_peer_ids:
+			if peer_id == 1:  # Skip server
+				continue
+			game_world._receive_player_position.rpc_id(peer_id, bot_id, pos, animation, health, false)
+	else:
+		# Try calling the method directly as fallback (it might be a Callable)
+		if _broadcast_debug_counter == 0:
+			print("[BotManager] Trying direct call to _receive_player_position")
+		for peer_id in real_peer_ids:
+			if peer_id == 1:
+				continue
+			game_world.call("_receive_player_position", bot_id, pos, animation, health, false)
 
 func _find_nearest_enemy(pos: Vector2) -> Node:
 	"""Find nearest enemy to position."""

@@ -4503,22 +4503,28 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, w
 		# Add a small collision shape at feet for body-blocking
 		_add_body_blocking_collision(player)
 
-		# Set player name on health bar for remote players
+		# Set player name on health bar for remote players (deferred to ensure HealthBar is ready)
 		if display_name != "" and player.has_node("HealthBar"):
 			var hb = player.get_node("HealthBar")
-			if hb.has_method("set_player_name"):
-				hb.set_player_name(display_name)
-			if hb.has_method("set_name_color"):
-				if is_guest_player:
-					hb.set_name_color(Color(0.7, 0.75, 0.7, 1.0))  # Greenish-gray for guests
-				else:
-					hb.set_name_color(Color(0.4, 0.8, 1.0, 1.0))  # Cyan for authenticated
-			# Apply tier to health bar name coloring
-			if hb.has_method("set_ashbane_tier"):
-				hb.set_ashbane_tier(ashbane_tier)
+			# Defer name setting to next frame to ensure HealthBar's _ready() has run
+			call_deferred("_setup_remote_player_healthbar", hb, display_name, is_guest_player, ashbane_tier)
 
 		# Create Allegiance Shield for remote player
 		_add_allegiance_shield(player, ashbane_tier)
+
+func _setup_remote_player_healthbar(hb: Control, display_name: String, is_guest: bool, tier: String) -> void:
+	"""Setup health bar for remote player (called deferred to ensure HealthBar is ready)"""
+	if not is_instance_valid(hb):
+		return
+	if hb.has_method("set_player_name"):
+		hb.set_player_name(display_name)
+	if hb.has_method("set_name_color"):
+		if is_guest:
+			hb.set_name_color(Color(0.7, 0.75, 0.7, 1.0))  # Greenish-gray for guests
+		else:
+			hb.set_name_color(Color(0.4, 0.8, 1.0, 1.0))  # Cyan for authenticated
+	if hb.has_method("set_ashbane_tier"):
+		hb.set_ashbane_tier(tier)
 
 @rpc("any_peer", "call_local", "reliable")
 func despawn_player(id: int):
