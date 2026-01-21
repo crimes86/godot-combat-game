@@ -39,11 +39,25 @@ enum BotBehavior {
 	WANDER,     # Random movement, tests position sync
 	CLUSTER,    # Move toward a point, tests AOI worst-case
 	COMBAT,     # Fight each other, tests damage/state packets
-	REINFORCE   # Stream toward a point over time, tests battle scenario
+	REINFORCE,  # Stream toward a point over time, tests battle scenario
+	PATROL,     # Walk between waypoints in sequence
+	FOLLOW      # Follow a real player
 }
 var current_behavior: BotBehavior = BotBehavior.IDLE
 var cluster_target: Vector2 = Vector2.ZERO
 var combat_enabled: bool = false
+
+# Patrol waypoints (shared across bots, or per-bot)
+var patrol_waypoints: Array[Vector2] = []
+var default_patrol_route: Array[Vector2] = [
+	Vector2(-400, -400),
+	Vector2(400, -400),
+	Vector2(400, 400),
+	Vector2(-400, 400)
+]  # Square patrol by default
+
+# Follow target (peer ID of player to follow)
+var follow_target_peer_id: int = 0
 
 # Ramping
 var ramp_active: bool = false
@@ -555,6 +569,73 @@ func _update_visible_bots(delta: float):
 					else:
 						velocity = Vector2(randf_range(-30, 30), randf_range(-30, 30))
 
+			BotBehavior.PATROL:
+				# Walk between waypoints in sequence
+				var waypoints = bot_data.get("patrol_waypoints", patrol_waypoints if patrol_waypoints.size() > 0 else default_patrol_route)
+				if waypoints.size() == 0:
+					velocity = Vector2.ZERO
+				else:
+					var waypoint_idx = bot_data.get("patrol_index", 0)
+					var target_waypoint = waypoints[waypoint_idx]
+					var dist_to_waypoint = player.global_position.distance_to(target_waypoint)
+
+					if dist_to_waypoint < 30:
+						# Reached waypoint, move to next
+						waypoint_idx = (waypoint_idx + 1) % waypoints.size()
+						bot_data["patrol_index"] = waypoint_idx
+						# Brief pause at waypoint (optional)
+						bot_data["patrol_pause"] = randf() < 0.3  # 30% chance to pause
+						bot_data["patrol_pause_time"] = randf_range(0.5, 1.5)
+
+					# Handle pause
+					if bot_data.get("patrol_pause", false):
+						bot_data["patrol_pause_time"] = bot_data.get("patrol_pause_time", 0) - delta
+						if bot_data["patrol_pause_time"] <= 0:
+							bot_data["patrol_pause"] = false
+						velocity = Vector2.ZERO
+					else:
+						var dir = (target_waypoint - player.global_position).normalized()
+						var speed_mult = bot_data.get("speed_mult", randf_range(0.5, 0.7))
+						if not bot_data.has("speed_mult"):
+							bot_data["speed_mult"] = speed_mult
+						velocity = dir * BOT_MOVE_SPEED * speed_mult
+
+			BotBehavior.FOLLOW:
+				# Follow a real player
+				var target_peer = bot_data.get("follow_target", follow_target_peer_id)
+				var target_player: Node = null
+
+				# Find the target player
+				if target_peer > 0 and game_world and "players" in game_world:
+					target_player = game_world.players.get(target_peer)
+
+				# Fallback: follow nearest real player
+				if not target_player:
+					target_player = _find_nearest_real_player(player.global_position)
+
+				if target_player and is_instance_valid(target_player):
+					var dist = player.global_position.distance_to(target_player.global_position)
+					var follow_distance = bot_data.get("follow_distance", randf_range(80, 150))
+					if not bot_data.has("follow_distance"):
+						bot_data["follow_distance"] = follow_distance
+
+					if dist > follow_distance + 30:
+						# Move toward player
+						var dir = (target_player.global_position - player.global_position).normalized()
+						# Speed based on distance (faster when further away)
+						var speed_mult = clampf(dist / 300.0, 0.5, 1.2)
+						velocity = dir * BOT_MOVE_SPEED * speed_mult
+					elif dist < follow_distance - 20:
+						# Too close, back up a bit
+						var dir = (player.global_position - target_player.global_position).normalized()
+						velocity = dir * BOT_MOVE_SPEED * 0.3
+					else:
+						# At good distance, slight wander
+						velocity = Vector2(randf_range(-15, 15), randf_range(-15, 15))
+				else:
+					# No player to follow, wander instead
+					velocity = Vector2(randf_range(-30, 30), randf_range(-30, 30))
+
 		# Check if bot is dead (is_dead property or low health)
 		var bot_is_dead = false
 		if "is_dead" in player:
@@ -695,6 +776,30 @@ func _find_nearest_enemy(pos: Vector2) -> Node:
 
 	return nearest
 
+func _find_nearest_real_player(pos: Vector2) -> Node:
+	"""Find nearest real player (not a bot) to position."""
+	if not game_world or not "players" in game_world:
+		return null
+
+	var nearest: Node = null
+	var nearest_dist = 2000.0  # Max follow range
+
+	for peer_id in game_world.players:
+		# Skip bots (IDs 20000-29999)
+		if peer_id >= 20000 and peer_id < 30000:
+			continue
+
+		var player = game_world.players[peer_id]
+		if not is_instance_valid(player):
+			continue
+
+		var dist = pos.distance_to(player.global_position)
+		if dist < nearest_dist:
+			nearest_dist = dist
+			nearest = player
+
+	return nearest
+
 func _make_bot_attack(player: Node, target: Node):
 	"""Make a bot player attack a target."""
 	if not is_instance_valid(target):
@@ -753,6 +858,8 @@ func _parse_behavior(behavior: String) -> BotBehavior:
 		"cluster": return BotBehavior.CLUSTER
 		"combat": return BotBehavior.COMBAT
 		"reinforce": return BotBehavior.REINFORCE
+		"patrol": return BotBehavior.PATROL
+		"follow": return BotBehavior.FOLLOW
 		_: return BotBehavior.IDLE
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1007,6 +1114,45 @@ func handle_mcp_command(cmd: Dictionary) -> Dictionary:
 				total_bots = bots.size() + visible_bots.size(),
 				game_world_found = game_world != null
 			}
+
+		"vbots_patrol":
+			# Set patrol waypoints: {"action": "vbots_patrol", "waypoints": [[x1,y1], [x2,y2], ...]}
+			var waypoints_raw = cmd.get("waypoints", [])
+			var waypoints: Array[Vector2] = []
+			for wp in waypoints_raw:
+				if wp is Array and wp.size() >= 2:
+					waypoints.append(Vector2(wp[0], wp[1]))
+			if waypoints.size() > 0:
+				patrol_waypoints = waypoints
+			else:
+				patrol_waypoints = default_patrol_route
+			# Set behavior to patrol
+			return set_visible_bot_behavior("patrol")
+
+		"vbots_follow":
+			# Set bots to follow a player: {"action": "vbots_follow", "target": peer_id}
+			# target = 0 means follow nearest real player
+			var target_id = cmd.get("target", 0)
+			follow_target_peer_id = target_id
+			# Update all bots with the follow target
+			for bot_id in visible_bots:
+				visible_bots[bot_id]["follow_target"] = target_id
+			return set_visible_bot_behavior("follow")
+
+		"vbots_list_players":
+			# List real players that bots can follow
+			var players = []
+			if game_world and "players" in game_world:
+				for peer_id in game_world.players:
+					if peer_id >= 20000 and peer_id < 30000:
+						continue  # Skip bots
+					var p = game_world.players[peer_id]
+					if is_instance_valid(p):
+						players.append({
+							"peer_id": peer_id,
+							"position": {"x": p.global_position.x, "y": p.global_position.y}
+						})
+			return {ok = true, players = players}
 
 		_:
 			return {error = "Unknown bot command: %s" % action}
