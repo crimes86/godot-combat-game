@@ -86,25 +86,17 @@ func _ready() -> void:
 
 	# Initialize sprite - ensure hframes is set correctly for sprite sheet animation
 	if sprite:
-		print("[Wildlife] %s init - idle_frames=%d, walk_frames=%d, run_frames=%d" % [animal_type, idle_frames, walk_frames, run_frames])
-		print("[Wildlife] %s textures - idle=%s, walk=%s, run=%s" % [animal_type, idle_texture, walk_texture, run_texture])
-
 		# Explicitly disable region mode to ensure hframes works
 		sprite.region_enabled = false
 
 		if idle_texture:
 			sprite.texture = idle_texture
-			# Print texture size for debugging
-			print("[Wildlife] %s texture size: %s" % [animal_type, idle_texture.get_size()])
 
 		sprite.hframes = idle_frames
 		sprite.vframes = 1
 		sprite.frame = 0
 		current_anim = ""  # Reset so _play_animation will run fully
 		current_frames = idle_frames
-
-		print("[Wildlife] %s sprite after init: hframes=%d, vframes=%d, frame=%d, region_enabled=%s" % [
-			animal_type, sprite.hframes, sprite.vframes, sprite.frame, sprite.region_enabled])
 
 		# Verify state after first frame with deferred call
 		call_deferred("_verify_sprite_state")
@@ -199,9 +191,19 @@ func _process_fleeing(delta: float) -> void:
 	var player = _get_nearest_player()
 
 	if player:
-		# Flee directly away from player
-		var flee_direction = (global_position - player.global_position).normalized()
-		velocity = flee_direction * flee_speed
+		# Calculate flee direction away from player
+		var flee_direction = (global_position - player.global_position)
+
+		# Wildlife sprites only support east/west facing - pure horizontal flee
+		# Determine which horizontal direction to flee (away from player on X axis)
+		var flee_x = 1.0 if flee_direction.x >= 0 else -1.0
+
+		# If player is nearly directly above/below, pick random horizontal
+		if abs(flee_direction.x) < 10.0:
+			flee_x = 1.0 if randf() > 0.5 else -1.0
+
+		# Pure horizontal movement only
+		velocity = Vector2(flee_x, 0).normalized() * flee_speed
 
 		# Check if we've fled far enough
 		var distance = global_position.distance_to(player.global_position)
@@ -221,10 +223,18 @@ func _process_fleeing(delta: float) -> void:
 
 
 func _pick_roam_target() -> void:
-	# Pick a random point within roam radius of home
-	var angle = randf() * TAU
-	var distance = randf_range(roam_radius * 0.3, roam_radius)
-	target_position = home_position + Vector2(cos(angle), sin(angle)) * distance
+	# Pick a random point to roam to
+	# Wildlife sprites only support east/west facing - no vertical movement
+
+	# Choose east (+1) or west (-1) direction
+	var dir_x = 1.0 if randf() > 0.5 else -1.0
+	var distance_x = randf_range(roam_radius * 0.3, roam_radius)
+
+	# Pure horizontal movement only
+	target_position = global_position + Vector2(dir_x * distance_x, 0)
+
+	# Update home position to stay near where we roam
+	home_position = global_position
 
 
 func _update_animation(delta: float) -> void:
@@ -247,9 +257,9 @@ func _update_facing() -> void:
 	if velocity.length_squared() > 1.0:
 		facing_right = velocity.x > 0
 
-	# Update sprite flip_h (sprites face right by default)
+	# Update sprite flip_h (sprites face WEST/left by default, flip for east/right)
 	if sprite:
-		sprite.flip_h = not facing_right
+		sprite.flip_h = facing_right
 
 
 func _play_animation(anim_name: String) -> void:
@@ -427,18 +437,7 @@ func _verify_sprite_state() -> void:
 	if not sprite:
 		return
 
-	print("[Wildlife] %s VERIFY (deferred): hframes=%d, vframes=%d, frame=%d, region=%s, tex=%s" % [
-		animal_type,
-		sprite.hframes,
-		sprite.vframes,
-		sprite.frame,
-		sprite.region_enabled,
-		sprite.texture.resource_path if sprite.texture else "null"
-	])
-
 	# Force hframes again in case something reset it
 	if sprite.hframes != current_frames:
-		push_warning("[Wildlife] %s hframes was changed! Resetting from %d to %d" % [
-			animal_type, sprite.hframes, current_frames])
 		sprite.hframes = current_frames
 		sprite.vframes = 1

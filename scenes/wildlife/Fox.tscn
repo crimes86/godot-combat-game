@@ -26,14 +26,14 @@ carcass_item_id = "fox_carcass"
 idle_texture = ExtResource("2_idle")
 walk_texture = ExtResource("3_walk")
 run_texture = ExtResource("4_run")
-idle_frames = 8
+idle_frames = 6
 walk_frames = 8
 run_frames = 6
 
 [node name="Sprite" type="Sprite2D" parent="."]
 texture_filter = 0
 texture = ExtResource("2_idle")
-hframes = 8
+hframes = 6
 vframes = 1
 region_enabled = false
 scale = Vector2(1.5, 1.5)
