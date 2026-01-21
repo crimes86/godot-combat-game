@@ -4201,6 +4201,10 @@ func _request_existing_players(_deprecated_id: int = 0):
 					var p_data = NetworkManager.authenticated_players[existing_id].get("player_data", {})
 					var ashbane_data = p_data.get("ashbane", {})
 					p_tier = ashbane_data.get("tier", "initiate")
+				# Check if this is a bot (ID 20000-29999) and get name from BotManager
+				elif existing_id >= 20000 and existing_id < 30000:
+					p_name = "Bot_%d" % existing_id
+					p_is_guest = false  # Bots aren't guests
 				# Also check player's shield for current tier
 				if existing_player.has_node("AllegianceShield"):
 					p_tier = existing_player.get_node("AllegianceShield").current_tier
