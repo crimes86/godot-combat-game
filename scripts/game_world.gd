@@ -4514,9 +4514,11 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, w
 
 func _setup_remote_player_healthbar(hb: Control, display_name: String, is_guest: bool, tier: String) -> void:
 	"""Setup health bar for remote player (called deferred to ensure HealthBar is ready)"""
+	print("[GameWorld] _setup_remote_player_healthbar: name='%s' hb_valid=%s" % [display_name, is_instance_valid(hb)])
 	if not is_instance_valid(hb):
 		return
 	if hb.has_method("set_player_name"):
+		print("[GameWorld] Calling set_player_name('%s')" % display_name)
 		hb.set_player_name(display_name)
 	if hb.has_method("set_name_color"):
 		if is_guest:

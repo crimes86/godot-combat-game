@@ -341,8 +341,9 @@ func set_player_name(new_name: String) -> void:
 	if name_label:
 		name_label.text = display_name
 		name_label.visible = not display_name.is_empty()
+		print("✅ [HEALTHBAR] Set name='%s' visible=%s" % [display_name, name_label.visible])
 	else:
-		print("❌ [HEALTHBAR] name_label is null!")
+		print("❌ [HEALTHBAR] name_label is null! (name was '%s')" % display_name)
 
 func set_name_color(color: Color) -> void:
 	"""Set the name label color (e.g., different for guests vs authenticated)"""
