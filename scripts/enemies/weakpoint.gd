@@ -4,10 +4,12 @@ class_name Weakpoint
 var max_hits: int = 3
 var current_hits: int = 0
 var is_destroyed: bool = false
+var is_charging: bool = true  # Weakpoint starts in "charging" state - not clickable until server confirms
 var sprite: Polygon2D
 var glow_sprite: Polygon2D
 var sparkle_particles: CPUParticles2D
 var shine_layers: Array = []  # Store shine polygons for brightness animation
+var charging_tween: Tween = null  # Reference to charging animation tween
 
 # Color theme: "blood" for training dummy, "bone" for skeletons
 var color_theme: String = "blood"
@@ -72,7 +74,10 @@ func _ready() -> void:
 		return
 
 	z_index = 300
-	input_pickable = true
+
+	# Start in charging state - not clickable until server confirms (hides 200ms latency)
+	input_pickable = false
+	is_charging = true
 
 	# Add to weakpoints group for cursor detection
 	add_to_group("weakpoints")
@@ -192,6 +197,61 @@ func _ready() -> void:
 
 	input_event.connect(_on_input)
 	max_hits = randi_range(3, 5)
+
+	# Start charging animation (pulsing, dim) - will be replaced by activate()
+	_start_charging_animation()
+
+func _start_charging_animation() -> void:
+	"""Play charging animation while waiting for server confirmation.
+	Weakpoint pulses and is dimmed to indicate 'not ready yet'."""
+	if not sprite or not glow_sprite:
+		return
+
+	# Dim the weakpoint to indicate charging
+	modulate.a = 0.4
+
+	# Pulsing scale animation
+	charging_tween = create_tween()
+	charging_tween.set_loops()
+	charging_tween.set_trans(Tween.TRANS_SINE)
+	charging_tween.set_ease(Tween.EASE_IN_OUT)
+
+	# Pulse scale up and down
+	charging_tween.tween_property(sprite, "scale", Vector2(1.15, 1.15), 0.3)
+	charging_tween.tween_property(sprite, "scale", Vector2(0.9, 0.9), 0.3)
+
+func activate() -> void:
+	"""Called when server confirms window is valid - make weakpoint clickable.
+	This hides the 200ms network latency behind the charging animation."""
+	if is_destroyed:
+		return
+
+	is_charging = false
+	input_pickable = true
+
+	# Stop charging animation
+	if charging_tween and charging_tween.is_valid():
+		charging_tween.kill()
+		charging_tween = null
+
+	# Reset scale
+	if sprite:
+		sprite.scale = Vector2.ONE
+
+	# Fade in to full visibility with a satisfying "ready" effect
+	var activate_tween = create_tween()
+	activate_tween.set_parallel(true)
+	activate_tween.tween_property(self, "modulate:a", 1.0, 0.15)
+
+	# Brief scale pop for "ready" feedback
+	if sprite:
+		activate_tween.tween_property(sprite, "scale", Vector2(1.2, 1.2), 0.1)
+		activate_tween.chain().tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.1)
+
+	# Play a subtle activation sound
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("play_ui_click"):
+		sound_manager.play_ui_click(global_position, -15.0)
 
 func calculate_hitbox_radius() -> float:
 	"""Calculate hitbox radius based on player level (degrades for tighter precision at higher levels)"""
@@ -360,8 +420,8 @@ func set_damage_per_hit(damage: int) -> void:
 	damage_per_hit = damage
 
 func _on_input(_vp: Node, event: InputEvent, _idx: int) -> void:
-	if is_destroyed:
-		return
+	if is_destroyed or is_charging:
+		return  # Block input while charging (waiting for server confirmation)
 
 	# Don't allow hits if parent enemy is dying or a corpse
 	var parent = get_parent()
@@ -381,8 +441,8 @@ func _on_input(_vp: Node, event: InputEvent, _idx: int) -> void:
 		hit()
 
 func hit() -> void:
-	if is_destroyed:
-		return
+	if is_destroyed or is_charging:
+		return  # Block hits while charging (waiting for server confirmation)
 
 	# Don't allow hits if parent enemy is dying or a corpse
 	var parent = get_parent()

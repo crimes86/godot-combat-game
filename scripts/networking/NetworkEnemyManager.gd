@@ -43,6 +43,8 @@ var client_known_enemies: Dictionary = {}   # Dictionary[int, Dictionary[int, bo
 # Client-side interpolation data for smooth movement
 var enemy_target_positions: Dictionary = {}  # network_id -> target position
 var enemy_interpolation_speeds: Dictionary = {}  # network_id -> calculated speed
+var enemy_velocities: Dictionary = {}  # network_id -> Vector2 velocity (for extrapolation)
+var enemy_last_update_times: Dictionary = {}  # network_id -> msec timestamp of last update
 
 # Reference to game world
 var game_world: Node = null
@@ -260,8 +262,10 @@ func _process(delta):
 		_interpolate_enemy_positions(delta)
 
 func _interpolate_enemy_positions(delta: float) -> void:
-	"""Client-side smooth interpolation of enemy positions using exponential smoothing."""
-	const LERP_SPEED: float = 12.0  # Higher = snappier, lower = smoother (10-15 feels good)
+	"""Client-side smooth interpolation with velocity extrapolation for 200ms+ latency.
+	Predicts where the enemy WILL be based on their velocity, then smoothly interpolates."""
+	const LERP_SPEED: float = 15.0  # Slightly higher for snappier response
+	const EXTRAPOLATION_FACTOR: float = 0.5  # How much to trust velocity (0=none, 1=full)
 
 	for id in enemy_target_positions:
 		var enemy = get_enemy(id)
@@ -270,22 +274,37 @@ func _interpolate_enemy_positions(delta: float) -> void:
 
 		var target_pos = enemy_target_positions[id]
 		var current_pos = enemy.global_position
-		var distance = current_pos.distance_to(target_pos)
+		var velocity = enemy_velocities.get(id, Vector2.ZERO)
+
+		# Calculate time since last server update
+		var current_time = Time.get_ticks_msec()
+		var last_update = enemy_last_update_times.get(id, current_time)
+		var time_since_update = (current_time - last_update) / 1000.0
+
+		# EXTRAPOLATION: Predict where enemy will be based on velocity
+		# This compensates for network latency by showing where enemy SHOULD be
+		var predicted_pos = target_pos
+		if velocity.length() > 5.0 and time_since_update < 0.5:  # Only extrapolate if moving and recent
+			# Extrapolate forward by time since last update, scaled by factor
+			var extrapolation_time = time_since_update * EXTRAPOLATION_FACTOR
+			predicted_pos = target_pos + velocity * extrapolation_time
+
+		var distance = current_pos.distance_to(predicted_pos)
 
 		# If very close, snap to target
 		if distance < 0.5:
-			enemy.global_position = target_pos
+			enemy.global_position = predicted_pos
 			continue
 
 		# If too far (lag spike or teleport), snap immediately
 		if distance > 500.0:
-			enemy.global_position = target_pos
+			enemy.global_position = target_pos  # Snap to actual target, not extrapolated
+			enemy_velocities[id] = Vector2.ZERO  # Reset velocity on teleport
 			continue
 
-		# Exponential smoothing - moves faster when far, slower when close
-		# This creates smooth deceleration as enemy approaches target
+		# Exponential smoothing toward predicted position
 		var t = clampf(delta * LERP_SPEED, 0.0, 1.0)
-		enemy.global_position = current_pos.lerp(target_pos, t)
+		enemy.global_position = current_pos.lerp(predicted_pos, t)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ENEMY REGISTRATION (Server Only)
@@ -315,6 +334,11 @@ func unregister_enemy(network_id: int) -> void:
 		enemies.erase(network_id)
 	# Clean up damage tracking to prevent memory leaks
 	_clear_damage_tracking(network_id)
+	# Clean up interpolation/velocity tracking (client-side)
+	enemy_target_positions.erase(network_id)
+	enemy_interpolation_speeds.erase(network_id)
+	enemy_velocities.erase(network_id)
+	enemy_last_update_times.erase(network_id)
 
 func get_enemy(network_id: int) -> Node:
 	"""Get enemy by network ID. Returns null if enemy is freed or doesn't exist."""
@@ -560,7 +584,7 @@ func _client_enemy_damaged(enemy_network_id: int, damage: float, new_health: flo
 	if not enemy or not is_instance_valid(enemy):
 		return
 
-	# Update local health (needed on both server and client)
+	# Update local health (needed on both server and client) - ALWAYS authoritative
 	enemy.current_health = new_health
 
 	# Emit damage signal for AI aggro (needed on server for enemy AI)
@@ -576,13 +600,29 @@ func _client_enemy_damaged(enemy_network_id: int, damage: float, new_health: flo
 	if not enemy.is_inside_tree():
 		return
 
-	# Tutorial: Notify TutorialManager if this is the training dummy
+	# CLIENT PREDICTION: Check if we are the attacker - skip visual feedback if so
+	# Attacker already saw feedback via _show_predicted_damage_feedback() for 0ms latency feel
+	var my_peer_id = multiplayer.get_unique_id()
+	var is_attacker = (attacker_id == my_peer_id)
+
+	# Tutorial: Notify TutorialManager if this is the training dummy (always, for state tracking)
 	if enemy.is_in_group("training_dummy"):
 		var tutorial_mgr = get_node_or_null("/root/TutorialManager")
 		if tutorial_mgr and tutorial_mgr.is_tutorial_active():
 			tutorial_mgr.on_dummy_hit(is_crit)
-			# NOTE: Don't call on_weakpoint_hit() here - it's called in _on_weakpoint_destroyed_local()
-			# when the weakpoint is actually destroyed (not just hit). This prevents double-counting.
+
+	# Update health bar - ALWAYS update (authoritative from server)
+	if enemy.health_bar and enemy.health_bar.has_method("update_health"):
+		enemy.health_bar.update_health(new_health, max_health)
+
+	# Skip visual/audio feedback for attacker (they already saw it via client prediction)
+	if is_attacker:
+		# Attacker still needs training dummy spin animation
+		if enemy.has_method("trigger_spin"):
+			enemy.trigger_spin()
+		return
+
+	# === VISUAL FEEDBACK FOR NON-ATTACKERS (other players watching) ===
 
 	# Trigger visual feedback (hit flash, combat text, sounds)
 	if enemy.has_node("HitFlash"):
@@ -592,14 +632,10 @@ func _client_enemy_damaged(enemy_network_id: int, damage: float, new_health: flo
 	if enemy.has_method("play_hurt_stagger"):
 		enemy.play_hurt_stagger()
 
-	# Update health bar
-	if enemy.health_bar and enemy.health_bar.has_method("update_health"):
-		enemy.health_bar.update_health(new_health, max_health)
-
 	# Spawn combat text
 	_spawn_combat_text(enemy, damage, is_crit, is_weakpoint)
 
-	# Play hit sounds (only for the attacker to avoid duplicates when testing locally)
+	# Play hit sounds (only for non-attackers now)
 	_play_hit_sounds(enemy, is_crit, is_weakpoint, attacker_id)
 
 	# Trigger spin animation on TrainingDummy
@@ -1108,6 +1144,21 @@ func _client_sync_positions(positions: Dictionary) -> void:
 			var old_target = enemy_target_positions.get(id, enemy.global_position)
 			enemy_target_positions[id] = data.pos
 
+			# VELOCITY TRACKING: Calculate velocity for extrapolation (200ms latency fix)
+			var current_time = Time.get_ticks_msec()
+			var last_time = enemy_last_update_times.get(id, current_time)
+			var dt = (current_time - last_time) / 1000.0  # Convert to seconds
+			enemy_last_update_times[id] = current_time
+
+			if dt > 0.01 and dt < 1.0:  # Valid time delta (10ms to 1s)
+				var velocity = (data.pos - old_target) / dt
+				# Smooth velocity to reduce jitter (exponential moving average)
+				var old_velocity = enemy_velocities.get(id, Vector2.ZERO)
+				enemy_velocities[id] = old_velocity.lerp(velocity, 0.5)
+			else:
+				# First update or invalid dt - no velocity yet
+				enemy_velocities[id] = Vector2.ZERO
+
 			# Calculate interpolation speed based on distance and sync rate
 			# This ensures we reach the target before next update arrives
 			var distance = old_target.distance_to(data.pos)
@@ -1340,6 +1391,8 @@ func despawn_enemy_for_client(network_id: int) -> void:
 	unregister_enemy(network_id)
 	enemy_target_positions.erase(network_id)
 	enemy_interpolation_speeds.erase(network_id)
+	enemy_velocities.erase(network_id)
+	enemy_last_update_times.erase(network_id)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SPAWN SYNC (Server -> Clients)
@@ -1779,7 +1832,51 @@ func get_player_peer_id(player_node: Node) -> int:
 # CRIT WINDOW RESULT REPORTING (Client-Predicted System)
 # ═══════════════════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════════════════
+# WEAKPOINT WINDOW SYNC (Server-Authoritative)
+# ═══════════════════════════════════════════════════════════════════════════
+# Weakpoints spawn in "charging" state on client.
+# Client requests validation, server confirms, client activates weakpoints.
+# This hides 200ms network latency behind the charging animation.
+
 @rpc("any_peer", "reliable")
+func request_weakpoint_window_validation(enemy_network_id: int) -> void:
+	"""Client requests server to validate their weakpoint window.
+	Server confirms if the enemy is valid and window can proceed."""
+	if not multiplayer:
+		return
+
+	if not multiplayer.is_server():
+		return
+
+	var requester_id = multiplayer.get_remote_sender_id()
+	if requester_id == 0:
+		requester_id = 1
+
+	# Validate enemy exists and is alive
+	var enemy = get_enemy(enemy_network_id)
+	if not enemy or not is_instance_valid(enemy):
+		return  # Silently fail - window will timeout
+
+	if enemy.is_dying or enemy.is_corpse:
+		return  # Enemy is dead, window invalid
+
+	# Confirm the window to the requester
+	confirm_weakpoint_window.rpc_id(requester_id, enemy_network_id)
+
+@rpc("authority", "reliable")
+func confirm_weakpoint_window(enemy_network_id: int) -> void:
+	"""Server confirms client's weakpoint window is valid.
+	Client will activate their weakpoints (make them clickable)."""
+	# Find the local player's CritWindowManager and notify it
+	var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	for player in players:
+		if player.is_multiplayer_authority():
+			var crit_window_mgr = player.get_node_or_null("CritWindowManager")
+			if crit_window_mgr and crit_window_mgr.has_method("on_server_confirm_window"):
+				crit_window_mgr.on_server_confirm_window(enemy_network_id)
+			return
+
 func report_crit_window_result(enemy_network_id: int, weakpoints_destroyed: int, total_damage: int) -> void:
 	"""Client reports crit window results. Server validates and applies damage."""
 	# Guard against null multiplayer during scene transitions

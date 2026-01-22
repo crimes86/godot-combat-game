@@ -1686,8 +1686,14 @@ func heal_allies(allies: Array, heal_amount: float) -> void:
 			if ally.has_method("heal"):
 				ally.heal(heal_amount, "player", my_peer_id)
 
-		# Healer always sees heal text for allies they healed
+		# CLIENT PREDICTION: Healer gets immediate feedback (0ms latency feel)
+		# Server will validate and sync authoritative health to target
 		CombatText.create_heal(heal_amount, ally.global_position, get_tree().root, Vector2.ZERO)
+
+		# Play heal impact sound immediately for healer
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager and sound_manager.has_method("play_healing_impact_sound"):
+			sound_manager.play_healing_impact_sound(ally.global_position, -3.0)
 
 func _spawn_heal_pulse(center_pos: Vector2, radius: float, skip_rate_limit: bool = false) -> void:
 	"""Spawn a green pulse effect at the healing location. Broadcast to all players."""
@@ -1996,13 +2002,16 @@ func apply_damage_with_feedback(enemy: Node, damage: float, is_crit: bool, hit_w
 	if has_peer and enemy_net_id >= 0:
 		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
 		if network_enemy_mgr:
+			# CLIENT PREDICTION: Show feedback immediately (0ms latency feel)
+			_show_predicted_damage_feedback(enemy, damage, is_crit, hit_weakpoint)
+
 			if multiplayer.is_server():
 				# Server processes damage directly (no RPC to self)
 				network_enemy_mgr.request_damage(enemy_net_id, damage, is_crit, hit_weakpoint)
 			else:
 				# Client sends RPC to server
 				network_enemy_mgr.request_damage.rpc_id(1, enemy_net_id, damage, is_crit, hit_weakpoint)
-			# Visual feedback will be triggered by server broadcast
+			# Server broadcasts health update - attacker skips visual feedback (already shown)
 			return
 	# Single player: apply damage directly
 	enemy.take_damage(damage, is_crit, hit_weakpoint)
@@ -2014,6 +2023,43 @@ func apply_damage_with_feedback(enemy: Node, damage: float, is_crit: bool, hit_w
 	# Trigger hit flash on enemy
 	if enemy.has_node("HitFlash"):
 		enemy.get_node("HitFlash").flash(is_crit)
+
+func _show_predicted_damage_feedback(enemy: Node, damage: float, is_crit: bool, hit_weakpoint: bool) -> void:
+	"""Show damage feedback immediately on client (0ms latency feel).
+	Server will validate and broadcast authoritative health.
+	This is a Player.gd version for legacy damage paths."""
+	if not is_instance_valid(enemy):
+		return
+
+	# 1. Attack feedback particles
+	if attack_feedback and attack_feedback.has_method("trigger_attack_feedback"):
+		attack_feedback.trigger_attack_feedback(enemy.global_position, is_crit, hit_weakpoint)
+
+	# 2. Damage number
+	if attack_feedback and attack_feedback.has_method("spawn_damage_number"):
+		attack_feedback.spawn_damage_number(enemy.global_position, damage, is_crit, hit_weakpoint)
+
+	# 3. Hit flash on enemy
+	if enemy.has_node("HitFlash"):
+		enemy.get_node("HitFlash").flash(is_crit)
+
+	# 4. Stagger animation
+	if enemy.has_method("play_hurt_stagger"):
+		enemy.play_hurt_stagger()
+
+	# 5. Hit sound
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		var weapon_type = "unarmed"
+		if CharacterStats.equipped_weapon:
+			weapon_type = CharacterStats.equipped_weapon.weapon_type
+		var hit_pos = enemy.global_position
+		get_tree().create_timer(0.1).timeout.connect(func():
+			if is_crit:
+				sound_manager.play_critical_hit_sound(hit_pos, -8.0)
+			else:
+				sound_manager.play_normal_hit_sound(hit_pos, -12.0, weapon_type)
+		)
 
 func _on_crit_window_completed(success_ratio: float, total_destroyed: int, enemy: Node) -> void:
 	var all_destroyed = (total_destroyed == 3)

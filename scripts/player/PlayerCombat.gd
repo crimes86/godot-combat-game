@@ -1016,14 +1016,18 @@ func apply_damage_with_feedback(enemy: Node, damage: float, is_crit: bool, hit_w
 	if has_peer and enemy_net_id >= 0:
 		var network_enemy_mgr = player.get_node_or_null("/root/NetworkEnemyManager")
 		if network_enemy_mgr:
+			# CLIENT PREDICTION: Show feedback immediately (0ms latency feel)
+			# Server will validate and broadcast authoritative health - we reconcile on mismatch
+			_show_predicted_damage_feedback(enemy, damage, is_crit, hit_weakpoint)
+
 			if player.multiplayer.is_server():
 				# Server processes damage directly (no RPC to self)
 				network_enemy_mgr.request_damage(enemy_net_id, damage, is_crit, hit_weakpoint)
 			else:
 				# Client sends RPC to server
 				network_enemy_mgr.request_damage.rpc_id(1, enemy_net_id, damage, is_crit, hit_weakpoint)
-			# Server will broadcast visual feedback via _client_enemy_damaged
-			# Skip local take_damage - server handles it authoritatively
+			# Server broadcasts health update via _client_enemy_damaged
+			# Visual feedback already shown above - server broadcast will skip for attacker
 			_track_weapon_hit(damage, is_crit, enemy, enemy_hp_before)
 			return
 
@@ -1071,6 +1075,60 @@ func apply_damage_with_feedback(enemy: Node, damage: float, is_crit: bool, hit_w
 			else:
 				sound_manager.play_normal_hit_sound(hit_pos, -12.0, weapon_type)
 		)
+
+# ========================================
+# CLIENT-SIDE PREDICTION (Latency Hiding)
+# ========================================
+
+func _show_predicted_damage_feedback(enemy: Node, damage: float, is_crit: bool, hit_weakpoint: bool) -> void:
+	"""Show damage feedback immediately on client (0ms latency feel).
+	Server will validate and broadcast authoritative health - visual feedback already shown.
+	This makes the game feel responsive even at 200ms+ RTT."""
+	if not is_instance_valid(enemy):
+		return
+
+	# 1. Damage number - instant feedback
+	if attack_feedback and attack_feedback.has_method("spawn_damage_number"):
+		attack_feedback.spawn_damage_number(enemy.global_position, damage, is_crit, hit_weakpoint)
+
+	# 2. Blood splatter particles
+	if attack_feedback and attack_feedback.has_method("trigger_attack_feedback"):
+		attack_feedback.trigger_attack_feedback(enemy.global_position, is_crit, hit_weakpoint)
+
+	# 3. Hit flash on enemy
+	if enemy.has_node("HitFlash"):
+		enemy.get_node("HitFlash").flash(is_crit)
+
+	# 4. Stagger animation
+	if enemy.has_method("play_hurt_stagger"):
+		enemy.play_hurt_stagger()
+
+	# 5. Hit sound (delayed slightly so swing whoosh plays first)
+	var sound_manager = player.get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		var weapon_type = "unarmed"
+		var is_gun = false
+		var is_bow = false
+		if CharacterStats.equipped_weapon:
+			weapon_type = CharacterStats.equipped_weapon.weapon_type
+			is_gun = CharacterStats.equipped_weapon.is_gun_weapon()
+			is_bow = CharacterStats.equipped_weapon.is_bow_weapon()
+		var hit_pos = enemy.global_position
+		var tree = player.get_tree()
+		tree.create_timer(0.1).timeout.connect(func():
+			if is_crit:
+				sound_manager.play_critical_hit_sound(hit_pos, -8.0)
+			elif is_gun:
+				var is_armored = enemy.is_in_group("training_dummy")
+				sound_manager.play_bullet_impact_sound(hit_pos, is_armored, -8.0)
+			elif is_bow:
+				pass  # Bow impact handled in _spawn_arrow_impact
+			else:
+				sound_manager.play_normal_hit_sound(hit_pos, -12.0, weapon_type)
+		)
+
+	# NOTE: We do NOT update the health bar here - server sends authoritative health
+	# This prevents visual desync if server rejects the damage (anti-cheat, etc.)
 
 # ========================================
 # GUN ATTACK SYSTEM

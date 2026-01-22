@@ -208,6 +208,11 @@ func _start_growing_sprite_window(target: Node, window_data: WindowData) -> void
 		end_window(target, 0)
 		return
 
+	# SERVER SYNC: Request validation from server for weakpoint window
+	# Weakpoints start in "charging" state - server confirmation activates them
+	# This hides 200ms network latency behind the charging animation
+	_request_window_validation(target, window_data)
+
 func _on_weakpoint_spawned(weakpoint: Node, target: Node, window_data: WindowData) -> void:
 	"""Track when a weakpoint is spawned and configure it for client-predicted hits"""
 	if not active_windows.has(target):
@@ -356,3 +361,55 @@ func _report_window_results(target: Node, weakpoints_destroyed: int, total_damag
 	else:
 		# Client reports to server
 		network_enemy_mgr.report_crit_window_result.rpc_id(1, enemy_net_id, weakpoints_destroyed, total_damage)
+
+# ============================================
+# SERVER-SYNCED WEAKPOINT ACTIVATION
+# ============================================
+# Weakpoints spawn in "charging" state and are activated after server confirms.
+# This hides 200ms network latency behind a charging animation.
+
+func _request_window_validation(target: Node, window_data: WindowData) -> void:
+	"""Request server validation for weakpoint window.
+	In single-player or as server, immediately activate weakpoints.
+	As client, request confirmation from server."""
+	if not multiplayer.has_multiplayer_peer():
+		# Single player - immediately activate weakpoints after a brief moment
+		# (let the spawn animation start first)
+		get_tree().create_timer(0.1).timeout.connect(_activate_weakpoints.bind(target))
+		return
+
+	var enemy_net_id = target.get("network_id") if target.get("network_id") != null else -1
+
+	if multiplayer.is_server():
+		# We are the server - immediately activate weakpoints after brief delay
+		get_tree().create_timer(0.1).timeout.connect(_activate_weakpoints.bind(target))
+	else:
+		# Client - request validation from server
+		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+		if network_enemy_mgr and enemy_net_id >= 0:
+			network_enemy_mgr.request_weakpoint_window_validation.rpc_id(1, enemy_net_id)
+		else:
+			# Fallback: activate after timeout if no network manager
+			get_tree().create_timer(0.25).timeout.connect(_activate_weakpoints.bind(target))
+
+func _activate_weakpoints(target: Node) -> void:
+	"""Activate all weakpoints for target - called when server confirms or in single-player."""
+	if not active_windows.has(target):
+		return
+
+	var window_data = active_windows[target]
+
+	for weakpoint in window_data.weakpoint_refs:
+		if is_instance_valid(weakpoint) and weakpoint.has_method("activate"):
+			weakpoint.activate()
+
+func on_server_confirm_window(enemy_network_id: int) -> void:
+	"""Called when server confirms our weakpoint window is valid.
+	Activates the weakpoints so player can click them."""
+	# Find the target by network_id
+	for target in active_windows:
+		if is_instance_valid(target):
+			var net_id = target.get("network_id") if target.get("network_id") != null else -1
+			if net_id == enemy_network_id:
+				_activate_weakpoints(target)
+				return
