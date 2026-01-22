@@ -126,6 +126,522 @@ const ROLE_LOADOUTS = {
 	]
 }
 
+# ═══════════════════════════════════════════════════════════════════════════
+# TEAM SYSTEM - Organized groups of bots that work together
+# ═══════════════════════════════════════════════════════════════════════════
+enum TeamState {
+	FORMING,    # Members moving to rally point
+	READY,      # All members at rally point, waiting
+	GRINDING,   # Team actively fighting enemies
+	RETURNING   # Team returning to rally point after grinding
+}
+
+# Team rally points - closer to grinding zones (skeleton spawns)
+# Skeletons spawn ~1100 units from campfire (-6000, 0)
+const TEAM_RALLY_POINTS = [
+	Vector2(-5100, 0),     # Team 1: East (near eastern skeletons at -4900)
+	Vector2(-6900, 0),     # Team 2: West (near western skeletons at -7100)
+	Vector2(-6000, -900),  # Team 3: North (near northern skeleton at -6000, -1100)
+	Vector2(-6000, 900),   # Team 4: South (near southern skeletons at -6000, 1100)
+	Vector2(-5100, -200),  # Team 5: East-north
+	Vector2(-5100, 200),   # Team 6: East-south
+]
+
+# Standard team composition (total 5 members)
+const TEAM_COMPOSITION = {
+	BotRole.TANK: 1,     # 1 tank to hold aggro
+	BotRole.HEALER: 1,   # 1 healer to keep team alive
+	BotRole.DPS: 2,      # 2 DPS for damage
+	BotRole.SUPPORT: 1   # 1 support for buffs
+}
+
+# Formation offsets from rally point (classic MMO formation)
+# Tank front, healer back, DPS flanks, support middle
+const TEAM_FORMATION = {
+	BotRole.TANK: [Vector2(0, -40)],           # Front (1 tank)
+	BotRole.HEALER: [Vector2(0, 50)],          # Back center (1 healer)
+	BotRole.DPS: [Vector2(-45, 0), Vector2(45, 0)],  # Left and right flanks (2 DPS)
+	BotRole.SUPPORT: [Vector2(0, 15)]          # Center-back (1 support)
+}
+
+# Grinding zones - areas where teams go to fight enemies
+# These should be near enemy spawn areas
+# Grinding zones - directly at skeleton spawn locations (campfire at -6000, 0)
+# Same as rally points since we want teams to grind where they spawn
+const GRINDING_ZONES = [
+	Vector2(-4900, 0),     # East - skeletons here
+	Vector2(-7100, 0),     # West - skeletons here
+	Vector2(-6000, -1100), # North - skeleton here
+	Vector2(-6000, 1100),  # South - skeletons here
+]
+
+# Grinding session settings
+const GRINDING_DURATION: float = 60.0  # Seconds to grind before returning
+const GRINDING_RETREAT_HEALTH: float = 0.15  # Return when team avg health below 15%
+const TEAM_MOVE_SPEED: float = 100.0  # Speed when moving as a team
+
+# Team storage: team_id -> team data
+var teams: Dictionary = {}
+var next_team_id: int = 1
+
+func spawn_team(rally_point_index: int = -1) -> Dictionary:
+	"""Spawn a balanced team at a rally point.
+
+	Args:
+		rally_point_index: Which rally point to use (0-5), or -1 for auto-assign
+
+	Returns:
+		Dictionary with team info
+	"""
+	if not game_world:
+		_find_game_world()
+	if not game_world or not game_world.has_method("spawn_player"):
+		return {error = "Game world not found or doesn't support spawn_player"}
+
+	# Auto-assign rally point if not specified
+	if rally_point_index < 0 or rally_point_index >= TEAM_RALLY_POINTS.size():
+		rally_point_index = (next_team_id - 1) % TEAM_RALLY_POINTS.size()
+
+	var rally_point = TEAM_RALLY_POINTS[rally_point_index]
+	var team_id = next_team_id
+	next_team_id += 1
+
+	# Create team data
+	var team_data = {
+		"id": team_id,
+		"state": TeamState.FORMING,
+		"rally_point": rally_point,
+		"rally_index": rally_point_index,
+		"members": [],  # List of bot_ids
+		"spawn_time": Time.get_unix_time_from_system()
+	}
+
+	var spawned_ids = []
+
+	# Track role spawn counts for formation positioning
+	var role_spawn_counts = {}
+	for role in TEAM_COMPOSITION:
+		role_spawn_counts[role] = 0
+
+	# Spawn bots according to composition
+	for role in TEAM_COMPOSITION:
+		var count = TEAM_COMPOSITION[role]
+		for i in range(count):
+			var bot_id = next_visible_bot_id
+			next_visible_bot_id += 1
+
+			var loadout = _get_role_loadout(role)
+
+			# Get formation offset for this role instance
+			var formation_offsets = TEAM_FORMATION.get(role, [Vector2.ZERO])
+			var role_index = role_spawn_counts[role]
+			var formation_offset = formation_offsets[role_index % formation_offsets.size()]
+			role_spawn_counts[role] += 1
+
+			# Calculate formation position (rally point + formation offset)
+			var formation_pos = rally_point + formation_offset
+
+			# Spawn near formation position with tiny scatter for visual variety
+			var spawn_pos = formation_pos + Vector2(
+				randf_range(-8, 8),
+				randf_range(-8, 8)
+			)
+
+			# Random gender
+			var gender = randi() % 2
+
+			# Loadout details
+			var weapon = loadout.get("weapon", "unarmed")
+			var chest = loadout.get("chest", "white_shirt")
+			var pants = loadout.get("legs", "green_pants")
+			var boots = loadout.get("boots", "")
+			var head = loadout.get("head", "")
+
+			# Display name with role prefix
+			var role_prefix = ROLE_PREFIXES[role]
+			var display_name = "%s_%d" % [role_prefix, bot_id]
+
+			# Debug: log loadout being applied
+			print("[BotManager] Spawning %s at formation %s: weapon=%s chest=%s" % [
+				display_name, formation_offset, weapon, chest
+			])
+
+			# Register bot data with team info - target is their formation position
+			visible_bots[bot_id] = {
+				"player": null,
+				"behavior": BotBehavior.CLUSTER,  # Start with cluster to formation position
+				"role": role,
+				"weapon": weapon,  # Store weapon for combat behavior
+				"team_id": team_id,
+				"target_position": formation_pos,  # Their specific formation spot
+				"formation_offset": formation_offset,  # Store for reference
+				"wander_target": spawn_pos,
+				"attack_cooldown": 0.0,
+				"sync_timer": 0.0,
+				"wander_timer": 0.0
+			}
+
+			# Spawn the player entity
+			game_world.spawn_player.rpc(
+				bot_id,
+				spawn_pos,
+				gender,
+				weapon,
+				boots,
+				pants,
+				chest,
+				"",     # arms
+				"",     # hands
+				head,
+				"", "", "", "", "", "",  # forged IDs
+				"", "", "",              # weapon glow/effect/theme
+				false,                   # weapon_is_forged
+				"",                      # weapon_item_id
+				display_name,
+				false,                   # is_guest
+				"initiate"               # ashbane_tier
+			)
+
+			call_deferred("_link_visible_bot_player", bot_id)
+			spawned_ids.append(bot_id)
+			team_data.members.append(bot_id)
+
+	# Store team
+	teams[team_id] = team_data
+
+	_notify_player_count_changed()
+
+	# Role breakdown for logging
+	var role_counts = {}
+	for role in TEAM_COMPOSITION:
+		role_counts[ROLE_PREFIXES[role].to_lower()] = TEAM_COMPOSITION[role]
+
+	print("[BotManager] Spawned Team %d at rally point %d (%s) with %d members" % [
+		team_id, rally_point_index, rally_point, spawned_ids.size()
+	])
+
+	return {
+		ok = true,
+		team_id = team_id,
+		rally_point_index = rally_point_index,
+		rally_point = {"x": rally_point.x, "y": rally_point.y},
+		members = spawned_ids,
+		composition = role_counts
+	}
+
+func spawn_teams(count: int) -> Dictionary:
+	"""Spawn multiple teams at different rally points."""
+	var results = []
+	var total_bots = 0
+
+	for i in range(count):
+		var result = spawn_team(i % TEAM_RALLY_POINTS.size())
+		if result.has("ok") and result.ok:
+			results.append(result)
+			total_bots += result.members.size()
+		else:
+			results.append(result)
+
+	print("[BotManager] Spawned %d teams with %d total bots" % [results.size(), total_bots])
+
+	return {
+		ok = true,
+		teams_spawned = results.size(),
+		total_bots = total_bots,
+		teams = results
+	}
+
+func despawn_team(team_id: int) -> Dictionary:
+	"""Despawn all members of a team."""
+	if not teams.has(team_id):
+		return {error = "Team %d not found" % team_id}
+
+	var team_data = teams[team_id]
+	var removed = []
+
+	for bot_id in team_data.members:
+		if visible_bots.has(bot_id):
+			var bot_data = visible_bots[bot_id]
+			if bot_data.player and is_instance_valid(bot_data.player):
+				if game_world and game_world.has_method("despawn_player"):
+					game_world.despawn_player(bot_id)
+				else:
+					bot_data.player.queue_free()
+			visible_bots.erase(bot_id)
+			removed.append(bot_id)
+
+	teams.erase(team_id)
+	_notify_player_count_changed()
+
+	print("[BotManager] Despawned Team %d (%d members)" % [team_id, removed.size()])
+
+	return {ok = true, team_id = team_id, removed = removed.size()}
+
+func despawn_all_teams() -> Dictionary:
+	"""Despawn all teams."""
+	var team_ids = teams.keys().duplicate()
+	var total_removed = 0
+
+	for team_id in team_ids:
+		var result = despawn_team(team_id)
+		if result.has("removed"):
+			total_removed += result.removed
+
+	return {ok = true, teams_removed = team_ids.size(), bots_removed = total_removed}
+
+func get_team_status(team_id: int) -> Dictionary:
+	"""Get status of a specific team."""
+	if not teams.has(team_id):
+		return {error = "Team %d not found" % team_id}
+
+	var team_data = teams[team_id]
+	var members_info = []
+	var members_at_rally = 0
+
+	for bot_id in team_data.members:
+		if visible_bots.has(bot_id):
+			var bot_data = visible_bots[bot_id]
+			var player = bot_data.get("player")
+			var at_rally = false
+			var pos = Vector2.ZERO
+
+			if player and is_instance_valid(player):
+				pos = player.global_position
+				at_rally = pos.distance_to(team_data.rally_point) < 50
+				if at_rally:
+					members_at_rally += 1
+
+			members_info.append({
+				"bot_id": bot_id,
+				"role": ROLE_PREFIXES.get(bot_data.get("role"), "Unknown"),
+				"position": {"x": pos.x, "y": pos.y},
+				"at_rally": at_rally
+			})
+
+	return {
+		ok = true,
+		team_id = team_id,
+		state = TeamState.keys()[team_data.state],
+		rally_point = {"x": team_data.rally_point.x, "y": team_data.rally_point.y},
+		members_at_rally = members_at_rally,
+		total_members = team_data.members.size(),
+		ready = members_at_rally == team_data.members.size(),
+		members = members_info
+	}
+
+func list_teams() -> Dictionary:
+	"""List all active teams."""
+	var team_list = []
+
+	for team_id in teams:
+		var status = get_team_status(team_id)
+		if status.has("ok"):
+			team_list.append({
+				"team_id": team_id,
+				"state": status.state,
+				"members": status.total_members,
+				"at_rally": status.members_at_rally,
+				"ready": status.ready
+			})
+
+	return {
+		ok = true,
+		team_count = teams.size(),
+		teams = team_list
+	}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# GRINDING SESSION MANAGEMENT
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _update_teams(delta: float) -> void:
+	"""Update all teams - handle state transitions and coordination."""
+	for team_id in teams:
+		var team_data = teams[team_id]
+		_update_team_state(team_id, team_data, delta)
+
+func _update_team_state(team_id: int, team_data: Dictionary, delta: float) -> void:
+	"""Update a single team's state machine."""
+	match team_data.state:
+		TeamState.FORMING:
+			# Check if all members are at their formation positions
+			var all_ready = true
+			for bot_id in team_data.members:
+				if visible_bots.has(bot_id):
+					var bot_data = visible_bots[bot_id]
+					var player = bot_data.get("player")
+					if player and is_instance_valid(player):
+						var dist = player.global_position.distance_to(bot_data.target_position)
+						if dist > 50:  # Not yet at formation position
+							all_ready = false
+							break
+
+			if all_ready:
+				team_data.state = TeamState.READY
+				print("[BotManager] Team %d is READY (all members in formation)" % team_id)
+
+		TeamState.READY:
+			# Team is ready, waiting for grinding command
+			# Could add auto-grind logic here later
+			pass
+
+		TeamState.GRINDING:
+			# Update grinding timer
+			var grind_time = team_data.get("grind_timer", 0.0) + delta
+			team_data["grind_timer"] = grind_time
+
+			# Check for retreat conditions
+			var avg_health = _get_team_avg_health(team_id)
+			var should_retreat = false
+
+			if grind_time >= GRINDING_DURATION:
+				should_retreat = true
+				print("[BotManager] Team %d returning (grind time complete)" % team_id)
+			elif avg_health < GRINDING_RETREAT_HEALTH:
+				should_retreat = true
+				print("[BotManager] Team %d retreating (low health: %.0f%%)" % [team_id, avg_health * 100])
+
+			if should_retreat:
+				_start_team_return(team_id)
+
+		TeamState.RETURNING:
+			# Check if all members are back at rally
+			var all_home = true
+			for bot_id in team_data.members:
+				if visible_bots.has(bot_id):
+					var bot_data = visible_bots[bot_id]
+					var player = bot_data.get("player")
+					if player and is_instance_valid(player):
+						var dist = player.global_position.distance_to(bot_data.target_position)
+						if dist > 50:
+							all_home = false
+							break
+
+			if all_home:
+				team_data.state = TeamState.READY
+				print("[BotManager] Team %d returned to rally and is READY" % team_id)
+
+func _get_team_avg_health(team_id: int) -> float:
+	"""Get average health percentage of team members."""
+	if not teams.has(team_id):
+		return 1.0
+
+	var team_data = teams[team_id]
+	var total_health = 0.0
+	var count = 0
+
+	for bot_id in team_data.members:
+		if visible_bots.has(bot_id):
+			var bot_data = visible_bots[bot_id]
+			var player = bot_data.get("player")
+			if player and is_instance_valid(player):
+				var current = player.get("current_health") if "current_health" in player else 100.0
+				var maximum = player.get("max_health") if "max_health" in player else 100.0
+				if maximum > 0:
+					total_health += current / maximum
+					count += 1
+
+	return total_health / count if count > 0 else 1.0
+
+func start_grinding_session(team_id: int, zone_index: int = -1) -> Dictionary:
+	"""Start a grinding session for a team.
+
+	Args:
+		team_id: The team to send grinding
+		zone_index: Which grinding zone (0-3), or -1 for auto-select
+	"""
+	if not teams.has(team_id):
+		return {error = "Team %d not found" % team_id}
+
+	var team_data = teams[team_id]
+
+	if team_data.state != TeamState.READY:
+		return {error = "Team %d is not ready (state: %s)" % [team_id, TeamState.keys()[team_data.state]]}
+
+	# Select grinding zone
+	if zone_index < 0 or zone_index >= GRINDING_ZONES.size():
+		zone_index = randi() % GRINDING_ZONES.size()
+
+	var grind_target = GRINDING_ZONES[zone_index]
+
+	# Update team state
+	team_data.state = TeamState.GRINDING
+	team_data["grind_target"] = grind_target
+	team_data["grind_zone"] = zone_index
+	team_data["grind_timer"] = 0.0
+
+	# Update all team members to move toward grind zone (maintaining formation)
+	for bot_id in team_data.members:
+		if visible_bots.has(bot_id):
+			var bot_data = visible_bots[bot_id]
+			var formation_offset = bot_data.get("formation_offset", Vector2.ZERO)
+			bot_data["target_position"] = grind_target + formation_offset
+			bot_data["behavior"] = BotBehavior.COMBAT  # Switch to combat mode
+
+	print("[BotManager] Team %d started grinding at zone %d (%s)" % [team_id, zone_index, grind_target])
+
+	return {
+		ok = true,
+		team_id = team_id,
+		zone_index = zone_index,
+		target = {"x": grind_target.x, "y": grind_target.y}
+	}
+
+func _start_team_return(team_id: int) -> void:
+	"""Internal: Start team return to rally point."""
+	if not teams.has(team_id):
+		return
+
+	var team_data = teams[team_id]
+	team_data.state = TeamState.RETURNING
+
+	# Update all members to return to rally formation
+	for bot_id in team_data.members:
+		if visible_bots.has(bot_id):
+			var bot_data = visible_bots[bot_id]
+			var formation_offset = bot_data.get("formation_offset", Vector2.ZERO)
+			bot_data["target_position"] = team_data.rally_point + formation_offset
+			bot_data["behavior"] = BotBehavior.CLUSTER  # Switch back to cluster (move to position)
+
+func stop_grinding_session(team_id: int) -> Dictionary:
+	"""Force a team to stop grinding and return to rally."""
+	if not teams.has(team_id):
+		return {error = "Team %d not found" % team_id}
+
+	var team_data = teams[team_id]
+
+	if team_data.state != TeamState.GRINDING:
+		return {error = "Team %d is not grinding" % team_id}
+
+	_start_team_return(team_id)
+
+	return {ok = true, team_id = team_id, message = "Team returning to rally"}
+
+func start_all_grinding() -> Dictionary:
+	"""Start grinding sessions for all ready teams."""
+	var started = []
+
+	for team_id in teams:
+		var team_data = teams[team_id]
+		if team_data.state == TeamState.READY:
+			var result = start_grinding_session(team_id)
+			if result.has("ok") and result.ok:
+				started.append(team_id)
+
+	return {ok = true, teams_started = started, count = started.size()}
+
+func stop_all_grinding() -> Dictionary:
+	"""Stop all grinding sessions and return teams to rally."""
+	var stopped = []
+
+	for team_id in teams:
+		var team_data = teams[team_id]
+		if team_data.state == TeamState.GRINDING:
+			_start_team_return(team_id)
+			stopped.append(team_id)
+
+	return {ok = true, teams_stopped = stopped, count = stopped.size()}
+
 # Patrol waypoints (shared across bots, or per-bot)
 var patrol_waypoints: Array[Vector2] = []
 var default_patrol_route: Array[Vector2] = [
@@ -254,6 +770,7 @@ func _process(delta: float):
 	_update_ramp(delta)
 	_update_bots(delta)
 	_update_visible_bots(delta)
+	_update_teams(delta)  # Team state machine updates
 	_update_metrics(delta)
 
 func _accept_control_connections():
@@ -423,6 +940,7 @@ func spawn_visible_bots_with_roles(count: int, behavior: String = "wander", posi
 			"player": null,
 			"behavior": behavior_enum,
 			"role": role,
+			"weapon": weapon,  # Store weapon for combat behavior
 			"target_position": position if behavior_enum == BotBehavior.CLUSTER else Vector2.ZERO,
 			"wander_target": spawn_pos,
 			"attack_cooldown": 0.0,
@@ -565,19 +1083,31 @@ func _link_visible_bot_player(bot_id: int):
 		player.set_multiplayer_authority(1)
 		bot_data["player"] = player
 
-		# Make bots invulnerable by setting very high health (but display 100/100)
+		# Set role-appropriate health values
+		var role = bot_data.get("role", null)
+		var bot_max_health = 100.0  # Default
+		if role != null:
+			match role:
+				BotRole.DPS:
+					bot_max_health = 80.0    # Glass cannon
+				BotRole.TANK:
+					bot_max_health = 150.0   # Durable
+				BotRole.HEALER:
+					bot_max_health = 70.0    # Squishy
+				BotRole.SUPPORT:
+					bot_max_health = 90.0    # Moderate
+
 		if "max_health" in player:
-			player.max_health = 999999
+			player.max_health = bot_max_health
 		if "current_health" in player:
-			player.current_health = 999999
+			player.current_health = bot_max_health
 
 		# Setup health bar display with role-based colors
 		var health_bar = player.get_node_or_null("HealthBar")
 		if health_bar:
 			health_bar.visible = true
 
-			# Get role info if available
-			var role = bot_data.get("role", null)
+			# Use role from above for name and color
 			var display_name: String
 			var name_color: Color
 
@@ -596,7 +1126,7 @@ func _link_visible_bot_player(bot_id: int):
 			if health_bar.has_method("set_name_color"):
 				health_bar.set_name_color(name_color)
 			if health_bar.has_method("update_health"):
-				health_bar.update_health(100, 100)
+				health_bar.update_health(bot_max_health, bot_max_health)
 
 		var role_str = BotRole.keys()[bot_data.get("role", BotRole.DPS)] if bot_data.has("role") else "none"
 		print("[BotManager] Linked bot %d (role=%s) to player node" % [bot_id, role_str])
@@ -749,28 +1279,128 @@ func _update_visible_bots(delta: float):
 			BotBehavior.CLUSTER:
 				if bot_data.target_position != Vector2.ZERO:
 					var dist = player.global_position.distance_to(bot_data.target_position)
-					if dist > 50:
+					if dist > 80:
+						# Move toward cluster point
 						var dir = (bot_data.target_position - player.global_position).normalized()
-						velocity = dir * BOT_MOVE_SPEED
+						velocity = dir * BOT_MOVE_SPEED * 0.6
+					elif dist > 30:
+						# Slow approach to final position
+						var dir = (bot_data.target_position - player.global_position).normalized()
+						velocity = dir * BOT_MOVE_SPEED * 0.2
 					else:
-						velocity = Vector2(randf_range(-20, 20), randf_range(-20, 20))
+						# At cluster point - stand still with rare small shifts
+						var idle_timer = bot_data.get("cluster_idle_timer", 0.0) + delta
+						bot_data["cluster_idle_timer"] = idle_timer
+						if idle_timer > randf_range(3.0, 6.0):  # Shift every 3-6 seconds
+							bot_data["cluster_idle_timer"] = 0.0
+							velocity = Vector2(randf_range(-10, 10), randf_range(-10, 10))
+						else:
+							velocity = Vector2.ZERO  # Stand still
 
 			BotBehavior.COMBAT:
-				# Find nearest enemy to fight
-				var nearest_enemy = _find_nearest_enemy(player.global_position)
-				if nearest_enemy:
-					var dist = player.global_position.distance_to(nearest_enemy.global_position)
-					if dist > BOT_COMBAT_RANGE:
-						var dir = (nearest_enemy.global_position - player.global_position).normalized()
-						velocity = dir * BOT_MOVE_SPEED
+				var role = bot_data.get("role", null)
+				var weapon = bot_data.get("weapon", "unarmed")
+				var is_ranged = weapon == "bow" or weapon == "crossbow"
+				var is_healer = role == BotRole.HEALER
+
+				# Debug: Log combat state every 2 seconds
+				var combat_log_timer = bot_data.get("combat_log_timer", 0.0) + delta
+				bot_data["combat_log_timer"] = combat_log_timer
+				if combat_log_timer > 2.0:
+					bot_data["combat_log_timer"] = 0.0
+					print("[BotManager] ⚔️ Bot %d COMBAT: role=%s weapon=%s ranged=%s healer=%s cooldown=%.2f pos=%s" % [
+						bot_id, role, weapon, is_ranged, is_healer, bot_data.attack_cooldown, player.global_position])
+
+				# Healers prioritize healing hurt teammates - STAY AT FORMATION
+				if is_healer:
+					var formation_pos = bot_data.get("target_position", Vector2.ZERO)
+					var dist_to_formation = player.global_position.distance_to(formation_pos)
+					var heal_range = 200.0  # Increased heal range so healer can reach team
+
+					# First: Stay at or return to formation position
+					if dist_to_formation > 30:
+						var dir = (formation_pos - player.global_position).normalized()
+						velocity = dir * BOT_MOVE_SPEED * 0.7
 					else:
-						velocity = Vector2.ZERO
-						if bot_data.attack_cooldown <= 0:
-							bot_data.attack_cooldown = 0.5
-							_make_bot_attack(player, nearest_enemy)
+						# At formation - look for hurt teammates to heal
+						var hurt_teammate = _find_hurt_teammate(bot_id, player.global_position)
+						if hurt_teammate:
+							var dist = player.global_position.distance_to(hurt_teammate.global_position)
+							if dist <= heal_range:
+								velocity = Vector2.ZERO
+								if bot_data.attack_cooldown <= 0:
+									bot_data.attack_cooldown = 1.5  # Heal cooldown
+									_make_bot_heal(player, hurt_teammate, bot_data)
+							else:
+								# Teammate out of range - stay at formation, small idle movement
+								velocity = Vector2(randf_range(-5, 5), randf_range(-5, 5))
+						else:
+							# No one to heal - idle at formation
+							velocity = Vector2(randf_range(-5, 5), randf_range(-5, 5))
 				else:
-					# No enemies, wander
-					bot_data.behavior = BotBehavior.WANDER
+					# Combat roles: find enemies to attack
+					var nearest_enemy = _find_nearest_enemy(player.global_position)
+					var attack_range = 200.0 if is_ranged else BOT_COMBAT_RANGE  # Bow has longer range
+
+					if nearest_enemy:
+						var dist = player.global_position.distance_to(nearest_enemy.global_position)
+						# Debug: Log enemy found and attack conditions
+						if combat_log_timer < 0.1:  # Log right after reset
+							print("[BotManager] 🎯 Bot %d found %s at dist=%.0f (range=%.0f) cooldown=%.2f" % [
+								bot_id, nearest_enemy.name, dist, attack_range, bot_data.attack_cooldown])
+
+						if is_ranged:
+							# RANGED: Stay at formation position, attack enemies in range
+							var formation_pos = bot_data.get("target_position", Vector2.ZERO)
+							var dist_to_formation = player.global_position.distance_to(formation_pos)
+
+							if dist_to_formation > 30:
+								# Move back to formation
+								var dir = (formation_pos - player.global_position).normalized()
+								velocity = dir * BOT_MOVE_SPEED * 0.7
+								if combat_log_timer < 0.1:
+									print("[BotManager] 🏹 Bot %d (ranged) returning to formation (dist=%.0f)" % [bot_id, dist_to_formation])
+							elif dist <= attack_range:
+								# In formation and enemy in range - attack!
+								velocity = Vector2.ZERO
+								if bot_data.attack_cooldown <= 0:
+									print("[BotManager] 🏹 Bot %d SHOOTING %s!" % [bot_id, nearest_enemy.name])
+									bot_data.attack_cooldown = 0.8
+									_make_bot_attack(player, nearest_enemy, bot_data)
+								elif combat_log_timer < 0.1:
+									print("[BotManager] 🏹 Bot %d waiting to shoot (cooldown=%.2f)" % [bot_id, bot_data.attack_cooldown])
+							else:
+								# In formation but enemy out of range - hold position
+								velocity = Vector2(randf_range(-5, 5), randf_range(-5, 5))
+								if combat_log_timer < 0.1:
+									print("[BotManager] 🏹 Bot %d holding (enemy at dist=%.0f > range=%.0f)" % [bot_id, dist, attack_range])
+						else:
+							# MELEE: Chase enemies
+							if dist > attack_range:
+								var dir = (nearest_enemy.global_position - player.global_position).normalized()
+								velocity = dir * BOT_MOVE_SPEED
+								if combat_log_timer < 0.1:
+									print("[BotManager] 🏃 Bot %d CHASING (dist=%.0f > range=%.0f)" % [bot_id, dist, attack_range])
+							else:
+								velocity = Vector2.ZERO
+								if bot_data.attack_cooldown <= 0:
+									print("[BotManager] ⚔️ Bot %d ATTACKING %s!" % [bot_id, nearest_enemy.name])
+									bot_data.attack_cooldown = 0.5
+									_make_bot_attack(player, nearest_enemy, bot_data)
+								elif combat_log_timer < 0.1:
+									print("[BotManager] ⏳ Bot %d waiting (cooldown=%.2f)" % [bot_id, bot_data.attack_cooldown])
+					else:
+						# No enemies nearby - move toward target position (grind zone)
+						var target = bot_data.get("target_position", Vector2.ZERO)
+						if target != Vector2.ZERO:
+							var dist_to_target = player.global_position.distance_to(target)
+							if dist_to_target > 50:
+								var dir = (target - player.global_position).normalized()
+								velocity = dir * BOT_MOVE_SPEED
+							else:
+								velocity = Vector2(randf_range(-10, 10), randf_range(-10, 10))
+						else:
+							velocity = Vector2.ZERO
 
 			BotBehavior.REINFORCE:
 				if bot_data.target_position != Vector2.ZERO:
@@ -864,7 +1494,9 @@ func _update_visible_bots(delta: float):
 			continue
 
 		# Move bot directly (server-side)
-		if velocity.length() > 0:
+		var character_sprite = player.get_node_or_null("CharacterSprite")
+
+		if velocity.length() > 1:  # Moving (threshold to avoid jitter)
 			var new_pos = player.global_position + velocity * delta
 			player.global_position = new_pos
 
@@ -874,12 +1506,30 @@ func _update_visible_bots(delta: float):
 			else:
 				animation = "walk_south" if velocity.y > 0 else "walk_north"
 
-			# Play animation on bot using LPC animation system
-			var character_sprite = player.get_node_or_null("CharacterSprite")
+			# Play walk animation on bot
 			if character_sprite and character_sprite.has_method("play_lpc_animation"):
 				var parts = animation.split("_")
 				if parts.size() >= 2:
 					character_sprite.play_lpc_animation(parts[0], parts[1])
+		else:
+			# Standing still - play idle animation
+			# Get last direction from bot_data or default to south
+			var last_dir = bot_data.get("last_direction", "south")
+			animation = "idle_" + last_dir
+
+			# Play idle animation (only update if not already idle)
+			if not bot_data.get("is_idle", false):
+				bot_data["is_idle"] = true
+				if character_sprite and character_sprite.has_method("play_lpc_animation"):
+					character_sprite.play_lpc_animation("idle", last_dir)
+
+		# Track last movement direction for idle facing
+		if velocity.length() > 1:
+			bot_data["is_idle"] = false
+			if abs(velocity.x) > abs(velocity.y):
+				bot_data["last_direction"] = "east" if velocity.x > 0 else "west"
+			else:
+				bot_data["last_direction"] = "south" if velocity.y > 0 else "north"
 
 		# Sync position to clients using dynamic tick rate from DynamicTickRateManager
 		var sync_rate = 20.0  # Default 20Hz
@@ -973,18 +1623,27 @@ func _find_nearest_enemy(pos: Vector2) -> Node:
 	"""Find nearest enemy to position."""
 	var enemies = get_tree().get_nodes_in_group("enemies")
 	var nearest: Node = null
-	var nearest_dist = 500.0  # Max aggro range
+	var nearest_dist = 800.0  # Max aggro range (increased for grinding)
+
+	if enemies.size() == 0:
+		print("[BotManager] ⚠️ No enemies in 'enemies' group!")
 
 	for enemy in enemies:
 		if not is_instance_valid(enemy):
 			continue
 		if enemy.has_method("is_dead") and enemy.is_dead():
 			continue
+		# Skip training dummy - it's for player practice, not bot targets
+		if enemy.is_in_group("training_dummy"):
+			continue
 
 		var dist = pos.distance_to(enemy.global_position)
 		if dist < nearest_dist:
 			nearest_dist = dist
 			nearest = enemy
+
+	if nearest:
+		print("[BotManager] 🎯 Found enemy %s at dist %.0f from (%.0f, %.0f)" % [nearest.name, nearest_dist, pos.x, pos.y])
 
 	return nearest
 
@@ -1012,8 +1671,89 @@ func _find_nearest_real_player(pos: Vector2) -> Node:
 
 	return nearest
 
-func _make_bot_attack(player: Node, target: Node):
+func _find_hurt_teammate(healer_bot_id: int, pos: Vector2) -> Node:
+	"""Find a hurt teammate in the same team that needs healing."""
+	# Get healer's team
+	if not visible_bots.has(healer_bot_id):
+		return null
+	var healer_data = visible_bots[healer_bot_id]
+	var team_id = healer_data.get("team_id", -1)
+
+	if team_id < 0 or not teams.has(team_id):
+		return null
+
+	var team_data = teams[team_id]
+	var most_hurt: Node = null
+	var lowest_health_pct = 0.9  # Only heal if below 90% health
+
+	for bot_id in team_data.members:
+		if bot_id == healer_bot_id:  # Don't heal self
+			continue
+		if not visible_bots.has(bot_id):
+			continue
+
+		var teammate_data = visible_bots[bot_id]
+		var teammate_player = teammate_data.get("player")
+		if not teammate_player or not is_instance_valid(teammate_player):
+			continue
+
+		# Check if teammate is hurt
+		if "current_health" in teammate_player and "max_health" in teammate_player:
+			var health_pct = teammate_player.current_health / teammate_player.max_health
+			if health_pct < lowest_health_pct:
+				# Check range (healers have limited range)
+				var dist = pos.distance_to(teammate_player.global_position)
+				if dist < 300:  # Max heal target range
+					lowest_health_pct = health_pct
+					most_hurt = teammate_player
+
+	return most_hurt
+
+func _make_bot_attack(player: Node, target: Node, bot_data: Dictionary = {}):
 	"""Make a bot player attack a target."""
+	if not is_instance_valid(target):
+		return
+
+	# Get weapon type from bot_data
+	var weapon = bot_data.get("weapon", "unarmed")
+	var is_ranged = weapon == "bow" or weapon == "crossbow"
+
+	# Calculate direction to target
+	var dir = (target.global_position - player.global_position).normalized()
+	var lpc_direction = "south"
+	if abs(dir.x) > abs(dir.y):
+		lpc_direction = "east" if dir.x > 0 else "west"
+	else:
+		lpc_direction = "south" if dir.y > 0 else "north"
+
+	# Choose animation based on weapon type
+	var attack_anim = "shoot" if is_ranged else "slash"
+
+	# Play attack animation on bot
+	var character_sprite = player.get_node_or_null("CharacterSprite")
+	if character_sprite and character_sprite.has_method("play_lpc_animation"):
+		character_sprite.play_lpc_animation(attack_anim, lpc_direction)
+
+	# Deal damage to target (base damage + some variance)
+	var base_damage = 15.0 if not is_ranged else 12.0  # Ranged does slightly less per hit
+	var damage = base_damage * randf_range(0.8, 1.2)
+	var is_crit = randf() < 0.1  # 10% crit chance
+	if is_crit:
+		damage *= 2.0
+
+	if target.has_method("take_damage"):
+		var old_health = target.current_health if "current_health" in target else -1
+		target.take_damage(damage, is_crit, false)
+		var new_health = target.current_health if "current_health" in target else -1
+		print("[BotManager] 💥 Bot attacked %s: damage=%.1f old_hp=%.1f new_hp=%.1f" % [target.name, damage, old_health, new_health])
+
+	# Broadcast attack animation to clients
+	if game_world:
+		var bot_id = player.name.get_slice("_", 1).to_int()
+		_broadcast_bot_position(bot_id, player.global_position, attack_anim + "_" + lpc_direction)
+
+func _make_bot_heal(player: Node, target: Node, bot_data: Dictionary = {}):
+	"""Make a healer bot heal a teammate."""
 	if not is_instance_valid(target):
 		return
 
@@ -1025,25 +1765,26 @@ func _make_bot_attack(player: Node, target: Node):
 	else:
 		lpc_direction = "south" if dir.y > 0 else "north"
 
-	# Play attack animation on bot
+	# Play staff cast animation (use thrust for healing staff)
 	var character_sprite = player.get_node_or_null("CharacterSprite")
 	if character_sprite and character_sprite.has_method("play_lpc_animation"):
-		character_sprite.play_lpc_animation("slash", lpc_direction)
+		character_sprite.play_lpc_animation("thrust", lpc_direction)
 
-	# Deal damage to target (base damage + some variance)
-	var base_damage = 15.0
-	var damage = base_damage * randf_range(0.8, 1.2)
-	var is_crit = randf() < 0.1  # 10% crit chance
-	if is_crit:
-		damage *= 2.0
+	# Heal the target
+	var heal_amount = 20.0 * randf_range(0.9, 1.1)
 
-	if target.has_method("take_damage"):
-		target.take_damage(damage, is_crit, false)
+	# Apply healing
+	if "current_health" in target and "max_health" in target:
+		target.current_health = min(target.current_health + heal_amount, target.max_health)
+		# Update healthbar if present
+		var health_bar = target.get_node_or_null("HealthBar")
+		if health_bar and health_bar.has_method("update_health"):
+			health_bar.update_health(target.current_health, target.max_health)
 
-	# Broadcast attack animation to clients
+	# Broadcast heal animation to clients
 	if game_world:
 		var bot_id = player.name.get_slice("_", 1).to_int()
-		_broadcast_bot_position(bot_id, player.global_position, "slash_" + lpc_direction)
+		_broadcast_bot_position(bot_id, player.global_position, "thrust_" + lpc_direction)
 
 # ═══════════════════════════════════════════════════════════════════
 # BEHAVIOR CONTROL
@@ -1392,6 +2133,76 @@ func handle_mcp_command(cmd: Dictionary) -> Dictionary:
 							"position": {"x": p.global_position.x, "y": p.global_position.y}
 						})
 			return {ok = true, players = players}
+
+		# ═══════════════════════════════════════════════════════════════
+		# TEAM COMMANDS
+		# ═══════════════════════════════════════════════════════════════
+		"team_spawn":
+			# Spawn a single team: {"action": "team_spawn", "rally_point": 0}
+			var rally_idx = cmd.get("rally_point", -1)
+			return spawn_team(rally_idx)
+
+		"teams_spawn":
+			# Spawn multiple teams: {"action": "teams_spawn", "count": 3}
+			var count = cmd.get("count", 1)
+			return spawn_teams(count)
+
+		"team_despawn":
+			# Despawn a specific team: {"action": "team_despawn", "team_id": 1}
+			var team_id = cmd.get("team_id", 0)
+			return despawn_team(team_id)
+
+		"teams_despawn_all":
+			# Despawn all teams
+			return despawn_all_teams()
+
+		"team_status":
+			# Get status of a team: {"action": "team_status", "team_id": 1}
+			var team_id = cmd.get("team_id", 0)
+			return get_team_status(team_id)
+
+		"teams_list":
+			# List all teams
+			return list_teams()
+
+		"teams_info":
+			# Get info about team system configuration
+			return {
+				ok = true,
+				max_teams = TEAM_RALLY_POINTS.size(),
+				team_size = TEAM_COMPOSITION.values().reduce(func(a, b): return a + b, 0),
+				composition = {
+					"tank": TEAM_COMPOSITION[BotRole.TANK],
+					"healer": TEAM_COMPOSITION[BotRole.HEALER],
+					"dps": TEAM_COMPOSITION[BotRole.DPS],
+					"support": TEAM_COMPOSITION[BotRole.SUPPORT]
+				},
+				rally_points = TEAM_RALLY_POINTS.map(func(p): return {"x": p.x, "y": p.y}),
+				grinding_zones = GRINDING_ZONES.map(func(p): return {"x": p.x, "y": p.y}),
+				grinding_duration = GRINDING_DURATION
+			}
+
+		# ═══════════════════════════════════════════════════════════════
+		# GRINDING SESSION COMMANDS
+		# ═══════════════════════════════════════════════════════════════
+		"grind_start":
+			# Start grinding for a team: {"action": "grind_start", "team_id": 1, "zone": 0}
+			var team_id = cmd.get("team_id", 0)
+			var zone = cmd.get("zone", -1)
+			return start_grinding_session(team_id, zone)
+
+		"grind_stop":
+			# Stop grinding for a team: {"action": "grind_stop", "team_id": 1}
+			var team_id = cmd.get("team_id", 0)
+			return stop_grinding_session(team_id)
+
+		"grind_start_all":
+			# Start grinding for all ready teams
+			return start_all_grinding()
+
+		"grind_stop_all":
+			# Stop all grinding sessions
+			return stop_all_grinding()
 
 		_:
 			return {error = "Unknown bot command: %s" % action}

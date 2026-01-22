@@ -1810,6 +1810,15 @@ func get_player_peer_id(player_node: Node) -> int:
 	if not player_node:
 		return -1
 
+	# Check if this is a bot (Player_20000 to Player_29999)
+	# Bots use their bot_id as their peer_id for tracking
+	if player_node.name.begins_with("Player_"):
+		var id_str = player_node.name.get_slice("_", 1)
+		if id_str.is_valid_int():
+			var id = id_str.to_int()
+			if id >= 20000 and id < 30000:
+				return id  # Return bot_id for bots
+
 	# Check multiplayer authority
 	if player_node.has_method("get_multiplayer_authority"):
 		return player_node.get_multiplayer_authority()

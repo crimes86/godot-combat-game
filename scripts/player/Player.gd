@@ -3974,8 +3974,12 @@ func get_appearance_data() -> Dictionary:
 	var weapon_is_forged = false
 	var weapon_item_id = ""
 
-	# Get from CharacterStats if this is the local player
-	if is_multiplayer_authority():
+	# Check if this is a bot (ID 20000-29999) - bots use remote_*_sprite values
+	var my_id = name.get_slice("_", 1).to_int() if name.begins_with("Player_") else 0
+	var is_bot = my_id >= 20000 and my_id < 30000
+
+	# Get from CharacterStats if this is the local player (not a bot)
+	if is_multiplayer_authority() and not is_bot:
 		if CharacterStats.equipped_weapon:
 			weapon_type = CharacterStats.equipped_weapon.weapon_type
 			# Get forged weapon data
