@@ -171,6 +171,19 @@ func _generate_session_id() -> void:
 
 func _load_or_create_device_id() -> void:
 	"""Load persistent device ID or create one if not exists"""
+	# Web: Use WebStorage for device ID persistence
+	if OS.has_feature("web"):
+		device_id = WebStorage.load_string("device_id", "")
+		if device_id.length() == 36:  # Valid UUID length
+			return
+		# Generate new device ID for web
+		_generate_session_id()  # Reuse UUID generation
+		device_id = session_id
+		_generate_session_id()  # Generate fresh session ID
+		WebStorage.save_string("device_id", device_id)
+		return
+
+	# Desktop: Use file system
 	var device_file_path = "user://device_id.txt"
 
 	if FileAccess.file_exists(device_file_path):
@@ -219,6 +232,10 @@ func get_log_context() -> Dictionary:
 
 func _ensure_log_directory() -> void:
 	"""Create log directory if it doesn't exist"""
+	# Web: Skip file logging, use browser console only
+	if OS.has_feature("web"):
+		return
+
 	if not DirAccess.dir_exists_absolute(log_dir):
 		var dir = DirAccess.open("user://")
 		if dir:
@@ -236,6 +253,11 @@ func _get_current_date_string() -> String:
 
 func _open_log_file() -> void:
 	"""Open log file for writing (creates new file per day)"""
+	# Web: Skip file logging, use browser console only
+	if OS.has_feature("web"):
+		log_to_file = false
+		return
+
 	# Close existing file if open
 	if _log_file:
 		_log_file.close()
@@ -268,6 +290,10 @@ func _open_log_file() -> void:
 
 func _rotate_old_logs() -> void:
 	"""Delete log files older than max_log_files days"""
+	# Web: Skip file operations
+	if OS.has_feature("web"):
+		return
+
 	var dir = DirAccess.open(log_dir)
 	if not dir:
 		return

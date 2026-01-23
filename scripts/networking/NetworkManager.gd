@@ -18,6 +18,16 @@ signal register_failed(error: String)
 signal authentication_required()  # Emitted when client connects and needs to auth
 
 const DEFAULT_PORT = 7777
+const DEFAULT_WS_PORT = 7778  # WebSocket port (for web clients)
+
+# Network protocol selection
+# WebSocket works on both desktop and web browsers
+# ENet is slightly more efficient but doesn't work in browsers
+enum NetworkProtocol { WEBSOCKET, ENET }
+var network_protocol: NetworkProtocol = NetworkProtocol.WEBSOCKET
+
+# Detect if running in a web browser
+var is_web_build: bool = OS.has_feature("web")
 
 # Player capacity - can be overridden via --max-players CLI arg for scaling tests
 # Default 50 for normal play, can scale to 200+ for large battles
@@ -124,6 +134,17 @@ func _parse_cli_args():
 				LogManager.info("Max players set to %d via CLI" % max_players, "network")
 			else:
 				LogManager.warn("Invalid --max-players value: %s (must be 10-500)" % args[i + 1], "network")
+		elif args[i] == "--websocket":
+			network_protocol = NetworkProtocol.WEBSOCKET
+			LogManager.info("Network protocol set to WebSocket via CLI", "network")
+		elif args[i] == "--enet":
+			# ENet only works on desktop, not web
+			if is_web_build:
+				LogManager.warn("Cannot use ENet in web build, using WebSocket", "network")
+				network_protocol = NetworkProtocol.WEBSOCKET
+			else:
+				network_protocol = NetworkProtocol.ENET
+				LogManager.info("Network protocol set to ENet via CLI", "network")
 
 	# Connect multiplayer signals
 	multiplayer.peer_connected.connect(_on_player_connected)
@@ -134,10 +155,23 @@ func _parse_cli_args():
 # Host a game server
 # is_dedicated: true for headless dedicated servers (no host player)
 func host_game(port: int = DEFAULT_PORT, host_player_data: Dictionary = {}, is_dedicated: bool = false) -> bool:
-	peer = ENetMultiplayerPeer.new()
-	# Bind to IPv4 only to avoid IPv6 port conflicts on some systems
-	peer.set_bind_ip("0.0.0.0")
-	var error = peer.create_server(port, max_players)
+	var error: Error
+
+	# Web builds MUST use WebSocket
+	if is_web_build:
+		network_protocol = NetworkProtocol.WEBSOCKET
+
+	if network_protocol == NetworkProtocol.WEBSOCKET:
+		peer = WebSocketMultiplayerPeer.new()
+		# WebSocket server - bind to all interfaces
+		error = peer.create_server(port, "*")
+		LogManager.info("Starting WebSocket server on port %d" % port, "network")
+	else:
+		peer = ENetMultiplayerPeer.new()
+		# Bind to IPv4 only to avoid IPv6 port conflicts on some systems
+		peer.set_bind_ip("0.0.0.0")
+		error = peer.create_server(port, max_players)
+		LogManager.info("Starting ENet server on port %d" % port, "network")
 
 	if error == OK:
 		multiplayer.multiplayer_peer = peer
@@ -193,14 +227,36 @@ func host_game(port: int = DEFAULT_PORT, host_player_data: Dictionary = {}, is_d
 		return false
 
 # Join a game server
+# For WebSocket: address can be a full URL (ws://...) or just IP/hostname
 func join_game(address: String, port: int = DEFAULT_PORT) -> bool:
-	peer = ENetMultiplayerPeer.new()
-	var error = peer.create_client(address, port)
+	var error: Error
+
+	# Web builds MUST use WebSocket
+	if is_web_build:
+		network_protocol = NetworkProtocol.WEBSOCKET
+
+	if network_protocol == NetworkProtocol.WEBSOCKET:
+		peer = WebSocketMultiplayerPeer.new()
+		# Build WebSocket URL if not already a full URL
+		var ws_url: String
+		if address.begins_with("ws://") or address.begins_with("wss://"):
+			ws_url = address
+		else:
+			# Determine protocol based on context
+			# Web builds on HTTPS must use wss://, otherwise ws://
+			var protocol = "wss" if is_web_build else "ws"
+			ws_url = "%s://%s:%d" % [protocol, address, port]
+
+		error = peer.create_client(ws_url)
+		LogManager.info("Connecting via WebSocket to %s..." % ws_url, "network")
+	else:
+		peer = ENetMultiplayerPeer.new()
+		error = peer.create_client(address, port)
+		LogManager.info("Connecting via ENet to %s:%d..." % [address, port], "network")
 
 	if error == OK:
 		multiplayer.multiplayer_peer = peer
 		is_host = false
-		LogManager.info("Connecting to %s:%d..." % [address, port], "network")
 		return true
 	else:
 		LogManager.error("Failed to create client: %s" % error_string(error), "network")
@@ -514,6 +570,29 @@ func set_player_name(name: String):
 				rpc("update_player_list", connected_players)
 			else:
 				rpc_id(1, "register_player", my_id, name)
+
+func set_network_protocol(protocol: NetworkProtocol) -> void:
+	"""Set the network protocol to use. Must be called before host_game/join_game.
+	Note: Web builds always use WebSocket regardless of this setting."""
+	if is_web_build and protocol == NetworkProtocol.ENET:
+		LogManager.warn("Cannot use ENet in web build, using WebSocket", "network")
+		network_protocol = NetworkProtocol.WEBSOCKET
+	else:
+		network_protocol = protocol
+		var protocol_name = "WebSocket" if protocol == NetworkProtocol.WEBSOCKET else "ENet"
+		LogManager.info("Network protocol set to %s" % protocol_name, "network")
+
+func get_network_protocol() -> NetworkProtocol:
+	"""Get the current network protocol."""
+	return network_protocol
+
+func get_network_protocol_name() -> String:
+	"""Get the current network protocol as a human-readable string."""
+	return "WebSocket" if network_protocol == NetworkProtocol.WEBSOCKET else "ENet"
+
+func is_using_websocket() -> bool:
+	"""Check if currently using WebSocket protocol."""
+	return network_protocol == NetworkProtocol.WEBSOCKET
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CHAT SYSTEM

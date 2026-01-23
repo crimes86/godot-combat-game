@@ -2,13 +2,16 @@ extends Node
 ## ServerRunner.gd - Handles dedicated server mode via CLI arguments
 ##
 ## Usage:
-##   Godot_v4.x.exe --headless -- --server --port 7000
-##   Godot_v4.x.exe --headless -- --server --port 7001 --shard 001
+##   Godot_v4.x.exe --headless -- --server --port 7777
+##   Godot_v4.x.exe --headless -- --server --port 7777 --shard 001
+##   Godot_v4.x.exe --headless -- --server --port 7777 --enet  # Use ENet instead of WebSocket
 ##
 ## Arguments (after "--"):
 ##   --server       Start as dedicated server (no local player)
-##   --port XXXX    Server port (default: 7000)
+##   --port XXXX    Server port (default: 7777)
 ##   --shard ID     Shard identifier for multi-server setups (default: "default")
+##   --websocket    Use WebSocket protocol (default, required for web clients)
+##   --enet         Use ENet protocol (faster, desktop clients only)
 ##
 ## Multi-Shard Setup:
 ##   Each shard runs on a different port with isolated player data:
@@ -70,17 +73,30 @@ func _start_dedicated_server(args: Array):
 	# Parse arguments
 	var port = NetworkManager.DEFAULT_PORT
 	var shard = "default"
+	var use_websocket = true  # Default to WebSocket for web client compatibility
 
 	for i in range(args.size()):
 		if args[i] == "--port" and i + 1 < args.size():
 			port = int(args[i + 1])
 		elif args[i] == "--shard" and i + 1 < args.size():
 			shard = args[i + 1]
+		elif args[i] == "--enet":
+			use_websocket = false
+		elif args[i] == "--websocket":
+			use_websocket = true
 
 	current_shard_id = shard
 
+	# Set network protocol before starting
+	if use_websocket:
+		NetworkManager.network_protocol = NetworkManager.NetworkProtocol.WEBSOCKET
+	else:
+		NetworkManager.network_protocol = NetworkManager.NetworkProtocol.ENET
+
+	var protocol_name = "WebSocket" if use_websocket else "ENet"
 	print("🖥️  Initializing server...")
 	print("   PID: %d" % OS.get_process_id())
+	print("   Protocol: %s" % protocol_name)
 	print("   Port: %d" % port)
 	print("   Shard: %s" % shard)
 
@@ -97,6 +113,7 @@ func _start_dedicated_server(args: Array):
 		print("   Version: %s" % NetworkManager.GAME_VERSION)
 		print("   Git: %s" % NetworkManager.GIT_HASH)
 		print("   Min Client: %s" % NetworkManager.MIN_CLIENT_VERSION)
+		print("   Protocol: %s" % protocol_name)
 		print("   Port: %d" % port)
 		print("   Shard: %s" % current_shard_id)
 		print("   Max Players: %d" % NetworkManager.MAX_PLAYERS)
@@ -475,10 +492,15 @@ func _print_server_status() -> void:
 
 func _write_status_file(player_count: int) -> void:
 	"""Write server status to /tmp for monitor agent to read."""
+	var protocol = "unknown"
+	if NetworkManager:
+		protocol = NetworkManager.get_network_protocol_name() if NetworkManager.has_method("get_network_protocol_name") else ("WebSocket" if NetworkManager.network_protocol == NetworkManager.NetworkProtocol.WEBSOCKET else "ENet")
+
 	var status = {
 		"players_online": player_count,
 		"players_max": NetworkManager.MAX_PLAYERS if NetworkManager else 50,
 		"shard_id": current_shard_id,
+		"protocol": protocol,
 		"version": NetworkManager.GIT_HASH if NetworkManager else "unknown",
 		"uptime_seconds": Time.get_unix_time_from_system() - server_start_time,
 		"timestamp": Time.get_unix_time_from_system()

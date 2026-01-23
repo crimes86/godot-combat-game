@@ -611,26 +611,30 @@ func get_and_clear_pending_error() -> String:
 # ===============================================================================
 
 func _load_saved_token() -> void:
-	"""Load token from disk on startup"""
-	if not FileAccess.file_exists(TOKEN_PATH):
+	"""Load token from storage on startup (works on both desktop and web)"""
+	# Use WebStorage for cross-platform compatibility
+	var data = WebStorage.load_json("session_token", {})
+
+	# Fallback: check legacy file path for migration (desktop only)
+	if data.is_empty() and not WebStorage.is_web():
+		if FileAccess.file_exists(TOKEN_PATH):
+			var file = FileAccess.open(TOKEN_PATH, FileAccess.READ)
+			if file:
+				var json_string = file.get_as_text()
+				file.close()
+				var json = JSON.new()
+				if json.parse(json_string) == OK:
+					data = json.data
+					# Migrate to WebStorage
+					WebStorage.save_json("session_token", data)
+					# Remove old file
+					DirAccess.remove_absolute(TOKEN_PATH)
+					LogManager.info("Migrated session token to WebStorage", "ashbane")
+
+	if data.is_empty():
 		LogManager.info("No saved Ashbane session", "ashbane")
 		return
 
-	var file = FileAccess.open(TOKEN_PATH, FileAccess.READ)
-	if not file:
-		return
-
-	var json_string = file.get_as_text()
-	file.close()
-
-	var json = JSON.new()
-	var parse_result = json.parse(json_string)
-	if parse_result != OK:
-		LogManager.warning("Failed to parse saved token", "ashbane")
-		_delete_saved_token()
-		return
-
-	var data = json.data
 	auth_token = data.get("token", "")
 	user_id = data.get("user_id", -1)
 	username = data.get("username", "")
@@ -652,12 +656,7 @@ func _load_saved_token() -> void:
 		_delete_saved_token()
 
 func _save_token() -> void:
-	"""Save token to disk for session persistence"""
-	var file = FileAccess.open(TOKEN_PATH, FileAccess.WRITE)
-	if not file:
-		LogManager.error("Failed to save Ashbane token", "ashbane")
-		return
-
+	"""Save token to storage for session persistence (works on both desktop and web)"""
 	var data = {
 		"token": auth_token,
 		"user_id": user_id,
@@ -666,13 +665,16 @@ func _save_token() -> void:
 		"saved_at": Time.get_unix_time_from_system()
 	}
 
-	file.store_string(JSON.stringify(data))
-	file.close()
-	LogManager.info("Saved Ashbane session", "ashbane")
+	if WebStorage.save_json("session_token", data):
+		LogManager.info("Saved Ashbane session (%s)" % WebStorage.get_storage_type(), "ashbane")
+	else:
+		LogManager.error("Failed to save Ashbane token", "ashbane")
 
 func _delete_saved_token() -> void:
-	"""Remove saved token file"""
-	if FileAccess.file_exists(TOKEN_PATH):
+	"""Remove saved token from storage"""
+	WebStorage.delete_string("session_token")
+	# Also clean up legacy file if it exists (desktop only)
+	if not WebStorage.is_web() and FileAccess.file_exists(TOKEN_PATH):
 		DirAccess.remove_absolute(TOKEN_PATH)
 
 # ===============================================================================

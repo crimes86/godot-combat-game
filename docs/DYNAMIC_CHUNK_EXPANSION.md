@@ -702,6 +702,161 @@ At removal:
 
 ---
 
+---
+
+## Regional World Structure
+
+> **Status**: Design Vision - Builds on Dynamic Chunk Expansion
+
+### Overview
+
+The world is organized into **Regions** (biomes) with organic boundaries, not level stripes. Each region contains dynamically expanding chunks, but players see a **logical map** of named areas.
+
+```
+                    ┌───────────┐
+                    │FROSTPEAKS │
+                    │  Lv 25-35 │
+                    └─────┬─────┘
+                          │
+           ┌──────────────┼──────────────┐
+           │              │              │
+     ┌─────┴─────┐  ┌─────┴─────┐  ┌─────┴─────┐
+     │ DARKWOOD  │  │GREENFIELDS│  │ ASHLANDS  │
+     │  Lv 15-25 │──│  Lv 1-15  │──│  Lv 20-30 │
+     └─────┬─────┘  └─────┬─────┘  └───────────┘
+           │              │
+     ┌─────┴─────┐        │
+     │  MARSHES  │────────┘
+     │  Lv 10-20 │
+     └───────────┘
+```
+
+### Key Principles
+
+| Concept | Player Sees | System Manages |
+|---------|-------------|----------------|
+| **Regions** | Named biomes with level ranges | Dynamic chunk pools per region |
+| **Sectors** | Named areas within regions | Chunks allocated to sectors as needed |
+| **Transitions** | Fixed landmarks (gates, bridges) | Connection points between regions |
+| **Territory** | Control %, guild ownership | Player investment per sector |
+| **Map** | Logical diagram + fog of war | Actual chunk coordinates |
+
+### Difficulty Within Regions
+
+Each region has internal difficulty gradients (not flat):
+
+```
+THE DARKWOOD (Lv 15-25)
+
+         [Deeper = Harder]
+               ↑
+    ┌──────────┴──────────┐
+    │   Lv 23-25  ☠️       │  ← Ancient ruins, elite mobs
+    │   Lv 19-22  🐺       │  ← Wolf packs, harder content
+    │   Lv 15-18  🌲       │  ← Forest edge, entry level
+    └──────────┬──────────┘
+               ↓
+        [Edge = Easier]
+    (connects to Greenfields)
+```
+
+### Regional Expansion
+
+Each region expands independently based on its population:
+
+```
+Region population high?
+    │
+    ▼
+Region expands at its frontier edges
+(direction depends on region geography)
+    │
+    ▼
+More chunks allocated to that region
+Higher level content at new deep edges
+Entry-level content stays near transition points
+```
+
+### Sectors (Strategic Map Layer)
+
+Within each region, **Sectors** are named areas for conquest gameplay:
+
+```
+DARKWOOD - SECTOR VIEW
+
+┌─────────┬─────────┬─────────┬─────────┐
+│ DEEP    │ ANCIENT │ WOLVES  │ SHADOW  │
+│ WOODS   │ RUINS   │ DEN     │ HOLLOW  │
+│ Lv24-25 │ Lv22-24 │ Lv20-22 │ Lv21-23 │
+├─────────┼─────────┼─────────┼─────────┤
+│ TWISTED │ HUNTER'S│ FALLEN  │ EASTERN │
+│ PATH    │ CAMP    │ BRIDGE  │ EDGE    │
+│ Lv19-21 │ Lv18-20 │ Lv17-19 │ Lv16-18 │
+├─────────┴─────────┼─────────┴─────────┤
+│ WOODSMAN'S GATE   │ CLEARINGS         │
+│ (to Greenfields)  │ Lv15-17           │
+└───────────────────┴───────────────────┘
+```
+
+**Sectors are fixed named areas.** The chunks WITHIN them scale dynamically, but "Wolves Den" is always north of "Hunter's Camp" on the map.
+
+### Sector Data Per Player
+
+```
+┌─────────────────────────────────────┐
+│  WOLVES DEN                         │
+│  Level 20-22                        │
+│                                     │
+│  Control: Iron Wolves (78%)         │
+│  ████████████████░░░░               │
+│                                     │
+│  Landmarks:                         │
+│  • Wolf Alpha Spawn (controlled)    │
+│  • Iron Keep [Guild Base]           │
+│  • Ancient Well (resource)          │
+│  • 3 Seed Plots (2 claimed)         │
+│                                     │
+│  Activity: 🔴 High (12 players)     │
+└─────────────────────────────────────┘
+```
+
+### Player-Facing Map
+
+Players see a **logical diagram**, not chunk coordinates:
+
+- Region connections (which regions border which)
+- Sector names within regions
+- Territory control percentages
+- Fog of war for unexplored sectors
+- Landmarks and bases
+
+The actual chunk count (whether Darkwood is 50 chunks or 500) is invisible.
+
+### Chunk Decay Rules (Regional)
+
+```
+PERMANENT (never despawn):
+• Core town/transition chunks
+• Player bases/structures
+• Seeded plots
+• Road tiles connecting permanent areas
+
+TEMPORARY (can despawn):
+• Wilderness chunks with no player investment
+• Frontier chunks nobody claimed
+• Decay timer: 7 days no visits → warning → despawn
+```
+
+### Integration with Seed Plot System
+
+The existing seed plot mechanics apply per-sector:
+- Each sector has seed plots at its edges
+- Claiming plots expands that sector's chunk allocation
+- Abandoned plots cause sector contraction
+- Player investment (bases, seeds) makes chunks permanent
+
+---
+
 ## Future Enhancements
 
 ### 1. Guild Claiming
