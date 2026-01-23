@@ -84,14 +84,14 @@ templates = Jinja2Templates(directory="templates")
 # Set CORS_ORIGINS env var to your production domain(s), comma-separated
 CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "").split(",") if os.environ.get("CORS_ORIGINS") else []
 
-# Include localhost origins for development (DEV_MODE) or if no origins configured
-_dev_mode_cors = os.getenv("DEV_MODE", "false").lower() in ("true", "1", "yes")
-if _dev_mode_cors or not CORS_ORIGINS:
-    CORS_ORIGINS.extend([
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "http://localhost:3000",  # If you add a separate frontend
-    ])
+# Always include localhost origins (safe - only accessible locally)
+# These are needed for local web export testing
+CORS_ORIGINS.extend([
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:3000",  # If you add a separate frontend
+    "http://localhost:5500",  # Live Server extension
+])
 
 # Filter empty strings
 CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS if origin.strip()]
