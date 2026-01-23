@@ -183,6 +183,7 @@ var sfx_volume_db: float = 0.0  # SFX volume offset applied to all sound effects
 
 # Server mode flag - disables all audio operations
 var _is_server_mode: bool = false
+var _web_audio_resumed: bool = false  # Track if web audio context has been resumed
 
 func _ready() -> void:
 	# Check if running as dedicated server
@@ -192,10 +193,15 @@ func _ready() -> void:
 		print("✅ Sound system ready! (server mode - audio disabled)")
 		return
 
+	# Web builds need special handling for audio context
+	if OS.has_feature("web"):
+		set_process_input(true)
+		print("🔊 Web build detected - audio will start on first user interaction")
+
 	# Create audio buses if they don't exist
 	_setup_audio_buses()
 
-	# Load real sound files first
+	# Load real sound files
 	print("🔊 Loading real sound files...")
 	_load_real_sounds()
 
@@ -203,6 +209,33 @@ func _ready() -> void:
 	print("🔊 Generating sound cache...")
 	_generate_all_sounds()
 	print("✅ Sound system ready!")
+
+func _input(event: InputEvent) -> void:
+	# Resume web audio context on first user interaction
+	if OS.has_feature("web") and not _web_audio_resumed:
+		if event is InputEventMouseButton or event is InputEventKey or event is InputEventScreenTouch:
+			_resume_web_audio()
+
+func _resume_web_audio() -> void:
+	"""Resume the browser AudioContext after user interaction."""
+	if _web_audio_resumed:
+		return
+	_web_audio_resumed = true
+
+	# Resume Godot's audio context via JavaScript
+	JavaScriptBridge.eval("
+		if (window.Godot && window.Godot.audio && window.Godot.audio.ctx) {
+			window.Godot.audio.ctx.resume().then(() => {
+				console.log('🔊 Audio context resumed');
+			});
+		}
+	")
+	print("🔊 Web audio context resumed after user interaction")
+
+	# Re-trigger menu music if we're still on menu
+	if menu_music_player and not menu_music_player.playing and menu_music:
+		menu_music_player.play()
+		print("🏠 Menu music restarted after audio resume")
 
 
 func _setup_audio_buses() -> void:
