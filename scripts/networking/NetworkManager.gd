@@ -163,9 +163,13 @@ func host_game(port: int = DEFAULT_PORT, host_player_data: Dictionary = {}, is_d
 
 	if network_protocol == NetworkProtocol.WEBSOCKET:
 		peer = WebSocketMultiplayerPeer.new()
+		# Increase buffer sizes for initial spawn burst (default is too small)
+		peer.inbound_buffer_size = 65536  # 64KB (default is 64KB, but explicit)
+		peer.outbound_buffer_size = 65536  # 64KB
+		peer.max_queued_packets = 4096  # Allow more queued packets (default is 2048)
 		# WebSocket server - bind to all interfaces
 		error = peer.create_server(port, "*")
-		LogManager.info("Starting WebSocket server on port %d" % port, "network")
+		LogManager.info("Starting WebSocket server on port %d (buffer: 64KB)" % port, "network")
 	else:
 		peer = ENetMultiplayerPeer.new()
 		# Bind to IPv4 only to avoid IPv6 port conflicts on some systems
@@ -237,6 +241,10 @@ func join_game(address: String, port: int = DEFAULT_PORT) -> bool:
 
 	if network_protocol == NetworkProtocol.WEBSOCKET:
 		peer = WebSocketMultiplayerPeer.new()
+		# Increase buffer sizes for initial spawn burst (default is too small)
+		peer.inbound_buffer_size = 65536  # 64KB
+		peer.outbound_buffer_size = 65536  # 64KB
+		peer.max_queued_packets = 4096  # Allow more queued packets
 		# Build WebSocket URL if not already a full URL
 		var ws_url: String
 		if address.begins_with("ws://") or address.begins_with("wss://"):
@@ -254,7 +262,7 @@ func join_game(address: String, port: int = DEFAULT_PORT) -> bool:
 			ws_url = "%s://%s:%d" % [protocol, address, port]
 
 		error = peer.create_client(ws_url)
-		LogManager.info("Connecting via WebSocket to %s..." % ws_url, "network")
+		LogManager.info("Connecting via WebSocket to %s (buffer: 64KB)..." % ws_url, "network")
 	else:
 		peer = ENetMultiplayerPeer.new()
 		error = peer.create_client(address, port)
