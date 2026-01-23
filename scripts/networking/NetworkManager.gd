@@ -243,8 +243,14 @@ func join_game(address: String, port: int = DEFAULT_PORT) -> bool:
 			ws_url = address
 		else:
 			# Determine protocol based on context
-			# Web builds on HTTPS must use wss://, otherwise ws://
-			var protocol = "wss" if is_web_build else "ws"
+			# - Desktop: always use ws://
+			# - Web on HTTPS: must use wss://
+			# - Web on HTTP (localhost): use ws://
+			var protocol = "ws"
+			if is_web_build:
+				# Check if page is served over HTTPS
+				var is_https = JavaScriptBridge.eval("window.location.protocol === 'https:'")
+				protocol = "wss" if is_https else "ws"
 			ws_url = "%s://%s:%d" % [protocol, address, port]
 
 		error = peer.create_client(ws_url)
