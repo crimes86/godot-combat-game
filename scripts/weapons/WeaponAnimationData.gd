@@ -66,6 +66,13 @@ const WEAPON_DATA = {
 		"style": "casting",
 		"range_mult": 1.25  # Medium-long reach (125px)
 	},
+	"gun": {
+		"slash_fps": 20.0,  # Shooting (uses Skorpio pose animations)
+		"walk_fps": 10.0,
+		"idle_fps": 4.0,
+		"style": "ranged",
+		"range_mult": 2.0  # Long range (200px)
+	},
 }
 
 # Aliases for weapon types that share animation data
@@ -88,6 +95,12 @@ const WEAPON_ALIASES = {
 	"scythe": "spear",
 	"bow": "staff",
 	"crossbow": "staff",
+	# Guns use Skorpio pose animations
+	"rifle": "gun",
+	"pistol": "gun",
+	"shotgun": "gun",
+	"railgun": "gun",
+	"battle_rifle": "gun",
 }
 
 static func get_data(weapon_type: String) -> Dictionary:
