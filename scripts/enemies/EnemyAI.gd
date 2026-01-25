@@ -330,6 +330,16 @@ func _physics_process(delta: float) -> void:
 		return
 
 	# ═══════════════════════════════════════════════════════════════
+	# DEATH CHECK (Must be before any velocity manipulation!)
+	# When dying, immediately stop all movement and exit early.
+	# This prevents the corpse from sliding during the death animation.
+	# ═══════════════════════════════════════════════════════════════
+	if enemy.is_dying or enemy.is_corpse:
+		enemy.velocity = Vector2.ZERO
+		enemy.move_and_slide()
+		return
+
+	# ═══════════════════════════════════════════════════════════════
 	# SLEEP SYSTEM (Server-side CPU optimization)
 	# When no players are nearby, enemies enter SLEEPING state and
 	# only check once per second if they should wake up.
@@ -390,14 +400,6 @@ func _physics_process(delta: float) -> void:
 	var max_speed = 150.0
 	if enemy.velocity.length() > max_speed:
 		enemy.velocity = enemy.velocity.normalized() * max_speed
-
-	# Only stop movement if THIS enemy is dying
-	# Crit window: enemy should keep fighting while player shoots weakpoints!
-	if enemy.has_method("get"):
-		if enemy.get("is_dying"):
-			enemy.velocity = Vector2.ZERO
-			enemy.move_and_slide()
-			return
 
 	# Update timers
 	state_timer += delta
