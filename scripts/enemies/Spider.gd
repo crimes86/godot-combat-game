@@ -415,19 +415,21 @@ func take_damage(damage: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 		die()
 
 func play_hurt_stagger() -> void:
-	"""Quick jolt for stagger feedback - tight, not bouncy"""
+	"""Quick jolt for stagger feedback - visual only (sprite offset, not node position)"""
 	if is_dying or is_corpse:
+		return
+
+	if not sprite:
 		return
 
 	# Kill any existing stagger tween to prevent bouncy overlap
 	if _stagger_tween and _stagger_tween.is_valid():
 		_stagger_tween.kill()
 
-	# Tight jolt and snap back - single sharp movement
-	var original_pos = position
+	# Tween the sprite's offset instead of the node position to avoid fighting with move_and_slide
 	_stagger_tween = create_tween()
-	_stagger_tween.tween_property(self, "position", original_pos + Vector2(2, -1), 0.02).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-	_stagger_tween.tween_property(self, "position", original_pos, 0.04).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	_stagger_tween.tween_property(sprite, "position", Vector2(2, -1), 0.02).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	_stagger_tween.tween_property(sprite, "position", Vector2.ZERO, 0.04).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 
 
 func die() -> void:

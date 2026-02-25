@@ -83,6 +83,7 @@ var pause_timer: float = 0.0
 var is_in_combat: bool = false  # CRITICAL: Only true after player attacks
 var attack_timer: float = 0.0
 var retreat_direction: Vector2 = Vector2.ZERO
+var retreat_cooldown: float = 0.0  # Prevents back-to-back retreats
 var leash_cooldown_timer: float = 0.0  # Prevent immediate re-aggro after leashing
 const LEASH_COOLDOWN_DURATION: float = 3.0  # 3 second cooldown after leashing
 
@@ -405,6 +406,7 @@ func _physics_process(delta: float) -> void:
 	state_timer += delta
 	attack_timer = max(0, attack_timer - delta)
 	leash_cooldown_timer = max(0, leash_cooldown_timer - delta)
+	retreat_cooldown = max(0, retreat_cooldown - delta)
 	ai_update_timer += delta
 	cache_refresh_timer += delta
 
@@ -1448,6 +1450,10 @@ func _on_enemy_damaged(_damage: float, is_crit: bool) -> void:
 		if enemy.has_method("get") and enemy.get("in_crit_window"):
 			return
 
+		# Don't retreat if still on cooldown from last retreat
+		if retreat_cooldown > 0:
+			return
+
 		# Don't retreat if player has ranged weapon (distance doesn't help!)
 		if _player_has_ranged_weapon():
 			return
@@ -1463,6 +1469,7 @@ func _on_enemy_damaged(_damage: float, is_crit: bool) -> void:
 			else:
 				retreat_direction = Vector2(randf() * 2 - 1, randf() * 2 - 1).normalized()
 
+			retreat_cooldown = 2.0  # Prevent another retreat for 2 seconds
 			change_state(State.RETREATING)
 
 func disengage() -> void:

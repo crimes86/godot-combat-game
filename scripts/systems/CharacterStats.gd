@@ -1000,8 +1000,12 @@ func load_save_data(data: Dictionary) -> void:
 	# Core progression
 	level = data.get("level", Constants.STARTING_LEVEL)
 	experience = data.get("experience", Constants.STARTING_XP)
-	experience_to_next_level = data.get("experience_to_next_level", Constants.BASE_XP_REQUIREMENT)
 	gold = data.get("gold", Constants.STARTING_GOLD)
+
+	# Always recalculate experience_to_next_level from level
+	# The backend doesn't store this field, so the saved value may be stale/default
+	var level_exponent = min(level - 1, 50)
+	experience_to_next_level = int(Constants.BASE_XP_REQUIREMENT * pow(Constants.XP_SCALING_EXPONENT, level_exponent))
 
 	# 6-Stat System
 	strength = data.get("strength", STARTING_STRENGTH)

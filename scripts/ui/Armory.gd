@@ -11152,6 +11152,9 @@ func _load_character_from_backend() -> void:
 		CharacterStats.gold = character.gold
 	if character.has("level"):
 		CharacterStats.level = character.level
+		# Recalculate experience_to_next_level from level (backend doesn't store this)
+		var level_exponent = min(CharacterStats.level - 1, 50)
+		CharacterStats.experience_to_next_level = int(Constants.BASE_XP_REQUIREMENT * pow(Constants.XP_SCALING_EXPONENT, level_exponent))
 	if character.has("experience"):
 		CharacterStats.experience = character.experience
 
@@ -11557,23 +11560,30 @@ func _on_settings_close_pressed() -> void:
 	_save_settings()
 
 func _on_master_volume_changed(value: float) -> void:
-	var db = linear_to_db(value / 100.0) if value > 0 else -80.0
-	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), db)
+	# Use SoundManager (handles both Godot audio and web JavaScript bridge)
+	var volume_linear = value / 100.0
+	if SoundManager and SoundManager.has_method("set_master_volume"):
+		SoundManager.set_master_volume(volume_linear)
+	else:
+		# Fallback: set Godot audio bus directly
+		var db = linear_to_db(volume_linear) if volume_linear > 0 else -80.0
+		AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), db)
 
 func _on_music_volume_changed(value: float) -> void:
-	var db = linear_to_db(value / 100.0) if value > 0 else -80.0
-	# Use SoundManager's music volume control
+	var volume_linear = value / 100.0
+	# Use SoundManager's music volume control (handles web JavaScript bridge)
 	if SoundManager and SoundManager.has_method("set_music_volume"):
-		SoundManager.set_music_volume(db)
+		SoundManager.set_music_volume(volume_linear)
 	# Also update Armory background music if playing
 	if _music_player and is_instance_valid(_music_player):
+		var db = linear_to_db(volume_linear) if volume_linear > 0 else -80.0
 		_music_player.volume_db = db
 
 func _on_sfx_volume_changed(value: float) -> void:
-	var db = linear_to_db(value / 100.0) if value > 0 else -80.0
-	# Store SFX volume in SoundManager for all sound effects
-	if SoundManager:
-		SoundManager.sfx_volume_db = db
+	var volume_linear = value / 100.0
+	# Use SoundManager's SFX volume control (handles web JavaScript bridge)
+	if SoundManager and SoundManager.has_method("set_sfx_volume"):
+		SoundManager.set_sfx_volume(volume_linear)
 
 func _on_fullscreen_toggled(pressed: bool) -> void:
 	if pressed:

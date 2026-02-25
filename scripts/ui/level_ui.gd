@@ -134,13 +134,18 @@ func _process(delta: float) -> void:
 	var now_in_combat = is_player_in_combat()
 	if now_in_combat != is_in_combat:
 		is_in_combat = now_in_combat
-		combat_border.visible = is_in_combat
 
-		# Heartbeat pulse effect when in combat
 		if is_in_combat:
+			# Entering combat - show border immediately
+			combat_border.modulate.a = 1.0
+			combat_border.visible = true
 			start_combat_heartbeat()
 		else:
+			# Leaving combat - fade out border instead of instant hide
 			stop_combat_heartbeat()
+			var fade_tween = create_tween()
+			fade_tween.tween_property(combat_border, "modulate:a", 0.0, 0.4).set_ease(Tween.EASE_IN)
+			fade_tween.tween_callback(func(): combat_border.visible = false)
 
 func is_player_in_combat() -> bool:
 	"""Check if player is in combat (being attacked or attacking)"""

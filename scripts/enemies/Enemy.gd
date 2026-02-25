@@ -885,7 +885,7 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 		die()
 
 func play_hurt_stagger() -> void:
-	"""Quick jolt for stagger feedback on hit - shakes the whole enemy"""
+	"""Quick jolt for stagger feedback on hit - visual only (sprite offset, not node position)"""
 	if is_dying or is_corpse:
 		return
 
@@ -896,13 +896,10 @@ func play_hurt_stagger() -> void:
 	if _stagger_tween and _stagger_tween.is_valid():
 		_stagger_tween.kill()
 
-	# Tight jolt and snap back - single sharp movement, not bouncy
-	var original_pos = position
+	# Tween the sprite's offset instead of the node position to avoid fighting with move_and_slide
 	_stagger_tween = create_tween()
-	# Quick jolt away from attacker direction (simplified to up-right)
-	_stagger_tween.tween_property(self, "position", original_pos + Vector2(3, -1), 0.02).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-	# Snap back to original - slightly slower for weight
-	_stagger_tween.tween_property(self, "position", original_pos, 0.04).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	_stagger_tween.tween_property(sprite, "position", Vector2(3, -1), 0.02).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	_stagger_tween.tween_property(sprite, "position", Vector2.ZERO, 0.04).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 
 func grow_for_crit_window(_difficulty: float = 1.0) -> void:
 	"""Visual effect: grow sprite and spawn weakpoints (called by CritWindowManager)"""
@@ -1628,16 +1625,23 @@ func die() -> void:
 	if should_grant_xp:
 		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 		if player and player.has_method("gain_experience"):
-			# Apply XP falloff based on player level vs enemy level
-			# Green (1-2 below) = full XP, Blue (3-5 below) = reduced, Gray (6+ below) = minimal
+			# EQ-style XP falloff: higher mobs = bonus, 5+ below = zero
 			var player_level = CharacterStats.level if CharacterStats else 1
-			var level_diff = player_level - enemy_level
+			var level_diff = player_level - enemy_level  # positive = player is higher
 			var falloff = 1.0
-			if level_diff > 0:
-				# 20% reduction per level above enemy, minimum 10% XP
-				falloff = maxf(0.1, 1.0 - (level_diff * 0.2))
+			if level_diff >= 5:
+				falloff = 0.0  # Gray - no XP
+			elif level_diff > 0:
+				# 1 below: 80%, 2: 60%, 3: 40%, 4: 20%
+				falloff = 1.0 - (level_diff * 0.2)
+			elif level_diff < 0:
+				# Mob is higher level: +15% bonus per level above player, cap at +60%
+				falloff = minf(1.6, 1.0 + (abs(level_diff) * 0.15))
 			var final_xp = int(xp_reward * xp_multiplier * falloff)
-			player.gain_experience(final_xp)
+			if final_xp <= 0:
+				final_xp = 0
+			if final_xp > 0:
+				player.gain_experience(final_xp)
 
 			# Show world-space XP text floating up from mob
 			var game_world = get_tree().get_first_node_in_group("game_world")

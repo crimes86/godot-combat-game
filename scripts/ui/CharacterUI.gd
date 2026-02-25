@@ -26,6 +26,7 @@ var stat_labels: Dictionary = {}  # stat_name: Label
 var character_name_label: Label
 var level_label: Label
 var xp_bar: ProgressBar
+var xp_detail_label: Label  # Shows "284 / 2028 (14%)" below the bar
 var hp_label: Label
 
 # UI colors - use UITheme singleton for consistency
@@ -424,9 +425,8 @@ func create_character_info_panel(parent: Control) -> void:
 	xp_container.add_child(xp_label)
 
 	xp_bar = ProgressBar.new()
-	xp_bar.custom_minimum_size = Vector2(0, 24)
-	xp_bar.show_percentage = true
-	xp_bar.add_theme_color_override("font_color", TEXT_COLOR)
+	xp_bar.custom_minimum_size = Vector2(0, 20)
+	xp_bar.show_percentage = false
 
 	# Dark dreadland styled progress bar
 	var xp_bg = StyleBoxFlat.new()
@@ -452,6 +452,12 @@ func create_character_info_panel(parent: Control) -> void:
 	xp_bar.add_theme_stylebox_override("fill", xp_fill)
 
 	xp_container.add_child(xp_bar)
+
+	# XP detail text below the bar: "284 / 2,028 (14%)"
+	xp_detail_label = create_text_label("", 11)
+	xp_detail_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	xp_detail_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1.0))
+	xp_container.add_child(xp_detail_label)
 
 	# Separator
 	var separator1 = create_styled_separator()
@@ -1443,6 +1449,16 @@ func create_header_label(text: String, size: int = 18) -> Label:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return label
 
+func _format_number(n: int) -> String:
+	"""Format number with comma separators (e.g. 5684 -> '5,684')"""
+	var s = str(abs(n))
+	var result = ""
+	for i in range(s.length()):
+		if i > 0 and (s.length() - i) % 3 == 0:
+			result += ","
+		result += s[i]
+	return ("-" + result) if n < 0 else result
+
 func create_text_label(text: String, size: int = 14) -> Label:
 	"""Create a standard text label"""
 	var label = Label.new()
@@ -1603,10 +1619,14 @@ func refresh_character_info() -> void:
 			hp_label.text = "HP: %d / %d" % [int(max_hp), int(max_hp)]
 
 	if xp_bar:
+		var xp_current = CharacterStats.experience
+		var xp_needed = CharacterStats.experience_to_next_level
 		var xp_percent = 0.0
-		if CharacterStats.experience_to_next_level > 0:
-			xp_percent = float(CharacterStats.experience) / float(CharacterStats.experience_to_next_level) * 100.0
+		if xp_needed > 0:
+			xp_percent = float(xp_current) / float(xp_needed) * 100.0
 		xp_bar.value = xp_percent
+		if xp_detail_label:
+			xp_detail_label.text = "%s / %s  (%d%%)" % [_format_number(xp_current), _format_number(xp_needed), int(xp_percent)]
 
 func refresh_stats() -> void:
 	"""Update all stat displays"""

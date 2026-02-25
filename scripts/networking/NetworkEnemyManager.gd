@@ -272,6 +272,10 @@ func _interpolate_enemy_positions(delta: float) -> void:
 		if not enemy or not is_instance_valid(enemy):
 			continue
 
+		# Stop interpolating dying/dead enemies - they should stay at death position
+		if enemy.is_dying or enemy.is_corpse:
+			continue
+
 		var target_pos = enemy_target_positions[id]
 		var current_pos = enemy.global_position
 		var velocity = enemy_velocities.get(id, Vector2.ZERO)
@@ -1068,7 +1072,7 @@ func _sync_enemy_positions() -> void:
 	var all_enemy_data: Dictionary = {}  # enemy_id -> {data, pos}
 	for id in enemies:
 		var enemy = enemies[id]
-		if is_instance_valid(enemy) and not enemy.is_corpse:
+		if is_instance_valid(enemy) and not enemy.is_corpse and not enemy.is_dying:
 			all_enemy_data[id] = {
 				"data": {
 					"pos": enemy.global_position,
@@ -1138,6 +1142,10 @@ func _client_sync_positions(positions: Dictionary) -> void:
 	for id in positions:
 		var enemy = get_enemy(id)
 		if enemy and is_instance_valid(enemy):
+			# Don't update dying/dead enemies - they stay at death position
+			if enemy.is_dying or enemy.is_corpse:
+				continue
+
 			var data = positions[id]
 
 			# Store target position for smooth interpolation in _process
