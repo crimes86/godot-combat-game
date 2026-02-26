@@ -147,6 +147,12 @@ func _ready():
 		set_process(false)
 		return
 
+	# Web browsers can't use TCP sockets - skip entirely
+	if OS.has_feature("web"):
+		print("[MCPBridge] Disabled on web (no TCP socket support)")
+		set_process(false)
+		return
+
 	var err = server.listen(PORT)
 	if err == OK:
 		print("[MCPBridge] AI control server listening on port %d" % PORT)

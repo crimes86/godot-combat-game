@@ -12,6 +12,8 @@ signal auth_cancelled()
 
 var _is_active: bool = false
 var _guest_progress: Dictionary = {}  # Stored progress to sync after auth
+var _pending_auth_url: String = ""  # For web: URL to open when user clicks
+var _open_login_button: Button = null  # Web-only: manual open button
 
 func _ready() -> void:
 	visible = false
@@ -77,8 +79,48 @@ func _on_auth_started(auth_url: String) -> void:
 	if not _is_active:
 		return
 
+	_pending_auth_url = auth_url
+
+	if OS.has_feature("web"):
+		# Web: Show a button the user must click to open login page
+		# This is required because browsers block popups unless triggered by user gesture
+		if status_label:
+			status_label.text = "Click the button below to open the login page.\n\nAfter logging in, return to this tab."
+
+		# Create/show manual open button
+		if not _open_login_button:
+			_open_login_button = Button.new()
+			_open_login_button.text = "Open Login Page"
+			_open_login_button.pressed.connect(_on_open_login_pressed)
+			# Insert before cancel button
+			var vbox = $Panel/VBox
+			if vbox:
+				vbox.add_child(_open_login_button)
+				vbox.move_child(_open_login_button, vbox.get_child_count() - 1)
+		_open_login_button.visible = true
+	else:
+		# Desktop: browser opened automatically
+		if status_label:
+			status_label.text = "A browser window has opened!\n\nLog in there, then return to the game.\n\nWaiting for you to complete login..."
+
+func _on_open_login_pressed() -> void:
+	"""Web-only: User clicked to open login page - this is a user gesture so popup works"""
+	if _pending_auth_url.is_empty():
+		return
+
+	# Use JavaScriptBridge for web to ensure it works
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("window.open('%s', '_blank')" % _pending_auth_url)
+	else:
+		OS.shell_open(_pending_auth_url)
+
+	# Update UI to show waiting state
 	if status_label:
-		status_label.text = "A browser window has opened!\n\nLog in there, then return to the game.\n\nWaiting for you to complete login..."
+		status_label.text = "Login page opened!\n\nComplete login there, then return to this tab.\n\nWaiting for you to complete login..."
+
+	# Hide the button after clicking
+	if _open_login_button:
+		_open_login_button.visible = false
 
 func _on_auth_completed(user_data: Dictionary) -> void:
 	"""Authentication successful"""
@@ -148,8 +190,14 @@ func _load_server_character(character: Dictionary) -> void:
 		CharacterStats.gold = character.gold
 	if character.has("level"):
 		CharacterStats.level = character.level
+		# Recalculate experience_to_next_level from level (backend doesn't store this)
+		var level_exponent = min(CharacterStats.level - 1, 50)
+		CharacterStats.experience_to_next_level = int(Constants.BASE_XP_REQUIREMENT * pow(Constants.XP_SCALING_EXPONENT, level_exponent))
 	if character.has("experience"):
 		CharacterStats.experience = character.experience
+		# Clamp experience to current level range
+		if CharacterStats.experience >= CharacterStats.experience_to_next_level:
+			CharacterStats.experience = CharacterStats.experience_to_next_level - 1
 
 	# Load inventory from server
 	if character.has("inventory") and character.inventory is Array:
@@ -264,3 +312,7 @@ func _hide_overlay() -> void:
 	_is_active = false
 	visible = false
 	_guest_progress = {}
+	_pending_auth_url = ""
+	if _open_login_button:
+		_open_login_button.queue_free()
+		_open_login_button = null

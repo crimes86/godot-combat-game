@@ -1195,6 +1195,8 @@ var _ashbane_initialized: bool = false
 var _connecting_dots_timer: Timer = null
 var _connecting_provider_label: String = ""
 var _connecting_dots_count: int = 0
+var _web_open_login_button: Button = null  # Web-only: manual open button
+var _pending_web_auth_url: String = ""  # For web: URL to open when user clicks
 
 func _setup_ashbane_integration():
 	"""Setup Ashbane auth integration"""
@@ -2973,14 +2975,57 @@ func _update_tier_display_content():
 func _on_ashbane_auth_started(auth_url: String):
 	"""Browser opened for authentication"""
 	_stop_connecting_dots_animation()
+	_pending_web_auth_url = auth_url
 
+	if OS.has_feature("web"):
+		# Web: Show a button the user must click to open login page
+		# Browsers block popups unless triggered by user gesture
+		if ashbane_status_label:
+			ashbane_status_label.text = "Click below to open the login page.\nAfter logging in, return to this tab."
+			ashbane_status_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.4))
+
+		# Create/show manual open button
+		if not _web_open_login_button and ashbane_panel:
+			_web_open_login_button = Button.new()
+			_web_open_login_button.text = "Open Login Page"
+			_web_open_login_button.custom_minimum_size = Vector2(260, 44)
+			_web_open_login_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			_style_ashbane_button(_web_open_login_button, ASHBANE_ACCENT_CYAN, false)
+			_web_open_login_button.pressed.connect(_on_web_open_login_pressed)
+			var vbox = ashbane_panel.get_node_or_null("VBoxContainer")
+			if vbox:
+				# Insert after status label
+				var insert_idx = ashbane_status_label.get_index() + 1 if ashbane_status_label else vbox.get_child_count()
+				vbox.add_child(_web_open_login_button)
+				vbox.move_child(_web_open_login_button, insert_idx)
+		if _web_open_login_button:
+			_web_open_login_button.visible = true
+	else:
+		# Desktop: browser opened automatically
+		if ashbane_status_label:
+			ashbane_status_label.text = "Complete login in your browser...\nWaiting for authentication..."
+			ashbane_status_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.4))
+
+func _on_web_open_login_pressed():
+	"""Web-only: User clicked to open login page - this is a user gesture so popup works"""
+	if _pending_web_auth_url.is_empty():
+		return
+
+	# Use JavaScriptBridge for web to ensure it works
+	JavaScriptBridge.eval("window.open('%s', '_blank')" % _pending_web_auth_url)
+
+	# Update UI to show waiting state
 	if ashbane_status_label:
-		ashbane_status_label.text = "Complete login in your browser...\nWaiting for authentication..."
-		ashbane_status_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.4))
+		ashbane_status_label.text = "Login page opened!\nComplete login there, then return here.\nWaiting for authentication..."
+
+	# Hide the button after clicking
+	if _web_open_login_button:
+		_web_open_login_button.visible = false
 
 func _on_ashbane_auth_completed(user_data: Dictionary):
 	"""Successfully authenticated with Ashbane"""
 	_stop_connecting_dots_animation()
+	_cleanup_web_login_button()
 
 	# Show success message briefly
 	if ashbane_status_label:
@@ -3004,9 +3049,17 @@ func _on_ashbane_auth_completed(user_data: Dictionary):
 		# Fallback if tree not available
 		_transition_to_armory()
 
+func _cleanup_web_login_button():
+	"""Clean up web-only login button"""
+	_pending_web_auth_url = ""
+	if _web_open_login_button:
+		_web_open_login_button.queue_free()
+		_web_open_login_button = null
+
 func _on_ashbane_auth_failed(error: String):
 	"""Ashbane authentication failed"""
 	_stop_connecting_dots_animation()
+	_cleanup_web_login_button()
 
 	if ashbane_status_label:
 		ashbane_status_label.text = error
@@ -3314,34 +3367,40 @@ func _on_exit_pressed():
 func _on_master_volume_changed(value: float):
 	if master_volume_value:
 		master_volume_value.text = "%d%%" % int(value)
-	# Convert 0-100 to dB (0 = -40dB, 100 = 0dB)
-	var db = lerp(-40.0, 0.0, value / 100.0)
-	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), db)
+	# Convert 0-100 to linear 0.0-1.0
+	var volume_linear = value / 100.0
+	# Update SoundManager (handles both Godot audio and web JavaScript bridge)
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("set_master_volume"):
+		sound_manager.set_master_volume(volume_linear)
+	else:
+		# Fallback: set Godot audio bus directly
+		var db = lerp(-40.0, 0.0, volume_linear)
+		AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), db)
 
 func _on_music_volume_changed(value: float):
 	if music_volume_value:
 		music_volume_value.text = "%d%%" % int(value)
-	# Apply to theme music and music bus if exists
-	var db = lerp(-40.0, 0.0, value / 100.0)
+	# Convert 0-100 to linear 0.0-1.0
+	var volume_linear = value / 100.0
+	# Update SoundManager (handles both Godot audio and web JavaScript bridge)
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("set_music_volume"):
+		sound_manager.set_music_volume(volume_linear)
+	# Also apply to theme music directly (menu uses separate AudioStreamPlayer)
 	if theme_music:
+		var db = lerp(-40.0, 0.0, volume_linear)
 		theme_music.volume_db = db + 10.0  # Offset since base is -10
-	# Try to set Music bus if it exists
-	var music_bus = AudioServer.get_bus_index("Music")
-	if music_bus >= 0:
-		AudioServer.set_bus_volume_db(music_bus, db)
 
 func _on_sfx_volume_changed(value: float):
 	if sfx_volume_value:
 		sfx_volume_value.text = "%d%%" % int(value)
-	# Apply to SFX bus if it exists
-	var db = lerp(-40.0, 0.0, value / 100.0)
-	var sfx_bus = AudioServer.get_bus_index("SFX")
-	if sfx_bus >= 0:
-		AudioServer.set_bus_volume_db(sfx_bus, db)
-	# Also update SoundManager if available
+	# Convert 0-100 to linear 0.0-1.0
+	var volume_linear = value / 100.0
+	# Update SoundManager (handles both Godot audio and web JavaScript bridge)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager and sound_manager.has_method("set_sfx_volume"):
-		sound_manager.set_sfx_volume(value / 100.0)
+		sound_manager.set_sfx_volume(volume_linear)
 
 func _on_fullscreen_toggled(enabled: bool):
 	if enabled:

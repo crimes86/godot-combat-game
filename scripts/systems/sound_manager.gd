@@ -184,6 +184,8 @@ var sfx_volume_db: float = 0.0  # SFX volume offset applied to all sound effects
 # Server mode flag - disables all audio operations
 var _is_server_mode: bool = false
 var _web_audio_resumed: bool = false  # Track if web audio context has been resumed
+var _web_pending_menu_music: bool = false  # Track if menu music should play after audio unlock
+var _web_pending_menu_volume: float = -10.0  # Volume for pending menu music
 
 func _ready() -> void:
 	# Check if running as dedicated server
@@ -196,6 +198,7 @@ func _ready() -> void:
 	# Web builds need special handling for audio context
 	if OS.has_feature("web"):
 		set_process_input(true)
+		_setup_web_audio_unlock()
 		print("🔊 Web build detected - audio will start on first user interaction")
 
 	# Create audio buses if they don't exist
@@ -216,26 +219,403 @@ func _input(event: InputEvent) -> void:
 		if event is InputEventMouseButton or event is InputEventKey or event is InputEventScreenTouch:
 			_resume_web_audio()
 
+func _setup_web_audio_unlock() -> void:
+	"""Set up JavaScript WebAudio bridge to bypass Godot's broken web audio."""
+	print("🔊 Setting up JavaScript WebAudio bridge...")
+	var js_code = """
+		(function() {
+			if (window._webAudioBridge) return;
+
+			// Create WebAudio bridge
+			window._webAudioBridge = {
+				ctx: null,
+				sounds: {},
+				music: null,
+				musicGain: null,
+				sfxGain: null,
+				unlocked: false,
+
+				init: function() {
+					if (this.ctx) return;
+					var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+					this.ctx = new AudioContextClass();
+					this.musicGain = this.ctx.createGain();
+					this.musicGain.connect(this.ctx.destination);
+					this.musicGain.gain.value = 0.5;
+					this.sfxGain = this.ctx.createGain();
+					this.sfxGain.connect(this.ctx.destination);
+					this.sfxGain.gain.value = 0.7;
+					console.log('🔊 [JS] WebAudio bridge initialized');
+				},
+
+				unlock: function() {
+					if (this.unlocked) return;
+					this.init();
+					var self = this;
+					if (this.ctx.state === 'suspended') {
+						this.ctx.resume().then(function() {
+							console.log('🔊 [JS] WebAudio context resumed');
+							// Preload common UI sounds
+							self.loadSound('button_click', 'audio/sfx/button_click.wav');
+							self.loadSound('button_hover', 'audio/sfx/button_hover.wav');
+						});
+					} else {
+						// Already running, preload sounds
+						self.loadSound('button_click', 'audio/sfx/button_click.wav');
+						self.loadSound('button_hover', 'audio/sfx/button_hover.wav');
+					}
+					this.unlocked = true;
+				},
+
+				loadSound: function(name, url) {
+					var self = this;
+					this.init();
+					fetch(url)
+						.then(function(response) { return response.arrayBuffer(); })
+						.then(function(buffer) { return self.ctx.decodeAudioData(buffer); })
+						.then(function(audioBuffer) {
+							self.sounds[name] = audioBuffer;
+							console.log('🔊 [JS] Loaded sound:', name);
+						})
+						.catch(function(e) { console.log('🔊 [JS] Failed to load:', name, e); });
+				},
+
+				playSound: function(name, volume) {
+					if (!this.unlocked) return;
+					var self = this;
+					var vol = volume || 0.5;
+					if (this.sounds[name]) {
+						// Use preloaded sound
+						var source = this.ctx.createBufferSource();
+						source.buffer = this.sounds[name];
+						var gain = this.ctx.createGain();
+						gain.gain.value = vol;
+						source.connect(gain);
+						gain.connect(this.sfxGain);
+						source.start(0);
+					} else {
+						// Fetch and play on demand
+						fetch(name)
+							.then(function(r) { return r.arrayBuffer(); })
+							.then(function(buf) { return self.ctx.decodeAudioData(buf); })
+							.then(function(audioBuffer) {
+								var source = self.ctx.createBufferSource();
+								source.buffer = audioBuffer;
+								var gain = self.ctx.createGain();
+								gain.gain.value = vol;
+								source.connect(gain);
+								gain.connect(self.sfxGain);
+								source.start(0);
+							})
+							.catch(function(e) { console.log('🔊 [JS] SFX fetch error:', e); });
+					}
+				},
+
+				playMusic: function(url, volume, loop) {
+					var self = this;
+					this.init();
+					if (this.music) {
+						this.music.stop();
+						this.music = null;
+					}
+					fetch(url)
+						.then(function(response) { return response.arrayBuffer(); })
+						.then(function(buffer) { return self.ctx.decodeAudioData(buffer); })
+						.then(function(audioBuffer) {
+							self.music = self.ctx.createBufferSource();
+							self.music.buffer = audioBuffer;
+							self.music.loop = loop !== false;
+							var gain = self.ctx.createGain();
+							gain.gain.value = volume || 0.3;
+							self.music.connect(gain);
+							gain.connect(self.musicGain);
+							self.music.start(0);
+							console.log('🔊 [JS] Music playing:', url);
+						})
+						.catch(function(e) { console.log('🔊 [JS] Failed to play music:', e); });
+				},
+
+				stopMusic: function() {
+					if (this.music) {
+						this.music.stop();
+						this.music = null;
+					}
+				},
+
+				setMusicVolume: function(vol) {
+					if (this.musicGain) this.musicGain.gain.value = vol;
+				},
+
+				setSfxVolume: function(vol) {
+					if (this.sfxGain) this.sfxGain.gain.value = vol;
+				}
+			};
+
+			// Unlock on user interaction
+			function unlockAudio() {
+				window._webAudioBridge.unlock();
+				document.removeEventListener('click', unlockAudio, true);
+				document.removeEventListener('touchstart', unlockAudio, true);
+				document.removeEventListener('keydown', unlockAudio, true);
+			}
+			document.addEventListener('click', unlockAudio, true);
+			document.addEventListener('touchstart', unlockAudio, true);
+			document.addEventListener('keydown', unlockAudio, true);
+
+			console.log('🔊 [JS] WebAudio bridge ready');
+		})();
+	"""
+	JavaScriptBridge.eval(js_code)
+	print("🔊 JavaScript WebAudio bridge installed")
+
 func _resume_web_audio() -> void:
-	"""Resume the browser AudioContext after user interaction."""
+	"""Resume web audio using JavaScript WebAudio bridge."""
 	if _web_audio_resumed:
 		return
 	_web_audio_resumed = true
+	print("🔊 Web audio unlock triggered - using JavaScript bridge")
 
-	# Resume Godot's audio context via JavaScript
-	JavaScriptBridge.eval("
-		if (window.Godot && window.Godot.audio && window.Godot.audio.ctx) {
-			window.Godot.audio.ctx.resume().then(() => {
-				console.log('🔊 Audio context resumed');
-			});
-		}
-	")
-	print("🔊 Web audio context resumed after user interaction")
+	# Unlock the JavaScript WebAudio bridge
+	JavaScriptBridge.eval("window._webAudioBridge && window._webAudioBridge.unlock();")
 
-	# Re-trigger menu music if we're still on menu
-	if menu_music_player and not menu_music_player.playing and menu_music:
-		menu_music_player.play()
-		print("🏠 Menu music restarted after audio resume")
+	# Play pending menu music via JavaScript bridge using external URL
+	if _web_pending_menu_music:
+		_web_pending_menu_music = false
+		print("🔊 Playing menu music via JavaScript WebAudio bridge...")
+
+		# Play menu music from external URL (audio files copied to builds/audio/)
+		var music_url = "audio/music/mainmenu.ogg"
+		var js_play = """
+			(function() {
+				if (!window._webAudioBridge) {
+					console.log('🔊 [JS] Bridge not ready!');
+					return 'bridge not ready';
+				}
+				window._webAudioBridge.unlock();
+				window._webAudioBridge.playMusic('%s', 0.5, true);
+				return 'music playing';
+			})();
+		""" % music_url
+
+		var result = JavaScriptBridge.eval(js_play)
+		print("🔊 Menu music result: %s" % str(result))
+		_playing_menu_music = true
+
+
+# Helper to play sounds via JavaScript bridge on web
+# Uses external audio files in builds/audio/sfx/
+func _play_sound_js(sound_name: String, volume: float = 0.5) -> void:
+	if not OS.has_feature("web"):
+		return
+	# Map sound names to external URLs
+	var url = "audio/sfx/%s" % sound_name
+	var js = "window._webAudioBridge && window._webAudioBridge.playSound('%s', %f);" % [url, volume]
+	JavaScriptBridge.eval(js)
+
+
+# Helper to play music via JavaScript bridge on web
+# Uses external audio files in builds/audio/music/
+func _play_music_js(music_name: String, volume: float = 0.3, loop: bool = true) -> void:
+	if not OS.has_feature("web"):
+		return
+	var url = "audio/music/%s" % music_name
+	var loop_str = "true" if loop else "false"
+	var js = "window._webAudioBridge && window._webAudioBridge.playMusic('%s', %f, %s);" % [url, volume, loop_str]
+	JavaScriptBridge.eval(js)
+
+
+func _stop_music_js() -> void:
+	if not OS.has_feature("web"):
+		return
+	JavaScriptBridge.eval("window._webAudioBridge && window._webAudioBridge.stopMusic();")
+
+
+# Play SFX via JavaScript WebAudio for web platform
+func _play_web_sfx(filename: String, volume: float = 0.5) -> void:
+	if not _web_audio_resumed:
+		return
+	# Use external audio files in builds/audio/sfx/
+	var url = "audio/sfx/%s" % filename
+	var js = """
+		(function() {
+			if (!window._webAudioBridge || !window._webAudioBridge.unlocked) return;
+			fetch('%s')
+				.then(function(r) { return r.arrayBuffer(); })
+				.then(function(buf) { return window._webAudioBridge.ctx.decodeAudioData(buf); })
+				.then(function(audioBuffer) {
+					var source = window._webAudioBridge.ctx.createBufferSource();
+					source.buffer = audioBuffer;
+					var gain = window._webAudioBridge.ctx.createGain();
+					gain.gain.value = %f;
+					source.connect(gain);
+					gain.connect(window._webAudioBridge.sfxGain);
+					source.start(0);
+				})
+				.catch(function(e) { console.log('🔊 [JS] SFX error:', e); });
+		})();
+	""" % [url, volume]
+	JavaScriptBridge.eval(js)
+
+
+# Convert res:// path to web URL for external audio files
+func _res_to_web_url(res_path: String) -> String:
+	# Convert "res://assets/audio/sfx/combat/hits/normal_hit_1.wav"
+	# to "audio/sfx/combat/hits/normal_hit_1.wav"
+	if res_path.begins_with("res://assets/audio/"):
+		return res_path.replace("res://assets/audio/", "audio/")
+	elif res_path.begins_with("res://assets/"):
+		return res_path.replace("res://assets/", "audio/")
+	return res_path
+
+
+# Play any audio file via JavaScript WebAudio for web platform
+func _play_web_audio(res_path: String, volume: float = 0.5, is_music: bool = false) -> void:
+	if not OS.has_feature("web") or not _web_audio_resumed:
+		return
+	var url = _res_to_web_url(res_path)
+	var gain_node = "window._webAudioBridge.musicGain" if is_music else "window._webAudioBridge.sfxGain"
+	var js = """
+		(function() {
+			if (!window._webAudioBridge || !window._webAudioBridge.unlocked) {
+				console.log('🔊 [JS] Bridge not ready for:', '%s');
+				return;
+			}
+			console.log('🔊 [JS] Playing:', '%s');
+			fetch('%s')
+				.then(function(r) {
+					if (!r.ok) throw new Error('HTTP ' + r.status);
+					return r.arrayBuffer();
+				})
+				.then(function(buf) { return window._webAudioBridge.ctx.decodeAudioData(buf); })
+				.then(function(audioBuffer) {
+					var source = window._webAudioBridge.ctx.createBufferSource();
+					source.buffer = audioBuffer;
+					var gain = window._webAudioBridge.ctx.createGain();
+					gain.gain.value = %f;
+					source.connect(gain);
+					gain.connect(%s);
+					source.start(0);
+				})
+				.catch(function(e) { console.log('🔊 [JS] Audio error:', '%s', e); });
+		})();
+	""" % [url, url, url, volume, gain_node, url]
+	JavaScriptBridge.eval(js)
+
+
+func _check_godot_audio_after_delay() -> void:
+	"""Check if Godot created its AudioContext after a short delay and resume it."""
+	await get_tree().create_timer(0.5).timeout
+
+	var js_check = """
+		(function() {
+			var found = [];
+
+			// Search for ANY AudioContext anywhere
+			function findContexts(obj, path, depth) {
+				if (depth > 3 || !obj) return;
+				try {
+					// Check if this IS an AudioContext
+					if (obj instanceof AudioContext || obj instanceof (window.webkitAudioContext || AudioContext)) {
+						found.push({path: path, state: obj.state});
+						if (obj.state === 'suspended') {
+							obj.resume().then(function() {
+								console.log('🔊 RESUMED context at ' + path);
+							});
+						}
+						return;
+					}
+					// Search properties
+					if (typeof obj === 'object') {
+						var keys = Object.keys(obj).slice(0, 100); // Limit search
+						for (var i = 0; i < keys.length; i++) {
+							var k = keys[i];
+							if (k === 'window' || k === 'self' || k === 'parent') continue;
+							try { findContexts(obj[k], path + '.' + k, depth + 1); } catch(e) {}
+						}
+					}
+				} catch(e) {}
+			}
+
+			// Search key locations
+			findContexts(window.Module, 'Module', 0);
+			findContexts(window.Godot, 'Godot', 0);
+
+			// Also check for GodotAudio specifically
+			if (window.GodotAudio) {
+				console.log('🔊 GodotAudio exists:', Object.keys(window.GodotAudio));
+				if (window.GodotAudio.ctx) {
+					console.log('🔊 GodotAudio.ctx state:', window.GodotAudio.ctx.state);
+					found.push({path: 'GodotAudio.ctx', state: window.GodotAudio.ctx.state});
+					if (window.GodotAudio.ctx.state === 'suspended') {
+						window.GodotAudio.ctx.resume();
+					}
+				}
+			}
+
+			// Check Module.GodotAudio
+			if (window.Module && window.Module.GodotAudio) {
+				console.log('🔊 Module.GodotAudio exists');
+			}
+
+			// Print all Module properties that contain 'audio'
+			if (window.Module) {
+				var audioProps = Object.keys(window.Module).filter(function(k) {
+					return k.toLowerCase().indexOf('audio') >= 0;
+				});
+				if (audioProps.length > 0) {
+					console.log('🔊 Module audio-related properties:', audioProps);
+				}
+			}
+
+			console.log('🔊 Total AudioContexts found:', found.length, found);
+			return found.length;
+		})();
+	"""
+	var count = JavaScriptBridge.eval(js_check)
+	print("🔊 After delay check: %s AudioContext(s)" % str(count))
+
+func _play_menu_music_immediate(volume_db: float) -> void:
+	"""Play menu music immediately without any async operations.
+	Called synchronously within user gesture context for web audio unlock."""
+	if _is_server_mode:
+		return
+	if not menu_music:
+		push_warning("Menu music not loaded!")
+		return
+
+	# Don't restart if already playing
+	if _playing_menu_music and menu_music_player and menu_music_player.playing:
+		return
+
+	_playing_menu_music = true
+
+	# Create menu music player if needed
+	if not menu_music_player:
+		menu_music_player = AudioStreamPlayer.new()
+		menu_music_player.name = "MenuMusicPlayer"
+		menu_music_player.bus = "Music"
+		add_child(menu_music_player)
+
+	menu_music_player.stream = menu_music
+	menu_music_player.volume_db = -80.0 if music_muted else volume_db
+
+	# Loop the menu music
+	if menu_music is AudioStreamMP3:
+		(menu_music as AudioStreamMP3).loop = true
+	elif menu_music is AudioStreamOggVorbis:
+		(menu_music as AudioStreamOggVorbis).loop = true
+
+	# Play immediately - this is the key moment for audio unlock!
+	menu_music_player.play()
+
+	# Debug: Show audio state
+	var master_idx = AudioServer.get_bus_index("Master")
+	var music_idx = AudioServer.get_bus_index("Music")
+	print("🏠 Menu music started (Thorns and Shadows) - IMMEDIATE")
+	print("   📊 Volume: %.1f dB (muted: %s)" % [menu_music_player.volume_db, music_muted])
+	print("   📊 Master bus: idx=%d, mute=%s, vol=%.1f dB" % [master_idx, AudioServer.is_bus_mute(master_idx), AudioServer.get_bus_volume_db(master_idx)])
+	print("   📊 Music bus: idx=%d, mute=%s, vol=%.1f dB, send=%s" % [music_idx, AudioServer.is_bus_mute(music_idx), AudioServer.get_bus_volume_db(music_idx), AudioServer.get_bus_send(music_idx)])
+	print("   📊 Player playing: %s, stream: %s" % [menu_music_player.playing, menu_music_player.stream != null])
 
 
 func _setup_audio_buses() -> void:
@@ -909,6 +1289,14 @@ func _generate_all_sounds() -> void:
 func play_sound(sound_type: SoundType, global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
 	if _is_server_mode or sfx_muted:
 		return
+
+	# On web, use JavaScript bridge with mapped paths
+	if OS.has_feature("web"):
+		var web_path = _get_web_path_for_sound_type(sound_type)
+		if web_path != "":
+			_play_web_audio(web_path, 0.5)
+		return
+
 	if not sound_cache.has(sound_type):
 		push_error("Sound type not found: ", sound_type)
 		return
@@ -927,6 +1315,14 @@ func play_sound(sound_type: SoundType, global_pos: Vector2 = Vector2.ZERO, volum
 func play_sound_2d(sound_type: SoundType, volume_db: float = 0.0) -> void:
 	if _is_server_mode or sfx_muted:
 		return
+
+	# On web, use JavaScript bridge with mapped paths
+	if OS.has_feature("web"):
+		var web_path = _get_web_path_for_sound_type(sound_type)
+		if web_path != "":
+			_play_web_audio(web_path, 0.5)
+		return
+
 	if not sound_cache.has(sound_type):
 		push_error("Sound type not found: ", sound_type)
 		return
@@ -945,6 +1341,43 @@ func play_sound_2d(sound_type: SoundType, volume_db: float = 0.0) -> void:
 	get_tree().root.add_child(player)
 	player.play()
 
+
+# Map SoundType enum to web audio paths
+func _get_web_path_for_sound_type(sound_type: SoundType) -> String:
+	match sound_type:
+		SoundType.GOLD_LOOT:
+			return "res://assets/audio/sfx/ui/gold_loot.wav"
+		SoundType.ITEM_PICKUP:
+			return "res://assets/audio/sfx/ui/item_pickup.wav"
+		SoundType.CHEST_OPEN:
+			return "res://assets/audio/sfx/ui/chest_open.wav"
+		SoundType.CORPSE_LOOT:
+			return "res://assets/audio/sfx/ui/corpse_loot.wav"
+		SoundType.BLACKSMITH_OPEN:
+			return "res://assets/audio/sfx/ui/blacksmith_open.wav"
+		SoundType.QUEST_ACCEPT:
+			return "res://assets/audio/sfx/ui/quest_accept.wav"
+		SoundType.QUEST_TURN_IN:
+			return "res://assets/audio/sfx/ui/quest_turn_in.wav"
+		SoundType.CRIT_WINDOW_OPEN:
+			return "res://assets/audio/sfx/combat/crit_window_open.wav"
+		SoundType.HIT_NORMAL:
+			return "res://assets/audio/sfx/combat/hits/normal_hit_1.wav"
+		SoundType.HIT_CRIT:
+			return "res://assets/audio/sfx/combat/hits/critical_hit.wav"
+		SoundType.HIT_WEAKPOINT:
+			return "res://assets/audio/sfx/combat/hits/weakpoint_hit_1.wav"
+		SoundType.FOOTSTEP_PLAYER:
+			return "res://assets/audio/sfx/footsteps/player_step_1.wav"
+		SoundType.FOOTSTEP_SKELETON:
+			return "res://assets/audio/sfx/footsteps/skeleton_step_1.wav"
+		SoundType.INVENTORY_MOVE:
+			return "res://assets/audio/sfx/inventory_move.wav"
+		SoundType.EQUIP_ITEM:
+			return "res://assets/audio/sfx/equip_item.wav"
+		_:
+			return ""
+
 ## Get a sound stream for attaching to existing AudioStreamPlayer nodes
 func get_sound(sound_type: SoundType) -> AudioStream:
 	return sound_cache.get(sound_type, null)
@@ -953,6 +1386,13 @@ func get_sound(sound_type: SoundType) -> AudioStream:
 func play_weakpoint_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
 	if sfx_muted:
 		return
+
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var wp_num = (randi() % 6) + 1  # Random between 1 and 6
+		_play_web_audio("res://assets/audio/sfx/combat/hits/weakpoint_hit_%d.wav" % wp_num, 0.6)
+		return
+
 	if weakpoint_sounds.is_empty():
 		# Fallback to placeholder sound if no real sounds loaded
 		play_sound(SoundType.HIT_WEAKPOINT, global_pos, volume_db)
@@ -978,6 +1418,12 @@ func play_weakpoint_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 func play_critical_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
 	if sfx_muted:
 		return
+
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		_play_web_audio("res://assets/audio/sfx/combat/hits/critical_hit.wav", 0.6)
+		return
+
 	if not critical_hit_sound:
 		# Fallback to placeholder sound if no real sound loaded
 		play_sound(SoundType.HIT_CRIT, global_pos, volume_db)
@@ -1000,6 +1446,13 @@ func play_critical_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: floa
 func play_normal_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0, weapon_type: String = "") -> void:
 	if sfx_muted:
 		return
+
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var hit_num = (randi() % 2) + 1  # Random between 1 and 2
+		_play_web_audio("res://assets/audio/sfx/combat/hits/normal_hit_%d.wav" % hit_num, 0.5)
+		return
+
 	var sounds_to_use = []  # Untyped to avoid type mismatch with Dictionary values
 
 	# Try weapon-specific sounds first
@@ -1035,6 +1488,11 @@ func play_normal_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float 
 func play_skeleton_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
 	if sfx_muted:
 		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var hurt_num = (randi() % 4) + 1  # Random between 1 and 4
+		_play_web_audio("res://assets/audio/sfx/combat/reactions/skeleton_hurt_%d.wav" % hurt_num, 0.5)
+		return
 	if skeleton_hurt_sounds.is_empty():
 		# No fallback - just don't play if not loaded
 		return
@@ -1059,11 +1517,20 @@ func play_skeleton_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: flo
 func play_skeleton_attack_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -10.0) -> void:
 	if sfx_muted:
 		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		_play_web_audio("res://assets/audio/sfx/combat/reactions/skeleton_attack.wav", 0.4)
+		return
 	_play_skeleton_sound(skeleton_attack_sound, global_pos, volume_db)
 
 ## Play skeleton aggro sound (when skeleton spots player) - uses dedicated aggro sounds
 func play_skeleton_aggro_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -10.0) -> void:
 	if sfx_muted:
+		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var aggro_num = (randi() % 3) + 1  # Random between 1 and 3
+		_play_web_audio("res://assets/audio/sfx/combat/reactions/skeleton_aggro_%d.wav" % aggro_num, 0.4)
 		return
 	if skeleton_aggro_sounds.is_empty():
 		# Fallback to attack sound if no aggro sounds loaded
@@ -1098,6 +1565,11 @@ func _play_skeleton_sound(sound: AudioStream, global_pos: Vector2, volume_db: fl
 func play_skeleton_death_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
 	if sfx_muted:
 		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var death_num = (randi() % 3) + 1  # Random between 1 and 3
+		_play_web_audio("res://assets/audio/sfx/combat/reactions/skeleton_death_%d.wav" % death_num, 0.5)
+		return
 	if skeleton_death_sounds.is_empty():
 		# Fallback to placeholder sound if no real sounds loaded
 		play_sound(SoundType.SKELETON_DEATH, global_pos, volume_db)
@@ -1126,6 +1598,11 @@ func play_skeleton_death_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: fl
 func play_wolf_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -6.0) -> void:
 	if sfx_muted:
 		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var hurt_num = (randi() % 5) + 1  # Random between 1 and 5
+		_play_web_audio("res://assets/audio/sfx/combat/reactions/wolf_hurt_%d.wav" % hurt_num, 0.5)
+		return
 	if wolf_hurt_sounds.is_empty():
 		return
 
@@ -1147,6 +1624,11 @@ func play_wolf_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 func play_wolf_attack_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -8.0) -> void:
 	if sfx_muted:
 		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var attack_num = (randi() % 3) + 1  # Random between 1 and 3
+		_play_web_audio("res://assets/audio/sfx/combat/reactions/wolf_attack_%d.wav" % attack_num, 0.4)
+		return
 	if wolf_attack_sounds.is_empty():
 		return
 
@@ -1157,6 +1639,11 @@ func play_wolf_attack_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float
 func play_wolf_aggro_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -8.0) -> void:
 	if sfx_muted:
 		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var aggro_num = (randi() % 3) + 1  # Random between 1 and 3
+		_play_web_audio("res://assets/audio/sfx/combat/reactions/wolf_aggro_%d.wav" % aggro_num, 0.4)
+		return
 	if wolf_aggro_sounds.is_empty():
 		return
 
@@ -1166,6 +1653,11 @@ func play_wolf_aggro_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float 
 ## Play wolf death sound
 func play_wolf_death_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -4.0) -> void:
 	if sfx_muted:
+		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var death_num = (randi() % 2) + 1  # Random between 1 and 2
+		_play_web_audio("res://assets/audio/sfx/combat/reactions/wolf_death_%d.wav" % death_num, 0.5)
 		return
 	if wolf_death_sounds.is_empty():
 		return
@@ -1209,6 +1701,15 @@ func play_wolf_footstep(global_pos: Vector2, camera_pos: Vector2, is_running: bo
 	var distance = global_pos.distance_to(camera_pos)
 	if distance > 800.0:
 		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		if is_running:
+			var run_num = (randi() % 2) + 1  # Random between 1 and 2
+			_play_web_audio("res://assets/audio/sfx/footsteps/wolf_run_%d.wav" % run_num, 0.25)
+		else:
+			var step_num = (randi() % 3) + 1  # Random between 1 and 3
+			_play_web_audio("res://assets/audio/sfx/footsteps/wolf_step_%d.wav" % step_num, 0.25)
+		return
 
 	var sounds_to_use = wolf_run_sounds if is_running else wolf_footstep_sounds
 	if sounds_to_use.is_empty():
@@ -1239,6 +1740,16 @@ func play_wolf_footstep(global_pos: Vector2, camera_pos: Vector2, is_running: bo
 func try_play_wolf_howl(_global_pos: Vector2 = Vector2.ZERO, howl_type: String = "distant", volume_db: float = -10.0) -> bool:
 	if sfx_muted:
 		return false
+	# On web, use JavaScript bridge (simplified - no cooldown tracking for web)
+	if OS.has_feature("web"):
+		var howl_file = "wolf_howl_distant.wav"
+		match howl_type:
+			"pack":
+				howl_file = "wolf_howl_pack.wav"
+			"alpha":
+				howl_file = "wolf_howl_alpha.wav"
+		_play_web_audio("res://assets/audio/sfx/ambient/%s" % howl_file, 0.4)
+		return true
 
 	var current_time = Time.get_ticks_msec() / 1000.0
 
@@ -1330,6 +1841,16 @@ func _find_closest_alpha_wolf_position() -> Vector2:
 func force_play_wolf_howl(_global_pos: Vector2 = Vector2.ZERO, howl_type: String = "distant", volume_db: float = -10.0) -> void:
 	if sfx_muted:
 		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var howl_file = "wolf_howl_distant.wav"
+		match howl_type:
+			"pack":
+				howl_file = "wolf_howl_pack.wav"
+			"alpha":
+				howl_file = "wolf_howl_alpha.wav"
+		_play_web_audio("res://assets/audio/sfx/ambient/%s" % howl_file, 0.5)
+		return
 
 	var howl_sound: AudioStream = null
 	match howl_type:
@@ -1362,6 +1883,13 @@ func force_play_wolf_howl(_global_pos: Vector2 = Vector2.ZERO, howl_type: String
 func play_sword_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -10.0) -> void:
 	if sfx_muted:
 		return
+
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var swing_num = (randi() % 2) + 1  # Random between 1 and 2
+		_play_web_audio("res://assets/audio/sfx/combat/weapon_swings/sword_swing_%d.wav" % swing_num, 0.4)
+		return
+
 	if sword_swing_sounds.is_empty():
 		# Fallback to placeholder sound if no real sounds loaded
 		play_sound(SoundType.SWING, global_pos, volume_db)
@@ -1384,6 +1912,11 @@ func play_sword_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float
 ## Play unarmed swing sound (whoosh when punching/kicking)
 func play_unarmed_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -10.0) -> void:
 	if sfx_muted:
+		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var swing_num = (randi() % 2) + 1  # Random between 1 and 2
+		_play_web_audio("res://assets/audio/sfx/combat/weapon_swings/unarmed_swing_%d.wav" % swing_num, 0.4)
 		return
 	if unarmed_swing_sounds.is_empty():
 		# Fallback to sword swing if no unarmed sounds loaded
@@ -1408,6 +1941,12 @@ func play_unarmed_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: flo
 func play_gunshot_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -6.0) -> void:
 	if sfx_muted:
 		return
+
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		_play_web_audio("res://assets/audio/sfx/combat/weapons/railgun_fire.wav", 0.5)
+		return
+
 	if gunshot_sounds.is_empty():
 		# No gunshot sounds loaded - use sword swing as placeholder with higher pitch
 		if not sword_swing_sounds.is_empty():
@@ -1439,6 +1978,12 @@ func play_gunshot_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -
 ## Play battle rifle sound (Halo-style burst fire - lighter, higher pitch than railgun)
 func play_battle_rifle_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -6.0) -> void:
 	if sfx_muted:
+		return
+
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var rifle_num = (randi() % 3) + 1  # Random between 1 and 3
+		_play_web_audio("res://assets/audio/sfx/combat/weapons/battle_rifle_fire_%d.wav" % rifle_num, 0.5)
 		return
 
 	var sound_stream: AudioStream = null
@@ -1475,6 +2020,15 @@ func play_battle_rifle_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: floa
 func play_bullet_impact_sound(global_pos: Vector2 = Vector2.ZERO, is_armored: bool = false, volume_db: float = -6.0) -> void:
 	if sfx_muted:
 		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		if is_armored:
+			var armor_num = (randi() % 4) + 1  # Random between 1 and 4
+			_play_web_audio("res://assets/audio/sfx/combat/hits/bullet_armor_%d.wav" % armor_num, 0.5)
+		else:
+			var flesh_num = (randi() % 4) + 1  # Random between 1 and 4
+			_play_web_audio("res://assets/audio/sfx/combat/hits/bullet_flesh_%d.wav" % flesh_num, 0.5)
+		return
 
 	var sounds_to_use: Array[AudioStream]
 	if is_armored and not bullet_armor_sounds.is_empty():
@@ -1503,6 +2057,12 @@ func play_bullet_impact_sound(global_pos: Vector2 = Vector2.ZERO, is_armored: bo
 ## Play bow shot sound (string release/twang)
 func play_bow_shot_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -12.0) -> void:
 	if sfx_muted:
+		return
+
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var bow_num = (randi() % 3) + 1  # Random between 1 and 3
+		_play_web_audio("res://assets/audio/sfx/combat/weapons/bow_shot_%d.wav" % bow_num, 0.5)
 		return
 
 	if bow_shot_sounds.is_empty():
@@ -1539,8 +2099,12 @@ func play_bow_impact_sound(global_pos: Vector2 = Vector2.ZERO, hit: bool = true,
 		return
 
 	if not hit:
-		# Miss sound - skip for now (arrow hitting ground silently)
-		# Could add a subtle ground thud sound here later
+		return
+
+	# On web, use JavaScript bridge (reuse bullet flesh impact)
+	if OS.has_feature("web"):
+		var flesh_num = (randi() % 4) + 1  # Random between 1 and 4
+		_play_web_audio("res://assets/audio/sfx/combat/hits/bullet_flesh_%d.wav" % flesh_num, 0.5)
 		return
 
 	# Hit sound - use bullet flesh impact
@@ -1564,6 +2128,13 @@ func play_bow_impact_sound(global_pos: Vector2 = Vector2.ZERO, hit: bool = true,
 func play_player_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -6.0) -> void:
 	if sfx_muted:
 		return
+
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var hurt_num = (randi() % 2) + 1  # Random between 1 and 2
+		_play_web_audio("res://assets/audio/sfx/player/player_hurt_%d.wav" % hurt_num, 0.5)
+		return
+
 	if player_hurt_sounds.is_empty():
 		# No real sounds loaded, skip (no placeholder for player hurt)
 		return
@@ -1587,6 +2158,11 @@ func play_player_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float
 func play_player_death_sound(global_pos: Vector2 = Vector2.ZERO, is_female: bool = false, volume_db: float = -4.0) -> void:
 	if sfx_muted:
 		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var death_file = "player_death_female.wav" if is_female else "player_death_male.wav"
+		_play_web_audio("res://assets/audio/sfx/player/%s" % death_file, 0.6)
+		return
 	var sound_stream = player_death_female_sound if is_female else player_death_male_sound
 
 	if not sound_stream:
@@ -1609,6 +2185,13 @@ func play_player_death_sound(global_pos: Vector2 = Vector2.ZERO, is_female: bool
 func play_player_footstep(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -18.0) -> void:
 	if sfx_muted:
 		return
+
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var step_num = (randi() % 3) + 1  # Random between 1 and 3
+		_play_web_audio("res://assets/audio/sfx/footsteps/player_step_%d.wav" % step_num, 0.3)
+		return
+
 	if player_footstep_sounds.is_empty():
 		# Fallback to placeholder
 		play_sound(SoundType.FOOTSTEP_PLAYER, global_pos, volume_db)
@@ -1643,6 +2226,11 @@ func play_skeleton_footstep(global_pos: Vector2, camera_pos: Vector2, volume_db:
 	var distance = global_pos.distance_to(camera_pos)
 	if distance > 1000.0:
 		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var step_num = (randi() % 3) + 1  # Random between 1 and 3
+		_play_web_audio("res://assets/audio/sfx/footsteps/skeleton_step_%d.wav" % step_num, 0.25)
+		return
 
 	if skeleton_footstep_sounds.is_empty():
 		# Fallback to placeholder
@@ -1676,6 +2264,10 @@ func play_skeleton_footstep(global_pos: Vector2, camera_pos: Vector2, volume_db:
 func play_fire_fuel_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -12.0, enhanced: bool = false) -> void:
 	if sfx_muted:
 		return
+	# On web, use JavaScript bridge (no fire fuel sound file, skip for web)
+	if OS.has_feature("web"):
+		# Fire fuel uses generated sound, skip on web for now
+		return
 	if not fire_fuel_add_sound:
 		# Fallback to placeholder
 		play_sound(SoundType.FIRE_FUEL_ADD, global_pos, volume_db)
@@ -1707,6 +2299,13 @@ func play_fire_fuel_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 func play_dodge_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -8.0) -> void:
 	if sfx_muted:
 		return
+
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var dodge_num = (randi() % 2) + 1  # Random between 1 and 2
+		_play_web_audio("res://assets/audio/sfx/dodge_%d.wav" % dodge_num, 0.5)
+		return
+
 	if dodge_sounds.is_empty():
 		# Fallback to unarmed swing if no dodge sounds loaded
 		play_unarmed_swing_sound(global_pos, volume_db)
@@ -1741,6 +2340,12 @@ func play_dodge_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -8.
 func play_inventory_move_sound(volume_db: float = -10.0) -> void:
 	if sfx_muted:
 		return
+
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		_play_web_audio("res://assets/audio/sfx/inventory_move.wav", 0.4)
+		return
+
 	if not inventory_move_sound:
 		# Fallback to placeholder
 		play_sound_2d(SoundType.INVENTORY_MOVE, volume_db)
@@ -1759,6 +2364,12 @@ func play_inventory_move_sound(volume_db: float = -10.0) -> void:
 func play_equip_sound(volume_db: float = -10.0) -> void:
 	if sfx_muted:
 		return
+
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		_play_web_audio("res://assets/audio/sfx/equip_item.wav", 0.5)
+		return
+
 	if not equip_item_sound:
 		# Fallback to placeholder
 		play_sound_2d(SoundType.EQUIP_ITEM, volume_db)
@@ -1775,8 +2386,19 @@ func play_equip_sound(volume_db: float = -10.0) -> void:
 
 ## Play button click sound (UI interactions)
 func play_button_click_sound(volume_db: float = -8.0) -> void:
+	# Web audio resume - button clicks trigger this before _input sees the event
+	if OS.has_feature("web") and not _web_audio_resumed:
+		print("🔊 Button click detected - resuming web audio")
+		_resume_web_audio()
+
 	if sfx_muted:
 		return
+
+	# On web, use JavaScript bridge since Godot audio is broken
+	if OS.has_feature("web"):
+		_play_web_sfx("button_click.wav", 0.7)
+		return
+
 	if not button_click_sound:
 		# No fallback - just skip if not loaded
 		return
@@ -1792,8 +2414,19 @@ func play_button_click_sound(volume_db: float = -8.0) -> void:
 
 ## Play button hover sound (UI interactions)
 func play_button_hover_sound(volume_db: float = -15.0) -> void:
+	# Web audio resume - hover triggers before click
+	if OS.has_feature("web") and not _web_audio_resumed:
+		print("🔊 Button hover detected - resuming web audio")
+		_resume_web_audio()
+
 	if sfx_muted:
 		return
+
+	# On web, use JavaScript bridge since Godot audio is broken
+	if OS.has_feature("web"):
+		_play_web_sfx("button_hover.wav", 0.4)
+		return
+
 	if not button_hover_sound:
 		# No fallback - just skip if not loaded
 		return
@@ -1811,6 +2444,10 @@ func play_button_hover_sound(volume_db: float = -15.0) -> void:
 func play_inventory_open_sound(volume_db: float = -10.0) -> void:
 	if sfx_muted:
 		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		_play_web_audio("res://assets/audio/sfx/ui/inventory_open.wav", 0.4)
+		return
 	if not inventory_open_sound:
 		return
 
@@ -1827,6 +2464,10 @@ func play_inventory_open_sound(volume_db: float = -10.0) -> void:
 func play_character_sheet_sound(volume_db: float = -10.0) -> void:
 	if sfx_muted:
 		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		_play_web_audio("res://assets/audio/sfx/ui/character_sheet_open.wav", 0.4)
+		return
 	if not character_sheet_sound:
 		return
 
@@ -1842,6 +2483,10 @@ func play_character_sheet_sound(volume_db: float = -10.0) -> void:
 ## Play weakpoint destruction sound (explosive glass/bone shatter finale)
 func play_weakpoint_destroyed_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
 	if sfx_muted:
+		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		_play_web_audio("res://assets/audio/sfx/combat/hits/weakpoint_destroyed.wav", 0.7)
 		return
 	if not weakpoint_destroyed_sound:
 		# Fallback to placeholder sound if no real sound loaded
@@ -1865,6 +2510,10 @@ func play_weakpoint_destroyed_sound(global_pos: Vector2 = Vector2.ZERO, volume_d
 func play_healing_cast_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -5.0) -> void:
 	if sfx_muted:
 		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		_play_web_audio("res://assets/audio/sfx/player/healing_staff_cast.wav", 0.5)
+		return
 	if not healing_staff_cast_sound:
 		push_warning("Healing staff cast sound not loaded")
 		return
@@ -1884,6 +2533,10 @@ func play_healing_cast_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: floa
 ## Play healing staff impact sound (projectile landing - second pulse explosion)
 func play_healing_impact_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -3.0) -> void:
 	if sfx_muted:
+		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		_play_web_audio("res://assets/audio/sfx/player/healing_staff_impact.wav", 0.5)
 		return
 	if not healing_staff_impact_sound:
 		push_warning("Healing staff impact sound not loaded")
@@ -1905,6 +2558,10 @@ func play_healing_impact_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: fl
 func play_lava_burn_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -6.0) -> void:
 	if sfx_muted:
 		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		_play_web_audio("res://assets/audio/sfx/combat/lava_burn.wav", 0.5)
+		return
 	if not lava_burn_sound:
 		push_warning("Lava burn sound not loaded")
 		return
@@ -1925,6 +2582,12 @@ func play_lava_burn_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 func play_level_up_sound(volume_db: float = -4.0) -> void:
 	if sfx_muted:
 		return
+
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		_play_web_audio("res://assets/audio/sfx/player/level_up.wav", 0.7)
+		return
+
 	if not level_up_sound:
 		push_warning("Level up sound not loaded")
 		return
@@ -2145,6 +2808,12 @@ func _pack_samples(samples: PackedVector2Array) -> PackedByteArray:
 func play_game_music(volume_db: float = -15.0) -> void:
 	if _is_server_mode:
 		return
+
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		_play_music_js("game_loop.ogg", 0.4, true)
+		return
+
 	if music_tracks.is_empty():
 		push_warning("No music tracks loaded!")
 		return
@@ -2224,6 +2893,21 @@ func is_game_music_playing() -> bool:
 func play_menu_music(volume_db: float = -10.0) -> void:
 	if _is_server_mode:
 		return
+
+	# On web builds, defer playback until after user interaction
+	if OS.has_feature("web") and not _web_audio_resumed:
+		_web_pending_menu_music = true
+		_web_pending_menu_volume = volume_db
+		print("🏠 Menu music queued (waiting for user interaction)")
+		return
+
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		_play_music_js("mainmenu.ogg", 0.4, true)
+		_playing_menu_music = true
+		print("🏠 Menu music started via web audio")
+		return
+
 	if not menu_music:
 		push_warning("Menu music not loaded!")
 		return
@@ -2251,7 +2935,15 @@ func play_menu_music(volume_db: float = -10.0) -> void:
 		(menu_music as AudioStreamOggVorbis).loop = true
 
 	menu_music_player.play()
+
+	# Debug: Show audio state
+	var master_idx = AudioServer.get_bus_index("Master")
+	var music_idx = AudioServer.get_bus_index("Music")
 	print("🏠 Menu music started (Thorns and Shadows)")
+	print("   📊 Volume: %.1f dB (muted: %s)" % [menu_music_player.volume_db, music_muted])
+	print("   📊 Master bus: idx=%d, mute=%s, vol=%.1f dB" % [master_idx, AudioServer.is_bus_mute(master_idx), AudioServer.get_bus_volume_db(master_idx)])
+	print("   📊 Music bus: idx=%d, mute=%s, vol=%.1f dB, send=%s" % [music_idx, AudioServer.is_bus_mute(music_idx), AudioServer.get_bus_volume_db(music_idx), AudioServer.get_bus_send(music_idx)])
+	print("   📊 Player playing: %s, stream: %s" % [menu_music_player.playing, menu_music_player.stream != null])
 
 ## Stop menu music with fade-out (called when entering game world)
 func stop_menu_music(fade_duration: float = 0.8) -> void:
@@ -2276,6 +2968,13 @@ func is_menu_music_playing() -> bool:
 
 ## Start playing Trading Hub music playlist
 func play_trading_hub_music(volume_db: float = -15.0) -> void:
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		_play_music_js("trading_hub_1.mp3", 0.4, true)
+		_playing_hub_music = true
+		print("🏠 Trading hub music started via web audio")
+		return
+
 	if trading_hub_tracks.is_empty():
 		push_warning("No trading hub music tracks loaded!")
 		return
@@ -2326,10 +3025,72 @@ func _on_trading_hub_track_finished() -> void:
 	_play_trading_hub_track()
 
 ## Set game music volume (for settings)
-func set_music_volume(volume_db: float) -> void:
+## volume_linear: 0.0 to 1.0 (percentage / 100)
+func set_music_volume(volume_linear: float) -> void:
+	# Clamp to valid range
+	volume_linear = clampf(volume_linear, 0.0, 1.0)
+
+	# Convert to dB for Godot audio
+	var volume_db = linear_to_db(volume_linear) if volume_linear > 0.0 else -80.0
 	music_volume_db = volume_db
 	if music_player:
 		music_player.volume_db = volume_db
+
+	# On web, also update JavaScript bridge
+	if OS.has_feature("web"):
+		# JavaScript gain uses linear 0.0-1.0
+		JavaScriptBridge.eval("window._webAudioBridge && window._webAudioBridge.setMusicVolume(%f);" % volume_linear)
+
+## Set SFX volume (for settings)
+## volume_linear: 0.0 to 1.0 (percentage / 100)
+func set_sfx_volume(volume_linear: float) -> void:
+	# Clamp to valid range
+	volume_linear = clampf(volume_linear, 0.0, 1.0)
+
+	# On web, update JavaScript bridge
+	if OS.has_feature("web"):
+		# JavaScript gain uses linear 0.0-1.0
+		JavaScriptBridge.eval("window._webAudioBridge && window._webAudioBridge.setSfxVolume(%f);" % volume_linear)
+
+	# Also set the SFX audio bus for any Godot audio that might play
+	var sfx_bus = AudioServer.get_bus_index("SFX")
+	if sfx_bus >= 0:
+		var volume_db = linear_to_db(volume_linear) if volume_linear > 0.0 else -80.0
+		AudioServer.set_bus_volume_db(sfx_bus, volume_db)
+
+## Set master volume (for settings) - affects both music and SFX
+## volume_linear: 0.0 to 1.0 (percentage / 100)
+func set_master_volume(volume_linear: float) -> void:
+	# Clamp to valid range
+	volume_linear = clampf(volume_linear, 0.0, 1.0)
+
+	# On web, update JavaScript bridge master gain
+	if OS.has_feature("web"):
+		# Set a master multiplier that affects both gains
+		JavaScriptBridge.eval("""
+			(function() {
+				if (!window._webAudioBridge) return;
+				window._webAudioBridge.masterVolume = %f;
+				// Apply master to destination - use a master gain node if not exists
+				if (!window._webAudioBridge.masterGain) {
+					var bridge = window._webAudioBridge;
+					bridge.masterGain = bridge.ctx.createGain();
+					// Reconnect music and sfx gains through master
+					bridge.musicGain.disconnect();
+					bridge.sfxGain.disconnect();
+					bridge.musicGain.connect(bridge.masterGain);
+					bridge.sfxGain.connect(bridge.masterGain);
+					bridge.masterGain.connect(bridge.ctx.destination);
+				}
+				window._webAudioBridge.masterGain.gain.value = %f;
+			})();
+		""" % [volume_linear, volume_linear])
+
+	# Also set the Master audio bus for Godot
+	var master_bus = AudioServer.get_bus_index("Master")
+	if master_bus >= 0:
+		var volume_db = linear_to_db(volume_linear) if volume_linear > 0.0 else -80.0
+		AudioServer.set_bus_volume_db(master_bus, volume_db)
 
 ## Get current music volume (for other music players to sync)
 func get_music_volume_db() -> float:
@@ -2375,6 +3136,12 @@ func _ensure_special_music_player() -> void:
 ## Play transition music (for scene changes)
 ## Optionally fades out current game music first
 func play_transition_music(volume_db: float = -10.0, fade_out_game_music: bool = true) -> void:
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		_play_music_js("transition.ogg", 0.5, false)
+		print("🎬 Playing transition music via web audio")
+		return
+
 	if not transition_music:
 		push_warning("Transition music not loaded")
 		return
@@ -2395,6 +3162,12 @@ func play_transition_music(volume_db: float = -10.0, fade_out_game_music: bool =
 
 ## Play claim sequence music (for rewards, unlocks)
 func play_claimsequence_music(volume_db: float = -10.0, fade_out_game_music: bool = true) -> void:
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		_play_music_js("claimsequence.ogg", 0.5, false)
+		print("🎁 Playing claim sequence music via web audio")
+		return
+
 	if not claimsequence_music:
 		push_warning("Claim sequence music not loaded")
 		return
@@ -2449,6 +3222,11 @@ func get_random_fall_sound() -> AudioStream:
 func play_tree_chop_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -8.0) -> void:
 	if sfx_muted:
 		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var chop_num = (randi() % 3) + 1  # Random between 1 and 3
+		_play_web_audio("res://assets/audio/sfx/tree/chop_%d.wav" % chop_num, 0.5)
+		return
 	var sound = get_random_chop_sound()
 	if not sound:
 		return
@@ -2468,6 +3246,11 @@ func play_tree_chop_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 ## Play tree fall sound at position (uses pooled audio - no per-tree AudioStreamPlayers needed)
 func play_tree_fall_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -8.0) -> void:
 	if sfx_muted:
+		return
+	# On web, use JavaScript bridge
+	if OS.has_feature("web"):
+		var fall_num = (randi() % 3) + 1  # Random between 1 and 3
+		_play_web_audio("res://assets/audio/sfx/tree/tree_fall_%d.wav" % fall_num, 0.6)
 		return
 	var sound = get_random_fall_sound()
 	if not sound:

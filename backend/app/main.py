@@ -96,9 +96,14 @@ CORS_ORIGINS.extend([
 # Filter empty strings
 CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS if origin.strip()]
 
+# Regex pattern to allow LAN origins (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+# This is safe because these are private network ranges, only accessible from local network
+LAN_ORIGIN_REGEX = r"^https?://(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?$"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
+    allow_origin_regex=LAN_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],

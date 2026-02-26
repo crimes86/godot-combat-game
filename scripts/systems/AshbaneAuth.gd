@@ -289,10 +289,15 @@ func _on_device_code_response(result: int, response_code: int, headers: PackedSt
 
 	LogManager.info("Device code received, opening browser", "ashbane")
 
-	# Open browser for user to authenticate
-	OS.shell_open(auth_url)
+	# On web, we can't auto-open popups (blocked by browser security).
+	# The UI will show a clickable button instead.
+	if OS.has_feature("web"):
+		LogManager.info("Web detected - UI will show manual open button", "ashbane")
+	else:
+		# Desktop: open browser automatically
+		OS.shell_open(auth_url)
 
-	# Emit signal so UI can show "waiting for browser auth"
+	# Emit signal so UI can show "waiting for browser auth" (or manual open button on web)
 	auth_started.emit(auth_url)
 
 	# Start polling for completion

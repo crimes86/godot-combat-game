@@ -295,6 +295,15 @@ func close_connection():
 			# If we're a client, sync our state to server one last time before disconnecting
 			if not is_host:
 				client_sync_state()
+				# Also sync directly to backend (bypasses rate limit for final save)
+				# This ensures the backend has the correct experience value
+				# even if the game server's camp timer sends a stale value later
+				if CharacterStats:
+					print("[NetworkManager] Final backend sync: level=%d, xp=%d/%d" % [
+						CharacterStats.level, CharacterStats.experience,
+						CharacterStats.experience_to_next_level])
+					CharacterStats._last_backend_sync_time = 0  # Reset rate limit for final save
+					CharacterStats.sync_to_backend()
 			# stop_auto_save() does final save internally
 			DatabaseManager.stop_auto_save()
 			DatabaseManager.logout_player(username)
@@ -1031,8 +1040,8 @@ func _on_backend_fetch_completed(result: int, code: int, _headers: PackedStringA
 		var backend_data = JSON.parse_string(body_text)
 
 		if backend_data and backend_data.get("success", false):
-			print("[Server] Backend fetch SUCCESS for %s: level=%d, gold=%d" % [
-				storage_key, backend_data.get("level", 1), backend_data.get("gold", 0)
+			print("[Server] Backend fetch SUCCESS for %s: level=%d, xp=%d, gold=%d" % [
+				storage_key, backend_data.get("level", 1), backend_data.get("experience", 0), backend_data.get("gold", 0)
 			])
 			_complete_ashbane_auth_with_backend_data(peer_id, backend_data)
 			return
@@ -1103,7 +1112,7 @@ func _complete_ashbane_auth_with_local_data(peer_id: int) -> void:
 		if not existing.is_empty():
 			player_data = existing
 			player_data["character_name"] = player_name
-			print("[Server] Loaded from LOCAL storage: %s, level=%d" % [storage_key, player_data.get("level", 1)])
+			print("[Server] Loaded from LOCAL storage: %s, level=%d, xp=%d" % [storage_key, player_data.get("level", 1), player_data.get("xp", 0)])
 		else:
 			# New user - create with defaults
 			var create_result = DatabaseManager.create_account(storage_key, "ashbane_auth_%d" % user_id)
@@ -1569,8 +1578,8 @@ func _sync_player_to_backend(user_id: int, username: String, state: Dictionary, 
 		http.queue_free()
 		return
 
-	print("[Server] Syncing %s (user_id=%d) to backend: level=%d, gold=%d" % [
-		username, user_id, state.get("level", 1), state.get("gold", 0)
+	print("[Server] Syncing %s (user_id=%d) to backend: level=%d, xp=%d, gold=%d" % [
+		username, user_id, state.get("level", 1), state.get("xp", 0), state.get("gold", 0)
 	])
 
 

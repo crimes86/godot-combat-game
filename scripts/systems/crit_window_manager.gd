@@ -387,9 +387,14 @@ func _request_window_validation(target: Node, window_data: WindowData) -> void:
 		# Client - request validation from server
 		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
 		if network_enemy_mgr and enemy_net_id >= 0:
+			print("[CritWindow] Client requesting weakpoint validation for enemy %d" % enemy_net_id)
 			network_enemy_mgr.request_weakpoint_window_validation.rpc_id(1, enemy_net_id)
+			# FAILSAFE: If server doesn't respond within 500ms, activate anyway
+			# This prevents weakpoints from being stuck in charging state on web/high latency
+			get_tree().create_timer(0.5).timeout.connect(_activate_weakpoints_if_still_charging.bind(target))
 		else:
 			# Fallback: activate after timeout if no network manager
+			print("[CritWindow] No network manager or invalid enemy_net_id (%d), using fallback" % enemy_net_id)
 			get_tree().create_timer(0.25).timeout.connect(_activate_weakpoints.bind(target))
 
 func _activate_weakpoints(target: Node) -> void:
@@ -402,6 +407,24 @@ func _activate_weakpoints(target: Node) -> void:
 	for weakpoint in window_data.weakpoint_refs:
 		if is_instance_valid(weakpoint) and weakpoint.has_method("activate"):
 			weakpoint.activate()
+
+func _activate_weakpoints_if_still_charging(target: Node) -> void:
+	"""Failsafe: Activate weakpoints only if they're still in charging state.
+	Called after timeout in case server confirmation never arrived."""
+	if not active_windows.has(target):
+		return
+
+	var window_data = active_windows[target]
+	var any_still_charging = false
+
+	for weakpoint in window_data.weakpoint_refs:
+		if is_instance_valid(weakpoint) and weakpoint.get("is_charging") == true:
+			any_still_charging = true
+			break
+
+	if any_still_charging:
+		print("[CritWindow] FAILSAFE: Server confirmation timeout, activating weakpoints anyway")
+		_activate_weakpoints(target)
 
 func on_server_confirm_window(enemy_network_id: int) -> void:
 	"""Called when server confirms our weakpoint window is valid.

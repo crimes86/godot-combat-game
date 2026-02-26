@@ -665,6 +665,7 @@ async def logout_sync(
 
     logger.info(
         f"[LOGOUT_SYNC] User {user.id}: gold={character.gold}, level={character.level}, "
+        f"xp={payload.experience}, "
         f"inventory={len(final_inventory)} items (was {len(server_inventory)}, preserved {len(server_metadata)} purchase timestamps)"
     )
 

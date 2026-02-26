@@ -1007,6 +1007,10 @@ func load_save_data(data: Dictionary) -> void:
 	var level_exponent = min(level - 1, 50)
 	experience_to_next_level = int(Constants.BASE_XP_REQUIREMENT * pow(Constants.XP_SCALING_EXPONENT, level_exponent))
 
+	# Clamp experience to current level range (fixes bloated values from old bug)
+	if experience >= experience_to_next_level:
+		experience = experience_to_next_level - 1
+
 	# 6-Stat System
 	strength = data.get("strength", STARTING_STRENGTH)
 	agility = data.get("agility", STARTING_AGILITY)
@@ -1223,7 +1227,7 @@ func sync_to_backend() -> void:
 
 func _initial_server_sync() -> void:
 	"""Called shortly after session start to sync initial state to server"""
-	print("[CharacterStats] Initial server sync: level=%d, xp=%d" % [level, experience])
+	print("[CharacterStats] Initial server sync: level=%d, xp=%d/%d (%.1f%%)" % [level, experience, experience_to_next_level, get_experience_progress() * 100])
 	_sync_to_server()
 
 # ============================================

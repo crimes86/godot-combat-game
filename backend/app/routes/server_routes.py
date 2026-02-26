@@ -175,6 +175,7 @@ async def server_character_sync(
     logger.info(
         f"[SERVER_SYNC] user={user.id} ({user.username}) "
         f"gold={prev_gold}->{character.gold} level={prev_level}->{character.level} "
+        f"xp={payload.experience} "
         f"inventory={len(payload.inventory)} reason={payload.disconnect_reason}"
     )
 
@@ -223,7 +224,7 @@ async def server_fetch_character(
 
     logger.info(
         f"[SERVER_FETCH] user={user.id} ({user.username}) "
-        f"level={character.level} gold={character.gold}"
+        f"level={character.level} gold={character.gold} xp={data.get('experience', 0)}"
     )
 
     return ServerCharacterFetchResponse(

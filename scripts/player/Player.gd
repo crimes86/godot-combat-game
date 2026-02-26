@@ -2767,9 +2767,16 @@ func _spawn_single_pvp_weakpoint(local_pos: Vector2) -> Node:
 
 	add_child(wp)
 
+	# PvP weakpoints don't need server validation (RPC broadcast already happened),
+	# so activate immediately after a brief delay for the spawn animation
+	get_tree().create_timer(0.15).timeout.connect(func():
+		if is_instance_valid(wp) and wp.has_method("activate"):
+			wp.activate()
+	)
+
 	# Debug: verify weakpoint is configured for input
-	print("[PvP] Spawned weakpoint at %s, input_pickable=%s, z_index=%d, scale=%s" % [
-		local_pos, wp.input_pickable, wp.z_index, wp.scale
+	print("[PvP] Spawned weakpoint at %s, is_charging=%s, z_index=%d, scale=%s" % [
+		local_pos, wp.is_charging, wp.z_index, wp.scale
 	])
 
 	return wp
@@ -5767,9 +5774,15 @@ func _on_master_volume_changed(value: float) -> void:
 		if label:
 			label.text = "%d%%" % int(value)
 
-	# Apply volume
-	var db = lerp(-40.0, 0.0, value / 100.0)
-	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), db)
+	# Apply volume via SoundManager (handles both Godot audio and web JavaScript bridge)
+	var volume_linear = value / 100.0
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("set_master_volume"):
+		sound_manager.set_master_volume(volume_linear)
+	else:
+		# Fallback: set Godot audio bus directly
+		var db = lerp(-40.0, 0.0, volume_linear)
+		AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), db)
 	_save_sound_settings()
 
 func _on_music_volume_changed(value: float) -> void:
@@ -5780,11 +5793,17 @@ func _on_music_volume_changed(value: float) -> void:
 		if label:
 			label.text = "%d%%" % int(value)
 
-	# Apply volume
-	var db = lerp(-40.0, 0.0, value / 100.0)
-	var music_bus = AudioServer.get_bus_index("Music")
-	if music_bus >= 0:
-		AudioServer.set_bus_volume_db(music_bus, db)
+	# Apply volume via SoundManager (handles both Godot audio and web JavaScript bridge)
+	var volume_linear = value / 100.0
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("set_music_volume"):
+		sound_manager.set_music_volume(volume_linear)
+	else:
+		# Fallback: set Godot audio bus directly
+		var db = lerp(-40.0, 0.0, volume_linear)
+		var music_bus = AudioServer.get_bus_index("Music")
+		if music_bus >= 0:
+			AudioServer.set_bus_volume_db(music_bus, db)
 	_save_sound_settings()
 
 func _on_sfx_volume_changed(value: float) -> void:
@@ -5795,14 +5814,11 @@ func _on_sfx_volume_changed(value: float) -> void:
 		if label:
 			label.text = "%d%%" % int(value)
 
-	# Apply volume
-	var db = lerp(-40.0, 0.0, value / 100.0)
-	var sfx_bus = AudioServer.get_bus_index("SFX")
-	if sfx_bus >= 0:
-		AudioServer.set_bus_volume_db(sfx_bus, db)
+	# Apply volume via SoundManager (handles both Godot audio and web JavaScript bridge)
+	var volume_linear = value / 100.0
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager and sound_manager.has_method("set_sfx_volume"):
-		sound_manager.set_sfx_volume(value / 100.0)
+		sound_manager.set_sfx_volume(volume_linear)
 	_save_sound_settings()
 
 func _save_sound_settings() -> void:

@@ -11156,7 +11156,19 @@ func _load_character_from_backend() -> void:
 		var level_exponent = min(CharacterStats.level - 1, 50)
 		CharacterStats.experience_to_next_level = int(Constants.BASE_XP_REQUIREMENT * pow(Constants.XP_SCALING_EXPONENT, level_exponent))
 	if character.has("experience"):
-		CharacterStats.experience = character.experience
+		var raw_xp = character.experience
+		CharacterStats.experience = raw_xp
+		# Clamp experience to current level range (fixes bloated values from old bug
+		# where experience_to_next_level defaulted to 200 every session)
+		if CharacterStats.experience >= CharacterStats.experience_to_next_level:
+			print("[Armory] ⚠️ XP CLAMPED: backend had %d, clamping to %d (xp_to_next=%d, level=%d)" % [
+				raw_xp, CharacterStats.experience_to_next_level - 1,
+				CharacterStats.experience_to_next_level, CharacterStats.level])
+			CharacterStats.experience = CharacterStats.experience_to_next_level - 1
+		print("[Armory] Loaded from backend: level=%d, xp=%d/%d (%.1f%%)" % [
+			CharacterStats.level, CharacterStats.experience,
+			CharacterStats.experience_to_next_level,
+			CharacterStats.get_experience_progress() * 100])
 
 	# Load inventory
 	if character.has("inventory") and character.inventory is Array:
