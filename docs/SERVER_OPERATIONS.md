@@ -98,6 +98,11 @@ RestartSec=10
 StandardOutput=append:/opt/ashbane-game/logs/game.log
 StandardError=append:/opt/ashbane-game/logs/game.log
 
+# Graceful shutdown: SIGTERM triggers save_all_players + backend sync
+# Server waits 3s for HTTP syncs, then exits. Give it 15s total before SIGKILL.
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
 # Resource limits
 LimitNOFILE=65536
 MemoryMax=1500M

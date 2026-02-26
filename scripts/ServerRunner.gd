@@ -397,8 +397,14 @@ func _notification(what: int) -> void:
 		if is_dedicated_server:
 			_graceful_shutdown()
 
+var _shutdown_in_progress: bool = false
+
 func _graceful_shutdown() -> void:
-	"""Save all players and shut down gracefully."""
+	"""Save all players to local DB + backend, wait for HTTP syncs, then exit."""
+	if _shutdown_in_progress:
+		return
+	_shutdown_in_progress = true
+
 	print("")
 	print("═══════════════════════════════════════════════════════")
 	print("   SERVER SHUTTING DOWN [Shard: %s]" % current_shard_id)
@@ -415,10 +421,21 @@ func _graceful_shutdown() -> void:
 	var player_count = NetworkManager.authenticated_players.size()
 	print("💾 Saving %d player(s)..." % player_count)
 
-	# Save all connected players
+	# Save all connected players (local DB + backend HTTP requests)
 	if NetworkManager.is_server():
 		NetworkManager.save_all_players()
 
+	# Wait for backend HTTP syncs to complete (up to 8 seconds)
+	# save_all_players fires async HTTPRequests — we need to let them finish
+	print("⏳ Waiting for backend sync to complete...")
+	var wait_timer = Timer.new()
+	wait_timer.one_shot = true
+	wait_timer.timeout.connect(_finish_shutdown)
+	add_child(wait_timer)
+	wait_timer.start(3.0)  # 3 seconds for HTTP requests to complete
+
+func _finish_shutdown() -> void:
+	"""Final shutdown after waiting for backend syncs."""
 	# Calculate uptime
 	var uptime = Time.get_unix_time_from_system() - server_start_time
 	var hours = int(uptime) / 3600

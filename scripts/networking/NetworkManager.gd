@@ -96,6 +96,7 @@ const CHAT_RATE_LIMIT_MS: int = 500  # Minimum 500ms between messages
 var _client_player_states: Dictionary = {}  # peer_id -> {position, inventory, stats, etc.}
 var _server_save_timer: Timer = null
 const SERVER_SAVE_INTERVAL: float = 120.0  # Save all connected players every 2 minutes
+var _server_save_count: int = 0  # Tracks save cycles for periodic backend sync
 
 # EQ-style camp/logout system - character stays in world after disconnect
 var _pending_logouts: Dictionary = {}  # peer_id -> {timer: Timer, username: String, player_node: Node}
@@ -1332,11 +1333,41 @@ func _on_server_save_timer() -> void:
 	if saved_count > 0:
 		LogManager.info("Server auto-saved %d player(s)" % saved_count, "database")
 
+	# Every other auto-save cycle (~4 min), also sync to backend
+	_server_save_count += 1
+	if _server_save_count % 2 == 0:
+		var backend_count = 0
+		for peer_id in authenticated_players:
+			var auth_info = authenticated_players[peer_id]
+			if auth_info.is_guest:
+				continue
+			var user_id = auth_info.get("user_id", 0)
+			if user_id <= 0 or not _client_player_states.has(peer_id):
+				continue
+			_sync_player_to_backend(user_id, auth_info.username, _client_player_states[peer_id], "auto_save")
+			backend_count += 1
+		if backend_count > 0:
+			print("[Server] Backend sync: %d player(s) synced to API" % backend_count)
+
 func save_all_players() -> void:
-	"""Force save all connected authenticated players (server-only)"""
+	"""Force save all connected authenticated players to local DB + backend (server-only)"""
 	if not is_host:
 		return
 	_on_server_save_timer()
+
+	# Also sync each Ashbane-authenticated player to the backend
+	# so inventory/state survives server restarts
+	for peer_id in authenticated_players:
+		var auth_info = authenticated_players[peer_id]
+		if auth_info.is_guest:
+			continue
+		var user_id = auth_info.get("user_id", 0)
+		if user_id <= 0:
+			continue
+		if _client_player_states.has(peer_id):
+			var state = _client_player_states[peer_id]
+			print("[Server] Backend sync for %s (user_id: %d) on save_all" % [auth_info.username, user_id])
+			_sync_player_to_backend(user_id, auth_info.username, state, "server_save")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # EQ-STYLE CAMP/LOGOUT SYSTEM
