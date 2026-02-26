@@ -213,6 +213,14 @@ const MEDIUM_ROCK_COUNT: int = 50  # Medium rocks
 const SMALL_ROCK_COUNT: int = 1200  # Small detail rocks to fill bare spots
 
 # ============================================
+# OSSUARY INFLUENCE SYSTEM
+# ============================================
+const OSSUARY_TIER_QUIET: int = 0      # 0-25% — minimal skeleton presence
+const OSSUARY_TIER_STIRRING: int = 1   # 25-50% — skeletons growing bolder
+const OSSUARY_TIER_RISING: int = 2     # 50-75% — significant skeleton threat
+const OSSUARY_TIER_SURGING: int = 3    # 75-100% — overwhelming skeleton presence
+
+# ============================================
 # GROUPS (for get_tree().get_nodes_in_group)
 # ============================================
 

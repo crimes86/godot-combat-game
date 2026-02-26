@@ -35,10 +35,26 @@ Get-ChildItem -Path . -Filter *.png -Recurse
 ```
 
 ### Code Conventions
-- Don't commit until user has tested changes in Godot
 - Equipment loading: `assets/equipment/` paths
 - Enemy loading: `assets/characters/enemies/` paths
 - Audio loading: `assets/audio/` paths (sfx/ or music/)
+
+---
+
+## Commit & Deployment Workflow
+
+This is the **local dev machine** (Windows). Commit and push when asked.
+After pushing, always tell the user which servers need syncing:
+
+| Change touches... | Game Server needs pull? | Backend needs pull? |
+|-------------------|------------------------|---------------------|
+| GDScript only (client-only UI, HUD) | No | No |
+| GDScript shared (Enemy.gd, game_world.gd, autoloads) | **Yes** — rebuild + restart `ashbane-game` | No |
+| `project.server.godot` or server stubs | **Yes** — rebuild + restart `ashbane-game` | No |
+| `backend/` Python code | No | **Yes** — restart backend service |
+| Both GDScript shared + backend | **Yes** | **Yes** |
+
+After push, remind user: "Game server needs pull + rebuild" or "Backend needs restart" or "Client-only, no server changes needed."
 
 ---
 

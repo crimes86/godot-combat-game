@@ -72,6 +72,7 @@ PlayerInteractionMenu="*res://scripts/stubs/PlayerInteractionMenuStub.gd"
 PlayerInspectUI="*res://scripts/stubs/PlayerInspectUIStub.gd"
 Minimap="*res://scripts/stubs/MinimapStub.gd"
 CombatJuice="*res://scripts/stubs/CombatJuiceStub.gd"
+OssuaryManager="*res://scripts/systems/OssuaryManager.gd"
 
 [display]
 

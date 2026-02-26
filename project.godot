@@ -72,6 +72,7 @@ Minimap="*res://scripts/ui/Minimap.gd"
 CombatJuice="*res://scripts/systems/CombatJuice.gd"
 MCPBridge="*res://scripts/debug/MCPBridge.gd"
 AuthOverlay="*res://scenes/ui/auth_overlay.tscn"
+OssuaryManager="*res://scripts/systems/OssuaryManager.gd"
 
 [display]
 

@@ -209,7 +209,16 @@ func _ready():
 	await get_tree().process_frame
 	update_terrain_visibility()
 
+	# Activate Ossuary influence system
+	if OssuaryManager:
+		OssuaryManager.activate()
+
 	Constants.log_spawning("✅ GameWorld ready!")
+
+func _exit_tree() -> void:
+	# Deactivate Ossuary influence when leaving game world
+	if OssuaryManager:
+		OssuaryManager.deactivate()
 
 func _process(delta):
 	"""Handle viewport culling for terrain and player sync"""
