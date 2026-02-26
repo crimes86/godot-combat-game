@@ -203,13 +203,14 @@ func _create_hud() -> void:
 	add_child(_hud_layer)
 
 	# Position below minimap (minimap: 220px diameter + 15px margin = bottom at 235px)
+	# Quest tracker starts at 280, this sits in the gap between
 	_hud_container = MarginContainer.new()
 	_hud_container.name = "OssuaryContainer"
 	_hud_container.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_hud_container.offset_left = -200
 	_hud_container.offset_right = -15
-	_hud_container.offset_top = 242
-	_hud_container.offset_bottom = 274
+	_hud_container.offset_top = 240
+	_hud_container.offset_bottom = 270
 	_hud_layer.add_child(_hud_container)
 
 	# Background panel for readability

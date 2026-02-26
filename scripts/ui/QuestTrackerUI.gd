@@ -120,7 +120,7 @@ func _create_ui() -> void:
 	control.anchor_bottom = 1.0  # Extend to bottom of screen
 	control.offset_left = -TRACKER_WIDTH - 10
 	control.offset_right = -10
-	control.offset_top = 250  # Below minimap (220px + 15px margin + 15px gap)
+	control.offset_top = 280  # Below minimap + Ossuary influence bar
 	control.offset_bottom = -10  # Small margin from bottom
 	add_child(control)
 
