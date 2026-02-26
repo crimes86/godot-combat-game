@@ -1672,7 +1672,7 @@ func die() -> void:
 	# Notify Ossuary influence system of skeleton kills
 	# Enemy.gd is only used by skeleton-type enemies (wolves/spiders have their own scripts)
 	if OssuaryManager:
-		OssuaryManager.on_skeleton_killed(enemy_level, get_meta("is_guardian", false), global_position)
+		OssuaryManager.on_skeleton_killed(get_meta("kill_credit_id", 1), enemy_level, get_meta("is_guardian", false), global_position)
 
 	# DEDICATED SERVER: Skip sound and animation - only update game state
 	var is_dedicated_server = "--server" in OS.get_cmdline_user_args()

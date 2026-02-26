@@ -2,10 +2,12 @@ extends Node
 
 ## Ossuary Influence & Corruption System
 ## Two meters that track the skeleton faction's grip on the world:
-##   - Influence (0-100): Rises when players kill skeletons, decays after idle.
-##   - Corruption (0-100): Grows passively over time, decays when skeletons die.
+##   - Influence (0-100): Per-player, rises when that player kills skeletons, decays after idle.
+##   - Corruption (0-100): Community-shared, grows passively, decays when any player kills skeletons.
 ##
-## Server-authoritative: the host runs the simulation, clients receive updates via RPC.
+## Server-authoritative: the host runs the simulation.
+##   - Corruption is broadcast to all clients.
+##   - Influence is sent per-player via targeted RPC.
 ## In single-player, runs locally.
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -52,11 +54,19 @@ const CORRUPTION_TIER_NAMES: Array[String] = ["Clean", "Tainted", "Blighted", "C
 # STATE
 # ═══════════════════════════════════════════════════════════════════════════
 
-var influence: float = 0.0
+## Per-player influence (server-side): peer_id → float
+var _player_influence: Dictionary = {}
+## Per-player idle timer (server-side): peer_id → seconds since last kill
+var _player_last_kill: Dictionary = {}
+
+## Local player's influence (set by targeted RPC or directly in single-player)
+var _local_influence: float = 0.0
+
+## Shared corruption (community-wide)
 var corruption: float = MAX_CORRUPTION  # Start fully corrupted — players must clear it
+
 var _tick_timer: float = 0.0
 var _sync_timer: float = 0.0
-var _time_since_last_kill: float = 0.0
 var _is_authority: bool = false  # True if we run the simulation (host or single-player)
 var _previous_influence_tier: int = -1
 var _previous_corruption_tier: int = -1
@@ -72,6 +82,10 @@ var _tier_label: Label = null
 var _corruption_bar: ProgressBar = null
 var _corruption_label: Label = null
 
+# Flash tweens
+var _flash_tween_influence: Tween = null
+var _flash_tween_corruption: Tween = null
+
 # ═══════════════════════════════════════════════════════════════════════════
 # LIFECYCLE
 # ═══════════════════════════════════════════════════════════════════════════
@@ -80,7 +94,9 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_create_hud()
 	_set_hud_visible(false)
-	LogManager.info("OssuaryManager initialized (influence: %.1f, corruption: %.1f)" % [influence, corruption], "ossuary")
+	# Clean up per-player data on disconnect
+	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+	LogManager.info("OssuaryManager initialized (corruption: %.1f)" % [corruption], "ossuary")
 
 func _process(delta: float) -> void:
 	if not _active:
@@ -89,29 +105,35 @@ func _process(delta: float) -> void:
 	if not _is_authority:
 		return
 
-	_time_since_last_kill += delta
-
-	# Tick-based updates
+	# Tick-based updates (corruption growth)
 	_tick_timer += delta
 	if _tick_timer >= TICK_INTERVAL:
 		_tick_timer -= TICK_INTERVAL
 		_apply_corruption_growth()
 
-	# Influence decay after idle delay (continuous, not tick-based)
-	if _time_since_last_kill >= INFLUENCE_DECAY_DELAY and influence > 0.0:
-		var old_influence = influence
-		influence = clampf(influence - INFLUENCE_DECAY_RATE * delta, MIN_INFLUENCE, MAX_INFLUENCE)
-		if influence != old_influence:
-			influence_changed.emit(influence)
-			_check_influence_threshold()
-			_update_hud()
+	# Per-player influence decay after idle delay
+	for peer_id in _player_influence.keys():
+		_player_last_kill[peer_id] = _player_last_kill.get(peer_id, 0.0) + delta
+		if _player_last_kill[peer_id] >= INFLUENCE_DECAY_DELAY and _player_influence[peer_id] > 0.0:
+			var old_val = _player_influence[peer_id]
+			_player_influence[peer_id] = clampf(old_val - INFLUENCE_DECAY_RATE * delta, MIN_INFLUENCE, MAX_INFLUENCE)
+			# Update local display if this is our own influence (single-player / host)
+			if _is_local_peer(peer_id):
+				_local_influence = _player_influence[peer_id]
+				if _local_influence != old_val:
+					influence_changed.emit(_local_influence)
+					_check_influence_threshold()
+					_update_hud()
 
 	# Sync to clients (multiplayer only)
 	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
 		_sync_timer += delta
 		if _sync_timer >= SYNC_INTERVAL:
 			_sync_timer -= SYNC_INTERVAL
-			_broadcast_state.rpc(influence, corruption)
+			_broadcast_corruption.rpc(corruption)
+			# Send each player their own influence value
+			for peer_id in _player_influence:
+				_send_player_influence.rpc_id(peer_id, _player_influence[peer_id])
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PUBLIC API
@@ -125,7 +147,7 @@ func activate() -> void:
 	_previous_corruption_tier = get_corruption_tier()
 	_set_hud_visible(true)
 	_update_hud()
-	LogManager.info("Ossuary system activated (authority: %s, influence: %.1f, corruption: %.1f)" % [_is_authority, influence, corruption], "ossuary")
+	LogManager.info("Ossuary system activated (authority: %s, influence: %.1f, corruption: %.1f)" % [_is_authority, _local_influence, corruption], "ossuary")
 
 func deactivate() -> void:
 	"""Call when leaving gameplay (returning to menu, armory, etc.)."""
@@ -134,30 +156,31 @@ func deactivate() -> void:
 
 func reset() -> void:
 	"""Reset both meters (new game/session)."""
-	influence = 0.0
+	_player_influence.clear()
+	_player_last_kill.clear()
+	_local_influence = 0.0
 	corruption = MAX_CORRUPTION  # Start fully corrupted
 	_previous_influence_tier = get_influence_tier()
 	_previous_corruption_tier = get_corruption_tier()
 	_tick_timer = 0.0
 	_sync_timer = 0.0
-	_time_since_last_kill = 0.0
-	influence_changed.emit(influence)
+	influence_changed.emit(_local_influence)
 	corruption_changed.emit(corruption)
 	_update_hud()
 
 func get_influence() -> float:
-	return influence
+	return _local_influence
 
 func get_corruption() -> float:
 	return corruption
 
 func get_influence_tier() -> int:
 	"""Returns 0-3 tier based on current influence."""
-	if influence >= 75.0:
+	if _local_influence >= 75.0:
 		return Constants.OSSUARY_TIER_SURGING
-	elif influence >= 50.0:
+	elif _local_influence >= 50.0:
 		return Constants.OSSUARY_TIER_RISING
-	elif influence >= 25.0:
+	elif _local_influence >= 25.0:
 		return Constants.OSSUARY_TIER_STIRRING
 	else:
 		return Constants.OSSUARY_TIER_QUIET
@@ -189,27 +212,26 @@ func get_corruption_tier_name() -> String:
 func get_tier_name() -> String:
 	return get_influence_tier_name()
 
-func on_skeleton_killed(enemy_level: int, is_guardian: bool, _position: Vector2) -> void:
-	"""Called when a skeleton-type enemy dies. Increases influence, decreases corruption."""
+func on_skeleton_killed(killer_peer_id: int, enemy_level: int, is_guardian: bool, _position: Vector2) -> void:
+	"""Called when a skeleton-type enemy dies. Increases killer's influence, decreases shared corruption."""
 	if not _is_authority:
 		return
 
-	_time_since_last_kill = 0.0
+	# --- Per-player influence gain ---
+	if not _player_influence.has(killer_peer_id):
+		_player_influence[killer_peer_id] = 0.0
+	_player_last_kill[killer_peer_id] = 0.0
 
-	# --- Influence gain ---
 	var gain = INFLUENCE_BASE_GAIN
 	if is_guardian:
 		gain += INFLUENCE_GUARDIAN_BONUS
 	gain += max(0, enemy_level - 1) * INFLUENCE_LEVEL_BONUS
 
-	var old_influence = influence
-	influence = clampf(influence + gain, MIN_INFLUENCE, MAX_INFLUENCE)
+	var old_influence = _player_influence[killer_peer_id]
+	_player_influence[killer_peer_id] = clampf(old_influence + gain, MIN_INFLUENCE, MAX_INFLUENCE)
+	var new_influence = _player_influence[killer_peer_id]
 
-	if influence != old_influence:
-		influence_changed.emit(influence)
-		_check_influence_threshold()
-
-	# --- Corruption decay ---
+	# --- Corruption decay (any kill counts for shared corruption) ---
 	var corruption_decay = CORRUPTION_KILL_DECAY
 	corruption_decay += max(0, enemy_level - 1) * CORRUPTION_LEVEL_BONUS
 
@@ -220,16 +242,51 @@ func on_skeleton_killed(enemy_level: int, is_guardian: bool, _position: Vector2)
 		corruption_changed.emit(corruption)
 		_check_corruption_threshold()
 
-	_update_hud()
+	# --- Distribute updates ---
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		# Targeted influence RPC to killer
+		_send_player_influence.rpc_id(killer_peer_id, new_influence)
+		# Broadcast corruption to all clients
+		_broadcast_corruption.rpc(corruption)
+		# Update local display if server is also the killer
+		if _is_local_peer(killer_peer_id):
+			_local_influence = new_influence
+			influence_changed.emit(_local_influence)
+			_check_influence_threshold()
+			_update_hud()
+			_flash_bar(_progress_bar)
+			_flash_bar(_corruption_bar)
+	else:
+		# Single-player: update directly
+		_local_influence = new_influence
+		influence_changed.emit(_local_influence)
+		_check_influence_threshold()
+		_update_hud()
+		_flash_bar(_progress_bar)
+		_flash_bar(_corruption_bar)
 
 	if is_guardian:
-		LogManager.debug("Guardian skeleton killed (L%d) — influence %.1f → %.1f (+%.1f), corruption %.1f → %.1f (-%.1f)" % [
-			enemy_level, old_influence, influence, gain, old_corruption, corruption, corruption_decay
+		LogManager.debug("Guardian skeleton killed by peer %d (L%d) — influence %.1f → %.1f (+%.1f), corruption %.1f → %.1f (-%.1f)" % [
+			killer_peer_id, enemy_level, old_influence, new_influence, gain, old_corruption, corruption, corruption_decay
 		], "ossuary")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # INTERNAL
 # ═══════════════════════════════════════════════════════════════════════════
+
+func _is_local_peer(peer_id: int) -> bool:
+	"""Check if a peer_id represents the local player."""
+	if not multiplayer.has_multiplayer_peer():
+		return true  # Single-player: peer 1 is always local
+	return peer_id == multiplayer.get_unique_id()
+
+func _on_peer_disconnected(peer_id: int) -> void:
+	"""Clean up per-player data when a player disconnects."""
+	if _player_influence.has(peer_id):
+		_player_influence.erase(peer_id)
+	if _player_last_kill.has(peer_id):
+		_player_last_kill.erase(peer_id)
+	LogManager.info("Ossuary: cleaned up data for disconnected peer %d" % peer_id, "ossuary")
 
 func _apply_corruption_growth() -> void:
 	"""Server-side: increase corruption passively each tick."""
@@ -267,16 +324,54 @@ func _check_corruption_threshold() -> void:
 		corruption_threshold_crossed.emit(current_tier, rising)
 		_previous_corruption_tier = current_tier
 
+func _flash_bar(bar: ProgressBar) -> void:
+	"""Quick white flash on a progress bar to highlight a change."""
+	if not bar:
+		return
+	# Kill any running flash on this bar
+	if bar == _progress_bar and _flash_tween_influence:
+		_flash_tween_influence.kill()
+	elif bar == _corruption_bar and _flash_tween_corruption:
+		_flash_tween_corruption.kill()
+
+	var tween = create_tween()
+	tween.tween_property(bar, "modulate", Color(2, 2, 2), 0.05)
+	tween.tween_property(bar, "modulate", Color(1, 1, 1), 0.25)
+
+	if bar == _progress_bar:
+		_flash_tween_influence = tween
+	elif bar == _corruption_bar:
+		_flash_tween_corruption = tween
+
+# ═══════════════════════════════════════════════════════════════════════════
+# NETWORKING
+# ═══════════════════════════════════════════════════════════════════════════
+
 @rpc("authority", "call_remote", "reliable")
-func _broadcast_state(inf_value: float, corr_value: float) -> void:
-	"""Client-side: receive authoritative values from server."""
-	influence = inf_value
+func _broadcast_corruption(corr_value: float) -> void:
+	"""Client-side: receive authoritative corruption value from server."""
+	var old_corruption = corruption
 	corruption = corr_value
-	influence_changed.emit(influence)
-	corruption_changed.emit(corruption)
-	_check_influence_threshold()
-	_check_corruption_threshold()
+	if corruption != old_corruption:
+		corruption_changed.emit(corruption)
+		_check_corruption_threshold()
 	_update_hud()
+	# Flash on kill-driven corruption decrease
+	if corruption < old_corruption:
+		_flash_bar(_corruption_bar)
+
+@rpc("authority", "call_remote", "reliable")
+func _send_player_influence(inf_value: float) -> void:
+	"""Client-side: receive your personal influence value from server."""
+	var old_influence = _local_influence
+	_local_influence = inf_value
+	if _local_influence != old_influence:
+		influence_changed.emit(_local_influence)
+		_check_influence_threshold()
+	_update_hud()
+	# Flash on influence increase (kill happened)
+	if _local_influence > old_influence:
+		_flash_bar(_progress_bar)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # HUD
@@ -338,7 +433,7 @@ func _create_hud() -> void:
 	skull_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	influence_row.add_child(skull_label)
 
-	_progress_bar = _create_bar(influence)
+	_progress_bar = _create_bar(_local_influence)
 	influence_row.add_child(_progress_bar)
 
 	_tier_label = Label.new()
@@ -408,19 +503,19 @@ func _update_hud() -> void:
 		return
 
 	# --- Influence bar ---
-	_progress_bar.value = influence
+	_progress_bar.value = _local_influence
 	_tier_label.text = get_influence_tier_name()
 
 	var inf_fill_color: Color
 	var inf_label_color: Color
 
-	if influence < 25.0:
+	if _local_influence < 25.0:
 		inf_fill_color = Color(0.3, 0.55, 0.35)
 		inf_label_color = Color(0.5, 0.6, 0.5)
-	elif influence < 50.0:
+	elif _local_influence < 50.0:
 		inf_fill_color = Color(0.55, 0.7, 0.3)
 		inf_label_color = Color(0.7, 0.75, 0.5)
-	elif influence < 75.0:
+	elif _local_influence < 75.0:
 		inf_fill_color = Color(0.8, 0.55, 0.2)
 		inf_label_color = Color(0.85, 0.65, 0.3)
 	else:
