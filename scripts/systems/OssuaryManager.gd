@@ -53,7 +53,7 @@ const CORRUPTION_TIER_NAMES: Array[String] = ["Clean", "Tainted", "Blighted", "C
 # ═══════════════════════════════════════════════════════════════════════════
 
 var influence: float = 0.0
-var corruption: float = 0.0
+var corruption: float = MAX_CORRUPTION  # Start fully corrupted — players must clear it
 var _tick_timer: float = 0.0
 var _sync_timer: float = 0.0
 var _time_since_last_kill: float = 0.0
@@ -135,7 +135,7 @@ func deactivate() -> void:
 func reset() -> void:
 	"""Reset both meters (new game/session)."""
 	influence = 0.0
-	corruption = 0.0
+	corruption = MAX_CORRUPTION  # Start fully corrupted
 	_previous_influence_tier = get_influence_tier()
 	_previous_corruption_tier = get_corruption_tier()
 	_tick_timer = 0.0
