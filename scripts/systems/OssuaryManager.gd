@@ -78,13 +78,9 @@ var _hud_container: MarginContainer = null
 # Influence row
 var _progress_bar: ProgressBar = null
 var _tier_label: Label = null
-# Corruption row
-var _corruption_bar: ProgressBar = null
-var _corruption_label: Label = null
 
 # Flash tweens
 var _flash_tween_influence: Tween = null
-var _flash_tween_corruption: Tween = null
 
 # ═══════════════════════════════════════════════════════════════════════════
 # LIFECYCLE
@@ -212,6 +208,31 @@ func get_corruption_tier_name() -> String:
 func get_tier_name() -> String:
 	return get_influence_tier_name()
 
+func get_corruption_display() -> Dictionary:
+	"""Returns corruption display data (value, tier, colors) for world-space UI."""
+	var tier = get_corruption_tier()
+	var fill_color: Color
+	var label_color: Color
+	if corruption < 25.0:
+		fill_color = Color(0.4, 0.45, 0.35)
+		label_color = Color(0.55, 0.6, 0.5)
+	elif corruption < 50.0:
+		fill_color = Color(0.5, 0.55, 0.25)
+		label_color = Color(0.6, 0.65, 0.35)
+	elif corruption < 75.0:
+		fill_color = Color(0.35, 0.6, 0.2)
+		label_color = Color(0.45, 0.7, 0.25)
+	else:
+		fill_color = Color(0.2, 0.7, 0.15)
+		label_color = Color(0.3, 0.8, 0.2)
+	return {
+		"value": corruption,
+		"tier": tier,
+		"tier_name": get_corruption_tier_name(),
+		"fill_color": fill_color,
+		"label_color": label_color
+	}
+
 func on_skeleton_killed(killer_peer_id: int, enemy_level: int, is_guardian: bool, _position: Vector2) -> void:
 	"""Called when a skeleton-type enemy dies. Increases killer's influence, decreases shared corruption."""
 	if not _is_authority:
@@ -255,7 +276,6 @@ func on_skeleton_killed(killer_peer_id: int, enemy_level: int, is_guardian: bool
 			_check_influence_threshold()
 			_update_hud()
 			_flash_bar(_progress_bar)
-			_flash_bar(_corruption_bar)
 	else:
 		# Single-player: update directly
 		_local_influence = new_influence
@@ -263,7 +283,6 @@ func on_skeleton_killed(killer_peer_id: int, enemy_level: int, is_guardian: bool
 		_check_influence_threshold()
 		_update_hud()
 		_flash_bar(_progress_bar)
-		_flash_bar(_corruption_bar)
 
 	if is_guardian:
 		LogManager.debug("Guardian skeleton killed by peer %d (L%d) — influence %.1f → %.1f (+%.1f), corruption %.1f → %.1f (-%.1f)" % [
@@ -328,20 +347,13 @@ func _flash_bar(bar: ProgressBar) -> void:
 	"""Quick white flash on a progress bar to highlight a change."""
 	if not bar:
 		return
-	# Kill any running flash on this bar
-	if bar == _progress_bar and _flash_tween_influence:
+	if _flash_tween_influence:
 		_flash_tween_influence.kill()
-	elif bar == _corruption_bar and _flash_tween_corruption:
-		_flash_tween_corruption.kill()
 
 	var tween = create_tween()
 	tween.tween_property(bar, "modulate", Color(2, 2, 2), 0.05)
 	tween.tween_property(bar, "modulate", Color(1, 1, 1), 0.25)
-
-	if bar == _progress_bar:
-		_flash_tween_influence = tween
-	elif bar == _corruption_bar:
-		_flash_tween_corruption = tween
+	_flash_tween_influence = tween
 
 # ═══════════════════════════════════════════════════════════════════════════
 # NETWORKING
@@ -356,9 +368,6 @@ func _broadcast_corruption(corr_value: float) -> void:
 		corruption_changed.emit(corruption)
 		_check_corruption_threshold()
 	_update_hud()
-	# Flash on kill-driven corruption decrease
-	if corruption < old_corruption:
-		_flash_bar(_corruption_bar)
 
 @rpc("authority", "call_remote", "reliable")
 func _send_player_influence(inf_value: float) -> void:
@@ -378,7 +387,7 @@ func _send_player_influence(inf_value: float) -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _create_hud() -> void:
-	"""Build a two-row influence + corruption indicator in the top-right corner."""
+	"""Build an influence indicator in the top-right corner."""
 	# Skip HUD on dedicated server
 	if "--server" in OS.get_cmdline_user_args():
 		return
@@ -389,14 +398,14 @@ func _create_hud() -> void:
 	_hud_layer.layer = 106
 	add_child(_hud_layer)
 
-	# Position below minimap — taller to fit two rows
+	# Position below minimap — single row for influence only
 	_hud_container = MarginContainer.new()
 	_hud_container.name = "OssuaryContainer"
 	_hud_container.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_hud_container.offset_left = -200
 	_hud_container.offset_right = -15
 	_hud_container.offset_top = 240
-	_hud_container.offset_bottom = 295  # Was 270 — expanded for two rows
+	_hud_container.offset_bottom = 270
 	_hud_layer.add_child(_hud_container)
 
 	# Background panel for readability
@@ -416,15 +425,10 @@ func _create_hud() -> void:
 	panel.add_theme_stylebox_override("panel", style)
 	_hud_container.add_child(panel)
 
-	# VBox to stack the two rows
-	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 3)
-	panel.add_child(vbox)
-
-	# --- Row 1: Influence (skull icon + bar + tier label) ---
+	# --- Influence row (skull icon + bar + tier label) ---
 	var influence_row = HBoxContainer.new()
 	influence_row.add_theme_constant_override("separation", 6)
-	vbox.add_child(influence_row)
+	panel.add_child(influence_row)
 
 	var skull_label = Label.new()
 	skull_label.text = "\u2620"  # Skull and crossbones
@@ -442,32 +446,6 @@ func _create_hud() -> void:
 	_tier_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.65))
 	_tier_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	influence_row.add_child(_tier_label)
-
-	# --- Row 2: Corruption (rot icon + bar + tier label) ---
-	var corruption_row = HBoxContainer.new()
-	corruption_row.add_theme_constant_override("separation", 6)
-	vbox.add_child(corruption_row)
-
-	var rot_label = Label.new()
-	rot_label.text = "\u2623"  # Biohazard — rot/corruption
-	rot_label.add_theme_font_size_override("font_size", 14)
-	rot_label.add_theme_color_override("font_color", Color(0.5, 0.6, 0.4))
-	rot_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	corruption_row.add_child(rot_label)
-
-	_corruption_bar = _create_bar(corruption)
-	# Override fill color to grey for corruption
-	var corr_fill = _corruption_bar.get_theme_stylebox("fill") as StyleBoxFlat
-	if corr_fill:
-		corr_fill.bg_color = Color(0.4, 0.45, 0.35)
-	corruption_row.add_child(_corruption_bar)
-
-	_corruption_label = Label.new()
-	_corruption_label.text = "Clean"
-	_corruption_label.add_theme_font_size_override("font_size", 11)
-	_corruption_label.add_theme_color_override("font_color", Color(0.55, 0.6, 0.5))
-	_corruption_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	corruption_row.add_child(_corruption_label)
 
 func _create_bar(initial_value: float) -> ProgressBar:
 	"""Create a styled progress bar for either meter."""
@@ -526,38 +504,6 @@ func _update_hud() -> void:
 	if inf_fill:
 		inf_fill.bg_color = inf_fill_color
 	_tier_label.add_theme_color_override("font_color", inf_label_color)
-
-	# --- Corruption bar ---
-	if not _corruption_bar or not _corruption_label:
-		return
-
-	_corruption_bar.value = corruption
-	_corruption_label.text = get_corruption_tier_name()
-
-	var corr_fill_color: Color
-	var corr_label_color: Color
-
-	if corruption < 25.0:
-		# Clean — muted grey
-		corr_fill_color = Color(0.4, 0.45, 0.35)
-		corr_label_color = Color(0.55, 0.6, 0.5)
-	elif corruption < 50.0:
-		# Tainted — pale sickly yellow-green
-		corr_fill_color = Color(0.5, 0.55, 0.25)
-		corr_label_color = Color(0.6, 0.65, 0.35)
-	elif corruption < 75.0:
-		# Blighted — sickly green
-		corr_fill_color = Color(0.35, 0.6, 0.2)
-		corr_label_color = Color(0.45, 0.7, 0.25)
-	else:
-		# Cursed — vivid toxic green
-		corr_fill_color = Color(0.2, 0.7, 0.15)
-		corr_label_color = Color(0.3, 0.8, 0.2)
-
-	var corr_fill = _corruption_bar.get_theme_stylebox("fill") as StyleBoxFlat
-	if corr_fill:
-		corr_fill.bg_color = corr_fill_color
-	_corruption_label.add_theme_color_override("font_color", corr_label_color)
 
 func _set_hud_visible(visible: bool) -> void:
 	"""Show/hide the HUD indicator."""

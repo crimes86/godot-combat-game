@@ -124,6 +124,13 @@ var players_in_warmth: Dictionary = {}
 # Visual elements
 var fire_sprite: Node2D = null
 
+# Corruption meter (world-space, community campfires only)
+var _corruption_container: Control = null
+var _corruption_bar: ProgressBar = null
+var _corruption_label: Label = null
+var _corruption_flash_tween: Tween = null
+const CORRUPTION_VISIBILITY_RANGE: float = 800.0
+
 var _is_server_mode: bool = false
 
 func _ready() -> void:
@@ -174,6 +181,10 @@ func _ready() -> void:
 	if not starts_unlit:
 		create_clearing_stumps()
 
+	# Create corruption meter above community campfires
+	if is_community_campfire:
+		create_corruption_meter()
+
 	# If unlit, hide fire visuals
 	if is_unlit:
 		set_unlit_visuals(true)
@@ -190,6 +201,7 @@ func _process(_delta: float) -> void:
 		return
 
 	update_coal_pulsing()
+	_update_corruption_meter_visibility()
 
 func is_visible_on_screen() -> bool:
 	"""Check if campfire is visible in camera viewport"""
@@ -2994,3 +3006,144 @@ func light_campfire() -> void:
 	var notification_manager = get_node_or_null("/root/NotificationManager")
 	if notification_manager and notification_manager.has_method("show_notification"):
 		notification_manager.show_notification("Campfire lit!", "SUCCESS")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CORRUPTION METER (world-space, community campfires only)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func create_corruption_meter() -> void:
+	"""Build a world-space corruption bar floating above the campfire."""
+	# Container positioned above the flames
+	_corruption_container = Control.new()
+	_corruption_container.name = "CorruptionMeter"
+	_corruption_container.position = Vector2(-55, -130)
+	_corruption_container.size = Vector2(110, 28)
+	_corruption_container.z_index = 10
+	_corruption_container.visible = false  # Hidden until player is near
+	add_child(_corruption_container)
+
+	# Background panel
+	var panel = PanelContainer.new()
+	panel.name = "BgPanel"
+	panel.position = Vector2.ZERO
+	panel.size = Vector2(110, 28)
+
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.05, 0.08, 0.7)
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_radius_bottom_right = 3
+	style.content_margin_left = 4
+	style.content_margin_right = 4
+	style.content_margin_top = 2
+	style.content_margin_bottom = 2
+	panel.add_theme_stylebox_override("panel", style)
+	_corruption_container.add_child(panel)
+
+	# HBox: icon + bar + tier label
+	var hbox = HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 4)
+	panel.add_child(hbox)
+
+	var rot_icon = Label.new()
+	rot_icon.text = "\u2623"  # Biohazard
+	rot_icon.add_theme_font_size_override("font_size", 11)
+	rot_icon.add_theme_color_override("font_color", Color(0.5, 0.6, 0.4))
+	rot_icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	hbox.add_child(rot_icon)
+
+	# Progress bar
+	_corruption_bar = ProgressBar.new()
+	_corruption_bar.min_value = 0.0
+	_corruption_bar.max_value = 100.0
+	_corruption_bar.value = 100.0
+	_corruption_bar.show_percentage = false
+	_corruption_bar.custom_minimum_size = Vector2(45, 8)
+	_corruption_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+	var bar_bg = StyleBoxFlat.new()
+	bar_bg.bg_color = Color(0.15, 0.15, 0.18, 0.9)
+	bar_bg.corner_radius_top_left = 2
+	bar_bg.corner_radius_top_right = 2
+	bar_bg.corner_radius_bottom_left = 2
+	bar_bg.corner_radius_bottom_right = 2
+	_corruption_bar.add_theme_stylebox_override("background", bar_bg)
+
+	var bar_fill = StyleBoxFlat.new()
+	bar_fill.bg_color = Color(0.2, 0.7, 0.15)  # Default cursed green, updated dynamically
+	bar_fill.corner_radius_top_left = 2
+	bar_fill.corner_radius_top_right = 2
+	bar_fill.corner_radius_bottom_left = 2
+	bar_fill.corner_radius_bottom_right = 2
+	_corruption_bar.add_theme_stylebox_override("fill", bar_fill)
+	hbox.add_child(_corruption_bar)
+
+	# Tier label
+	_corruption_label = Label.new()
+	_corruption_label.text = "Cursed"
+	_corruption_label.add_theme_font_size_override("font_size", 9)
+	_corruption_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.2))
+	_corruption_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	hbox.add_child(_corruption_label)
+
+	# Connect to OssuaryManager corruption signal
+	var ossuary = get_node_or_null("/root/OssuaryManager")
+	if ossuary:
+		ossuary.corruption_changed.connect(_on_corruption_changed)
+		# Initialize with current values
+		_refresh_corruption_display()
+
+func _on_corruption_changed(new_value: float) -> void:
+	"""Called when OssuaryManager corruption value changes."""
+	var old_value = _corruption_bar.value if _corruption_bar else 100.0
+	_refresh_corruption_display()
+	# Flash on kill-driven decrease
+	if new_value < old_value and _corruption_bar:
+		_flash_corruption_bar()
+
+func _refresh_corruption_display() -> void:
+	"""Update the world-space corruption bar from OssuaryManager display data."""
+	if not _corruption_bar or not _corruption_label:
+		return
+	var ossuary = get_node_or_null("/root/OssuaryManager")
+	if not ossuary or not ossuary.has_method("get_corruption_display"):
+		return
+	var data = ossuary.get_corruption_display()
+	_corruption_bar.value = data["value"]
+	_corruption_label.text = data["tier_name"]
+	var fill = _corruption_bar.get_theme_stylebox("fill") as StyleBoxFlat
+	if fill:
+		fill.bg_color = data["fill_color"]
+	_corruption_label.add_theme_color_override("font_color", data["label_color"])
+
+func _flash_corruption_bar() -> void:
+	"""Quick white flash on the corruption bar to highlight a kill."""
+	if not _corruption_bar:
+		return
+	if _corruption_flash_tween:
+		_corruption_flash_tween.kill()
+	_corruption_flash_tween = create_tween()
+	_corruption_flash_tween.tween_property(_corruption_bar, "modulate", Color(2, 2, 2), 0.05)
+	_corruption_flash_tween.tween_property(_corruption_bar, "modulate", Color(1, 1, 1), 0.25)
+
+func _update_corruption_meter_visibility() -> void:
+	"""Show/hide corruption meter based on player distance."""
+	if not _corruption_container:
+		return
+	var local_player = _get_local_player()
+	if not local_player:
+		_corruption_container.visible = false
+		return
+	var dist = global_position.distance_to(local_player.global_position)
+	_corruption_container.visible = dist <= CORRUPTION_VISIBILITY_RANGE
+
+func _get_local_player() -> Node2D:
+	"""Get the local player node."""
+	if player:
+		return player
+	var players = get_tree().get_nodes_in_group("player")
+	for p in players:
+		if p is CharacterBody2D:
+			return p
+	return null
