@@ -5,7 +5,7 @@ class_name EnemyAI
 ## - Enemies patrol around spawn point (non-aggro)
 ## - Player can walk right up to them safely
 ## - Only engages when player attacks first
-## - Then: chase, attack, retreat, deal damage
+## - Then: chase, attack, deal damage (may flee at low HP)
 ## - On death: respawn and return to patrol
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -30,9 +30,10 @@ class_name EnemyAI
 @export var attack_damage: float = 10.0
 @export var disengage_distance: float = 2500.0  # Return to patrol if player too far (large for kiting)
 
-## Behavior
-@export var retreat_chance: float = 0.25  # 25% chance on hit
-@export var retreat_duration: float = 0.8
+## Low-HP Flee (replaces mid-fight retreat)
+@export var flee_health_pct: float = 0.12  # Flee check when HP drops below 12%
+@export var flee_chance: float = 0.30      # 30% chance to flee at low HP
+@export var flee_duration: float = 2.5     # Flee for 2.5s then re-engage
 
 ## Avoidance (stop and pick new target when blocked)
 @export var separation_radius: float = 60.0  # Distance to detect blocking enemies (increased)
@@ -47,7 +48,7 @@ enum State {
 	PATROLLING,   # Default: peaceful wandering
 	COMBAT,       # Engaged: chasing player
 	ATTACKING,    # In range: striking player
-	RETREATING,   # Tactical: backing away
+	FLEEING,      # Low-HP: running away briefly
 	UNSTUCKING,   # Recovery: walking backward to get unstuck
 	CAMPFIRE_ATTRACTED,  # Heading to campfire to investigate
 	RETURNING,    # Walking back to spawn after leashing (can re-aggro)
@@ -82,8 +83,8 @@ var pause_timer: float = 0.0
 # Combat state
 var is_in_combat: bool = false  # CRITICAL: Only true after player attacks
 var attack_timer: float = 0.0
-var retreat_direction: Vector2 = Vector2.ZERO
-var retreat_cooldown: float = 0.0  # Prevents back-to-back retreats
+var flee_direction: Vector2 = Vector2.ZERO
+var _has_flee_checked: bool = false  # Only check flee once per combat
 var leash_cooldown_timer: float = 0.0  # Prevent immediate re-aggro after leashing
 const LEASH_COOLDOWN_DURATION: float = 3.0  # 3 second cooldown after leashing
 
@@ -406,7 +407,6 @@ func _physics_process(delta: float) -> void:
 	state_timer += delta
 	attack_timer = max(0, attack_timer - delta)
 	leash_cooldown_timer = max(0, leash_cooldown_timer - delta)
-	retreat_cooldown = max(0, retreat_cooldown - delta)
 	ai_update_timer += delta
 	cache_refresh_timer += delta
 
@@ -454,7 +454,7 @@ func _physics_process(delta: float) -> void:
 	# STUCK DETECTION (runs every frame, independent of AI throttling)
 	# ═══════════════════════════════════════════════════════════════
 	# Check for stuck (works in PATROLLING and COMBAT, but not while already unstucking)
-	if current_state != State.UNSTUCKING and current_state != State.ATTACKING and current_state != State.RETREATING:
+	if current_state != State.UNSTUCKING and current_state != State.ATTACKING and current_state != State.FLEEING:
 		stuck_timer += delta
 
 		# Detect Y-axis sliding (moving but only in one direction, not toward target)
@@ -542,8 +542,8 @@ func _physics_process(delta: float) -> void:
 			process_combat(delta)
 		State.ATTACKING:
 			process_attacking(delta)
-		State.RETREATING:
-			process_retreating(delta)
+		State.FLEEING:
+			process_fleeing(delta)
 		State.UNSTUCKING:
 			process_unstucking(delta)
 		State.CAMPFIRE_ATTRACTED:
@@ -998,23 +998,23 @@ func process_attacking(delta: float) -> void:
 		attack_timer = attack_cooldown
 
 # ═══════════════════════════════════════════════════════════════════════════
-# RETREATING STATE (Tactical Retreat)
+# FLEEING STATE (Low-HP Flee)
 # ═══════════════════════════════════════════════════════════════════════════
 
-func process_retreating(delta: float) -> void:
-	# If crit window opens, stop retreating and fight
+func process_fleeing(delta: float) -> void:
+	# If crit window opens, stop fleeing and fight
 	if enemy.has_method("get") and enemy.get("in_crit_window"):
 		change_state(State.COMBAT)
 		return
 
-	# Retreat for duration
-	if state_timer > retreat_duration:
+	# Flee for duration then re-engage
+	if state_timer > flee_duration:
 		change_state(State.COMBAT)
 		return
 
-	# Move away from player
-	enemy.velocity = retreat_direction * combat_speed * 1.2
-	update_enemy_animation(retreat_direction)
+	# Run away from player
+	enemy.velocity = flee_direction * combat_speed * 1.3
+	update_enemy_animation(flee_direction)
 	enemy.move_and_slide()
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1148,6 +1148,7 @@ func despawn_campfire_skeleton() -> void:
 func start_returning() -> void:
 	"""Start walking back to spawn point - enemy can still re-aggro if player follows"""
 	is_in_combat = false
+	_has_flee_checked = false
 	leash_cooldown_timer = LEASH_COOLDOWN_DURATION  # Prevent immediate re-aggro
 	change_state(State.RETURNING)
 
@@ -1444,38 +1445,33 @@ func _on_enemy_damaged(_damage: float, is_crit: bool) -> void:
 		# Enter combat immediately - from ANY non-combat state
 		if current_state != State.COMBAT and current_state != State.ATTACKING:
 			change_state(State.COMBAT)
-	# Already in combat - chance to retreat
-	elif current_state != State.RETREATING:
-		# Don't retreat during crit window - stand and fight!
-		if enemy.has_method("get") and enemy.get("in_crit_window"):
-			return
+	# Already in combat - check for low-HP flee (one-time check)
+	elif current_state != State.FLEEING and not _has_flee_checked:
+		var current_hp = enemy.get("current_health") if enemy.has_method("get") else 0.0
+		var max_hp = enemy.get("max_health") if enemy.has_method("get") else 1.0
+		if max_hp > 0 and current_hp > 0 and current_hp / max_hp <= flee_health_pct:
+			_has_flee_checked = true  # Only roll once per combat
 
-		# Don't retreat if still on cooldown from last retreat
-		if retreat_cooldown > 0:
-			return
+			# Don't flee during crit window
+			if enemy.has_method("get") and enemy.get("in_crit_window"):
+				return
 
-		# Don't retreat if player has ranged weapon (distance doesn't help!)
-		if _player_has_ranged_weapon():
-			return
+			# Don't flee if player has ranged weapon (distance doesn't help)
+			if _player_has_ranged_weapon():
+				return
 
-		var retreat_roll = retreat_chance
-		if is_crit:
-			retreat_roll += 0.2  # +20% on crit
-
-		if randf() < retreat_roll:
-			# Calculate retreat direction
-			if is_instance_valid(player):
-				retreat_direction = (enemy.global_position - player.global_position).normalized()
-			else:
-				retreat_direction = Vector2(randf() * 2 - 1, randf() * 2 - 1).normalized()
-
-			retreat_cooldown = 2.0  # Prevent another retreat for 2 seconds
-			change_state(State.RETREATING)
+			if randf() < flee_chance:
+				if is_instance_valid(player):
+					flee_direction = (enemy.global_position - player.global_position).normalized()
+				else:
+					flee_direction = Vector2(randf() * 2 - 1, randf() * 2 - 1).normalized()
+				change_state(State.FLEEING)
 
 func disengage() -> void:
 	"""Exit combat and return to patrol"""
 	print("[EnemyAI] 🏃 DISENGAGE: enemy=%s returning to patrol (target lost/dead)" % enemy.name)
 	is_in_combat = false
+	_has_flee_checked = false
 	leash_cooldown_timer = LEASH_COOLDOWN_DURATION  # Prevent immediate re-aggro
 
 	# Regenerate health to full when resetting
@@ -1571,7 +1567,7 @@ func change_state(new_state: State) -> void:
 			attack_timer = 0.0  # Attack immediately
 		State.COMBAT:
 			pass
-		State.RETREATING:
+		State.FLEEING:
 			pass
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1591,6 +1587,7 @@ func reset_to_patrol() -> void:
 		return
 
 	is_in_combat = false
+	_has_flee_checked = false
 	# Return to original spawn position (don't stay where we are!)
 	spawn_position = original_spawn_position
 	pick_new_patrol_target()
@@ -1607,6 +1604,7 @@ func disengage_to_spawn() -> void:
 		return
 
 	is_in_combat = false
+	_has_flee_checked = false
 	leash_cooldown_timer = LEASH_COOLDOWN_DURATION  # Prevent immediate re-aggro
 
 	# Regenerate health to full when resetting
@@ -1640,7 +1638,7 @@ func get_state_name_for_state(state: State) -> String:
 		State.PATROLLING: return "PATROLLING"
 		State.COMBAT: return "COMBAT"
 		State.ATTACKING: return "ATTACKING"
-		State.RETREATING: return "RETREATING"
+		State.FLEEING: return "FLEEING"
 		State.UNSTUCKING: return "UNSTUCKING"
 		State.CAMPFIRE_ATTRACTED: return "CAMPFIRE_ATTRACTED"
 		State.RETURNING: return "RETURNING"
