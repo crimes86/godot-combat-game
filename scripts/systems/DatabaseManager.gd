@@ -1011,22 +1011,23 @@ func apply_player_data_to_systems(username: String, player: Node = null) -> void
 
 	# Apply HP and other player state if player node is valid
 	if player and is_instance_valid(player):
-		# Apply HP if player has health
-		var saved_hp = data.get("current_hp", -1)
-		if saved_hp > 0 and player.has_method("set_health"):
-			player.set_health(saved_hp)
-		elif saved_hp > 0 and "current_health" in player:
-			player.current_health = saved_hp
-
 		# Refresh player sprite to show loaded equipment
 		if player.has_method("create_player_sprite"):
 			LogManager.debug("Refreshing player sprite with loaded equipment", "player")
 			player.create_player_sprite()
 
 		# Refresh player stats (attack speed, damage, etc.) from loaded equipment
+		# Must happen BEFORE restoring HP so max_health is correct
 		if player.has_method("update_stats_from_character"):
 			LogManager.debug("Refreshing player stats with loaded equipment", "player")
 			player.update_stats_from_character()
+
+		# Restore saved HP AFTER stats refresh so it doesn't get overwritten
+		var saved_hp = data.get("current_hp", -1)
+		if saved_hp > 0 and player.has_method("set_health"):
+			player.set_health(saved_hp)
+		elif saved_hp > 0 and "current_health" in player:
+			player.current_health = clampf(saved_hp, 1.0, player.max_health)
 
 	LogManager.info("Applied saved data for: %s" % username, "database")
 
