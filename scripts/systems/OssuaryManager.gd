@@ -202,16 +202,14 @@ func _create_hud() -> void:
 	_hud_layer.layer = 106
 	add_child(_hud_layer)
 
-	# Margin container — top-right
+	# Position below minimap (minimap: 220px diameter + 15px margin = bottom at 235px)
 	_hud_container = MarginContainer.new()
 	_hud_container.name = "OssuaryContainer"
 	_hud_container.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_hud_container.add_theme_constant_override("margin_top", 8)
-	_hud_container.add_theme_constant_override("margin_right", 8)
-	_hud_container.offset_left = -180
-	_hud_container.offset_right = -8
-	_hud_container.offset_top = 8
-	_hud_container.offset_bottom = 40
+	_hud_container.offset_left = -200
+	_hud_container.offset_right = -15
+	_hud_container.offset_top = 242
+	_hud_container.offset_bottom = 274
 	_hud_layer.add_child(_hud_container)
 
 	# Background panel for readability
