@@ -61,6 +61,14 @@ class ServerCharacterSync(BaseModel):
     equipped_weapon: str = Field(default="")
     equipped_armor: dict = Field(default_factory=dict)
     weapon_skills: dict = Field(default_factory=dict)
+    # Character stats
+    strength: int = Field(default=10, ge=1, le=999)
+    agility: int = Field(default=10, ge=1, le=999)
+    dexterity: int = Field(default=10, ge=1, le=999)
+    intelligence: int = Field(default=10, ge=1, le=999)
+    wisdom: int = Field(default=10, ge=1, le=999)
+    vitality: int = Field(default=10, ge=1, le=999)
+    current_hp: float = Field(default=-1.0, description="Current HP, -1 means not provided")
     # Optional context for logging
     disconnect_reason: Optional[str] = Field(default=None, max_length=64)
 
@@ -91,6 +99,7 @@ class ServerCharacterFetchResponse(BaseModel):
     intelligence: int
     wisdom: int
     vitality: int
+    current_hp: float = Field(default=-1.0)
 
 
 # =============================================================================
@@ -147,6 +156,14 @@ async def server_character_sync(
     data["equipped_armor"] = payload.equipped_armor
     data["weapon_skills"] = payload.weapon_skills
     data["inventory"] = payload.inventory
+    data["strength"] = payload.strength
+    data["agility"] = payload.agility
+    data["dexterity"] = payload.dexterity
+    data["intelligence"] = payload.intelligence
+    data["wisdom"] = payload.wisdom
+    data["vitality"] = payload.vitality
+    if payload.current_hp >= 0:
+        data["current_hp"] = payload.current_hp
 
     character.character_data = data
     character.last_played_at = datetime.utcnow()
@@ -242,7 +259,8 @@ async def server_fetch_character(
         dexterity=data.get("dexterity", 10),
         intelligence=data.get("intelligence", 10),
         wisdom=data.get("wisdom", 10),
-        vitality=data.get("vitality", 10)
+        vitality=data.get("vitality", 10),
+        current_hp=data.get("current_hp", -1.0)
     )
 
 

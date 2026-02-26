@@ -1084,7 +1084,8 @@ func _complete_ashbane_auth_with_backend_data(peer_id: int, backend_data: Dictio
 		"inventory": JSON.stringify(backend_data.get("inventory", [])),
 		"equipped_weapon": backend_data.get("equipped_weapon", ""),
 		"equipped_armor": backend_data.get("equipped_armor", {}),
-		"weapon_skills": JSON.stringify(backend_data.get("weapon_skills", {}))
+		"weapon_skills": JSON.stringify(backend_data.get("weapon_skills", {})),
+		"current_hp": backend_data.get("current_hp", -1.0)
 	}
 
 	# Save to local database for future reference
@@ -1556,6 +1557,13 @@ func _sync_player_to_backend(user_id: int, username: String, state: Dictionary, 
 		"equipped_weapon": equipped_weapon_str,
 		"equipped_armor": state.get("equipped_armor", {}),
 		"weapon_skills": weapon_skills_data,
+		"strength": state.get("strength", 10),
+		"agility": state.get("agility", 10),
+		"dexterity": state.get("dexterity", 10),
+		"intelligence": state.get("intelligence", 10),
+		"wisdom": state.get("wisdom", 10),
+		"vitality": state.get("vitality", 10),
+		"current_hp": state.get("current_hp", -1),
 		"disconnect_reason": disconnect_reason
 	}
 
