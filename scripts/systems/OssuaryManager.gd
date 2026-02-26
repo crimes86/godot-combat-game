@@ -217,25 +217,25 @@ func get_corruption_display() -> Dictionary:
 	var label_color: Color
 	var border_color: Color
 	if corruption < 25.0:
-		# Clean — bright warm gold, the fire is purified
+		# Clean — bright warm gold (matches skeleton gold wash tint)
 		fill_color = Color(0.85, 0.75, 0.3)
 		label_color = Color(0.9, 0.8, 0.4)
 		border_color = Color(0.7, 0.6, 0.2, 0.4)
 	elif corruption < 50.0:
-		# Tainted — muted amber, hints of corruption
-		fill_color = Color(0.7, 0.5, 0.2)
-		label_color = Color(0.75, 0.55, 0.3)
-		border_color = Color(0.6, 0.35, 0.15, 0.5)
+		# Tainted — muted amber (matches skeleton amber tint)
+		fill_color = Color(0.7, 0.5, 0.25)
+		label_color = Color(0.8, 0.6, 0.35)
+		border_color = Color(0.6, 0.4, 0.2, 0.5)
 	elif corruption < 75.0:
-		# Blighted — dark crimson-purple
-		fill_color = Color(0.5, 0.12, 0.25)
-		label_color = Color(0.6, 0.2, 0.3)
-		border_color = Color(0.5, 0.1, 0.25, 0.6)
+		# Blighted — violet-crimson (matches skeleton purple tint)
+		fill_color = Color(0.5, 0.2, 0.45)
+		label_color = Color(0.65, 0.3, 0.55)
+		border_color = Color(0.45, 0.15, 0.4, 0.6)
 	else:
-		# Cursed — deep ominous dark violet
-		fill_color = Color(0.35, 0.05, 0.2)
-		label_color = Color(0.5, 0.12, 0.3)
-		border_color = Color(0.4, 0.05, 0.25, 0.7)
+		# Cursed — deep dark violet (matches skeleton dark violet tint)
+		fill_color = Color(0.38, 0.1, 0.35)
+		label_color = Color(0.55, 0.2, 0.5)
+		border_color = Color(0.35, 0.1, 0.3, 0.7)
 	return {
 		"value": corruption,
 		"tier": tier,

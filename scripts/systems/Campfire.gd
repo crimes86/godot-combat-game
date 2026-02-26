@@ -3049,7 +3049,7 @@ func create_corruption_meter() -> void:
 	_corruption_panel_style.border_width_bottom = 1
 	_corruption_panel_style.border_width_left = 1
 	_corruption_panel_style.border_width_right = 1
-	_corruption_panel_style.border_color = Color(0.3, 0.08, 0.25, 0.6)
+	_corruption_panel_style.border_color = Color(0.35, 0.1, 0.3, 0.7)
 	panel.add_theme_stylebox_override("panel", _corruption_panel_style)
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_corruption_panel = panel
@@ -3083,7 +3083,7 @@ func create_corruption_meter() -> void:
 	_corruption_bar.add_theme_stylebox_override("background", bar_bg)
 
 	var bar_fill = StyleBoxFlat.new()
-	bar_fill.bg_color = Color(0.3, 0.08, 0.25)  # Default cursed, updated dynamically
+	bar_fill.bg_color = Color(0.38, 0.1, 0.35)  # Default cursed violet, updated dynamically
 	bar_fill.corner_radius_top_left = 2
 	bar_fill.corner_radius_top_right = 2
 	bar_fill.corner_radius_bottom_left = 2
@@ -3095,7 +3095,7 @@ func create_corruption_meter() -> void:
 	_corruption_label = Label.new()
 	_corruption_label.text = "Cursed"
 	_corruption_label.add_theme_font_size_override("font_size", 9)
-	_corruption_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.2))
+	_corruption_label.add_theme_color_override("font_color", Color(0.55, 0.2, 0.5))
 	_corruption_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	hbox.add_child(_corruption_label)
 
