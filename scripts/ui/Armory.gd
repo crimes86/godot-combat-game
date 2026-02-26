@@ -11170,6 +11170,17 @@ func _load_character_from_backend() -> void:
 			CharacterStats.experience_to_next_level,
 			CharacterStats.get_experience_progress() * 100])
 
+	# Compute base stats from level — each level grants +2 to all stats (up to cap)
+	var stat_levels = min(CharacterStats.level, Constants.STAT_GAIN_CAP_LEVEL) - 1
+	var computed_stat = Constants.STARTING_STRENGTH + stat_levels * 2
+	CharacterStats.strength = computed_stat
+	CharacterStats.agility = computed_stat
+	CharacterStats.dexterity = computed_stat
+	CharacterStats.intelligence = computed_stat
+	CharacterStats.wisdom = computed_stat
+	CharacterStats.vitality = computed_stat
+	print("[Armory] Computed stats from level %d: all stats = %d" % [CharacterStats.level, computed_stat])
+
 	# Load inventory
 	if character.has("inventory") and character.inventory is Array:
 		InventorySystem.inventory_items.clear()
