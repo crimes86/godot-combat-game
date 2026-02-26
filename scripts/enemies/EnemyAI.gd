@@ -1013,7 +1013,7 @@ func process_fleeing(delta: float) -> void:
 		return
 
 	# Run away from player
-	enemy.velocity = flee_direction * combat_speed * 1.3
+	enemy.velocity = flee_direction * combat_speed
 	update_enemy_animation(flee_direction)
 	enemy.move_and_slide()
 
