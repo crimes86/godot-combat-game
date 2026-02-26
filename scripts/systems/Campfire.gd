@@ -129,6 +129,9 @@ var _corruption_container: Control = null
 var _corruption_bar: ProgressBar = null
 var _corruption_label: Label = null
 var _corruption_flash_tween: Tween = null
+var _corruption_pulse_tween: Tween = null
+var _corruption_panel_style: StyleBoxFlat = null
+var _corruption_panel: PanelContainer = null
 const CORRUPTION_VISIBILITY_RANGE: float = 800.0
 
 var _is_server_mode: bool = false
@@ -1528,7 +1531,7 @@ func update_interaction_prompt() -> void:
 		var viewport_size = get_viewport().get_visible_rect().size
 		var camera = get_viewport().get_camera_2d()
 		if camera:
-			var prompt_world_pos = global_position + Vector2(0, -80)
+			var prompt_world_pos = global_position + Vector2(0, 60)
 			var camera_pos = camera.global_position
 			var screen_center = viewport_size / 2
 			var prompt_screen_pos = (prompt_world_pos - camera_pos) * camera.zoom.x + screen_center
@@ -3013,45 +3016,49 @@ func light_campfire() -> void:
 
 func create_corruption_meter() -> void:
 	"""Build a world-space corruption bar floating above the campfire."""
-	# Container positioned above the flames
+	# Scale down so Control pixel sizes look right in world space
 	_corruption_container = Control.new()
 	_corruption_container.name = "CorruptionMeter"
-	_corruption_container.position = Vector2(-55, -130)
-	_corruption_container.size = Vector2(110, 28)
 	_corruption_container.z_index = 10
 	_corruption_container.visible = false  # Hidden until player is near
+	# Scale down the whole container so UI elements are appropriately sized in world space
+	_corruption_container.scale = Vector2(1.5, 1.5)
+	# Position: centered above flames, accounting for scale
+	_corruption_container.position = Vector2(-82, -95)
+	_corruption_container.size = Vector2(110, 24)
 	add_child(_corruption_container)
 
 	# Background panel
 	var panel = PanelContainer.new()
 	panel.name = "BgPanel"
 	panel.position = Vector2.ZERO
-	panel.size = Vector2(110, 28)
+	panel.size = Vector2(110, 24)
 
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.05, 0.08, 0.7)
-	style.corner_radius_top_left = 3
-	style.corner_radius_top_right = 3
-	style.corner_radius_bottom_left = 3
-	style.corner_radius_bottom_right = 3
-	style.content_margin_left = 4
-	style.content_margin_right = 4
-	style.content_margin_top = 2
-	style.content_margin_bottom = 2
-	panel.add_theme_stylebox_override("panel", style)
+	_corruption_panel_style = StyleBoxFlat.new()
+	_corruption_panel_style.bg_color = Color(0.05, 0.05, 0.08, 0.7)
+	_corruption_panel_style.corner_radius_top_left = 3
+	_corruption_panel_style.corner_radius_top_right = 3
+	_corruption_panel_style.corner_radius_bottom_left = 3
+	_corruption_panel_style.corner_radius_bottom_right = 3
+	_corruption_panel_style.content_margin_left = 5
+	_corruption_panel_style.content_margin_right = 5
+	_corruption_panel_style.content_margin_top = 3
+	_corruption_panel_style.content_margin_bottom = 3
+	# Tier-colored border (updated dynamically)
+	_corruption_panel_style.border_width_top = 1
+	_corruption_panel_style.border_width_bottom = 1
+	_corruption_panel_style.border_width_left = 1
+	_corruption_panel_style.border_width_right = 1
+	_corruption_panel_style.border_color = Color(0.3, 0.08, 0.25, 0.6)
+	panel.add_theme_stylebox_override("panel", _corruption_panel_style)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	_corruption_panel = panel
 	_corruption_container.add_child(panel)
 
 	# HBox: icon + bar + tier label
 	var hbox = HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 4)
+	hbox.add_theme_constant_override("separation", 3)
 	panel.add_child(hbox)
-
-	var rot_icon = Label.new()
-	rot_icon.text = "\u2623"  # Biohazard
-	rot_icon.add_theme_font_size_override("font_size", 11)
-	rot_icon.add_theme_color_override("font_color", Color(0.5, 0.6, 0.4))
-	rot_icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	hbox.add_child(rot_icon)
 
 	# Progress bar
 	_corruption_bar = ProgressBar.new()
@@ -3063,15 +3070,20 @@ func create_corruption_meter() -> void:
 	_corruption_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 	var bar_bg = StyleBoxFlat.new()
-	bar_bg.bg_color = Color(0.15, 0.15, 0.18, 0.9)
+	bar_bg.bg_color = Color(0.1, 0.08, 0.12, 0.9)
 	bar_bg.corner_radius_top_left = 2
 	bar_bg.corner_radius_top_right = 2
 	bar_bg.corner_radius_bottom_left = 2
 	bar_bg.corner_radius_bottom_right = 2
+	bar_bg.border_width_top = 1
+	bar_bg.border_width_bottom = 1
+	bar_bg.border_width_left = 1
+	bar_bg.border_width_right = 1
+	bar_bg.border_color = Color(0.25, 0.2, 0.3, 0.5)
 	_corruption_bar.add_theme_stylebox_override("background", bar_bg)
 
 	var bar_fill = StyleBoxFlat.new()
-	bar_fill.bg_color = Color(0.2, 0.7, 0.15)  # Default cursed green, updated dynamically
+	bar_fill.bg_color = Color(0.3, 0.08, 0.25)  # Default cursed, updated dynamically
 	bar_fill.corner_radius_top_left = 2
 	bar_fill.corner_radius_top_right = 2
 	bar_fill.corner_radius_bottom_left = 2
@@ -3117,15 +3129,87 @@ func _refresh_corruption_display() -> void:
 		fill.bg_color = data["fill_color"]
 	_corruption_label.add_theme_color_override("font_color", data["label_color"])
 
-func _flash_corruption_bar() -> void:
-	"""Quick white flash on the corruption bar to highlight a kill."""
+	# Update panel border to match tier
+	if _corruption_panel_style:
+		_corruption_panel_style.border_color = data["border_color"]
+
+	# Update tooltip
+	if _corruption_panel:
+		var corr_val: float = data["value"]
+		var tier_name: String = data["tier_name"]
+		var next_threshold := ""
+		if corr_val >= 75.0:
+			next_threshold = "Reduce below 75 to weaken"
+		elif corr_val >= 50.0:
+			next_threshold = "Reduce below 50 to weaken"
+		elif corr_val >= 25.0:
+			next_threshold = "Reduce below 25 to cleanse"
+		else:
+			next_threshold = "Nearly cleansed!"
+		_corruption_panel.tooltip_text = "Corruption: %.0f / 100 (%s)\n%s\n\nThis campfire anchors the corruption\nof nearby skeletons. Kill them to\npurify the area. Corruption grows\npassively over time." % [corr_val, tier_name, next_threshold]
+
+	# Pulsing glow — stronger at higher corruption
+	_update_corruption_pulse(data["value"])
+
+func _update_corruption_pulse(corruption_value: float) -> void:
+	"""Looping pulse on the corruption bar — faster and brighter at high corruption."""
 	if not _corruption_bar:
 		return
+	# Don't interrupt a kill flash
+	if _corruption_flash_tween and _corruption_flash_tween.is_running():
+		return
+	if _corruption_pulse_tween:
+		_corruption_pulse_tween.kill()
+
+	# Pulse intensity scales with corruption: subtle at low, ominous at high
+	var intensity: float
+	var speed: float
+	if corruption_value >= 75.0:
+		intensity = 0.35  # Strong pulse
+		speed = 1.2       # Faster
+	elif corruption_value >= 50.0:
+		intensity = 0.2
+		speed = 1.8
+	elif corruption_value >= 25.0:
+		intensity = 0.1
+		speed = 2.5
+	else:
+		# Clean — no pulse, bar is calm
+		_corruption_bar.modulate = Color(1, 1, 1, 1)
+		return
+
+	var bright = Color(1.0 + intensity, 1.0 + intensity, 1.0 + intensity, 1.0)
+	var dim = Color(1.0 - intensity * 0.3, 1.0 - intensity * 0.3, 1.0 - intensity * 0.3, 1.0)
+
+	_corruption_pulse_tween = create_tween()
+	_corruption_pulse_tween.set_loops()
+	_corruption_pulse_tween.tween_property(_corruption_bar, "modulate", bright, speed * 0.5).set_trans(Tween.TRANS_SINE)
+	_corruption_pulse_tween.tween_property(_corruption_bar, "modulate", dim, speed * 0.5).set_trans(Tween.TRANS_SINE)
+
+func _flash_corruption_bar() -> void:
+	"""Bright flash on the whole corruption meter to highlight a kill, then resume pulse."""
+	if not _corruption_container or not _corruption_bar:
+		return
+	# Kill pulse during flash
+	if _corruption_pulse_tween:
+		_corruption_pulse_tween.kill()
 	if _corruption_flash_tween:
 		_corruption_flash_tween.kill()
 	_corruption_flash_tween = create_tween()
-	_corruption_flash_tween.tween_property(_corruption_bar, "modulate", Color(2, 2, 2), 0.05)
-	_corruption_flash_tween.tween_property(_corruption_bar, "modulate", Color(1, 1, 1), 0.25)
+	_corruption_flash_tween.set_parallel(true)
+	# Bright flash on the bar
+	_corruption_flash_tween.tween_property(_corruption_bar, "modulate", Color(2.5, 2.5, 2.5), 0.06)
+	_corruption_flash_tween.tween_property(_corruption_container, "scale", Vector2(1.6, 1.6), 0.06).set_trans(Tween.TRANS_BACK)
+	_corruption_flash_tween.set_parallel(false)
+	_corruption_flash_tween.tween_property(_corruption_bar, "modulate", Color(1, 1, 1), 0.3)
+	_corruption_flash_tween.tween_property(_corruption_container, "scale", Vector2(1.5, 1.5), 0.2).set_trans(Tween.TRANS_SINE)
+	# Resume pulse after flash
+	_corruption_flash_tween.tween_callback(_restart_corruption_pulse)
+
+func _restart_corruption_pulse() -> void:
+	var ossuary = get_node_or_null("/root/OssuaryManager")
+	if ossuary:
+		_update_corruption_pulse(ossuary.corruption)
 
 func _update_corruption_meter_visibility() -> void:
 	"""Show/hide corruption meter based on player distance."""
