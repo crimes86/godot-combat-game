@@ -220,6 +220,12 @@ const OSSUARY_TIER_STIRRING: int = 1   # 25-50% — skeletons growing bolder
 const OSSUARY_TIER_RISING: int = 2     # 50-75% — significant skeleton threat
 const OSSUARY_TIER_SURGING: int = 3    # 75-100% — overwhelming skeleton presence
 
+# Corruption tiers (inverse of influence — grows passively, decays on kills)
+const OSSUARY_CORRUPTION_CLEAN: int = 0     # 0-25% — no corruption
+const OSSUARY_CORRUPTION_TAINTED: int = 1   # 25-50% — mild corruption
+const OSSUARY_CORRUPTION_BLIGHTED: int = 2  # 50-75% — significant corruption
+const OSSUARY_CORRUPTION_CURSED: int = 3    # 75-100% — overwhelming corruption
+
 # ============================================
 # GROUPS (for get_tree().get_nodes_in_group)
 # ============================================
