@@ -116,7 +116,7 @@ func _start_dedicated_server(args: Array):
 		print("   Protocol: %s" % protocol_name)
 		print("   Port: %d" % port)
 		print("   Shard: %s" % current_shard_id)
-		print("   Max Players: %d" % NetworkManager.MAX_PLAYERS)
+		print("   Max Players: %d" % NetworkManager.max_players)
 		print("═══════════════════════════════════════════════════════")
 		print("   Type 'help' for admin commands")
 		print("   Use 'systemctl stop dreadland' for graceful shutdown")
