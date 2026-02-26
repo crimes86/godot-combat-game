@@ -23,6 +23,20 @@ const LOD_NEAR_DISTANCE: float = 1200.0  # Full detail within this range
 const LOD_FAR_DISTANCE: float = 2500.0  # Minimal detail beyond this range
 const LOOT_BODY_UI_SCENE: PackedScene = preload("res://scenes/ui/loot_body_ui.tscn")
 
+# Corruption visual tints (multiplied with level tint: final = level_tint * corruption_tint)
+const CORRUPTION_TINTS = {
+	0: Color(1.05, 1.0, 0.9),    # Clean: warm gold wash
+	1: Color(1.0, 0.9, 0.8),     # Tainted: amber
+	2: Color(0.85, 0.7, 0.8),    # Blighted: crimson-purple
+	3: Color(0.7, 0.55, 0.7),    # Cursed: dark violet
+}
+const EQUIPMENT_CORRUPTION_TINTS = {
+	0: Color(1.1, 1.05, 0.85),   # Clean: polished gold sheen
+	1: Color(0.95, 0.85, 0.75),  # Tainted: tarnished
+	2: Color(0.75, 0.55, 0.7),   # Blighted: corrupted purple
+	3: Color(0.55, 0.35, 0.55),  # Cursed: deep dark violet
+}
+
 # Performance: cache player reference (set once at ready, not refreshed every second)
 var cached_player: Node = null
 var ui_update_timer: float = 0.0
@@ -87,6 +101,10 @@ var in_crit_window: bool = false  # Simple flag set by grow/shrink methods
 var _crit_window_transitioning: bool = false  # Lock during grow/shrink async operations
 var original_scale: Vector2 = Vector2.ONE
 var original_modulate: Color = Color.WHITE  # Store original difficulty color
+var corruption_tier: int = 3  # Default: Cursed (game starts at 100%)
+var corruption_tint: Color = Color(0.7, 0.55, 0.7)  # Default to Cursed tint
+var corruption_particles: CPUParticles2D = null
+var _pending_corruption_update: bool = false  # Deferred update during crit window
 var weakpoints: Array = []  # Just for visual rendering
 var _grow_tween: Tween = null  # Track grow tween so shrink can wait for it
 var _stagger_tween: Tween = null  # Track stagger tween to prevent bouncy overlaps
@@ -124,6 +142,10 @@ signal corpse_clicked(corpse)  # Emitted when corpse is clicked for looting
 signal corpse_looted_empty(corpse)  # Emitted when all items taken from corpse
 
 func _exit_tree() -> void:
+	# Disconnect corruption signal to prevent freed-instance errors
+	if OssuaryManager and OssuaryManager.corruption_changed.is_connected(_on_corruption_changed):
+		OssuaryManager.corruption_changed.disconnect(_on_corruption_changed)
+
 	# Unregister from NetworkEnemyManager when freed to prevent "freed instance" crashes
 	# Use Engine.get_main_loop() to safely access autoloads even if node is outside scene tree
 	if network_id > 0:
@@ -322,6 +344,14 @@ func _ready() -> void:
 
 			# Apply level-based visual scaling (West→East progression)
 			apply_level_visual_scaling()
+
+			# Apply corruption visuals based on current OssuaryManager state
+			if OssuaryManager:
+				corruption_tier = OssuaryManager.get_corruption_tier()
+				corruption_tint = CORRUPTION_TINTS[corruption_tier]
+				apply_corruption_visual()
+				if not OssuaryManager.corruption_changed.is_connected(_on_corruption_changed):
+					OssuaryManager.corruption_changed.connect(_on_corruption_changed)
 
 			# Materialize effect - fade in smoothly from invisible
 			anim_sprite.modulate.a = 0.0
@@ -557,6 +587,17 @@ func create_equipment_layers() -> void:
 		if enemy_level >= 6:
 			equipment_to_add.append("gloves")
 
+		# Corruption-based equipment bonuses (high corruption = more geared)
+		var spawn_corruption_tier = corruption_tier
+		if spawn_corruption_tier >= 3:  # Cursed: boots + helmet for all
+			if "boots" not in equipment_to_add:
+				equipment_to_add.append("boots")
+			if "helmet" not in equipment_to_add:
+				equipment_to_add.append("helmet")
+		elif spawn_corruption_tier >= 2:  # Blighted: boots for all
+			if "boots" not in equipment_to_add:
+				equipment_to_add.append("boots")
+
 	# Create each equipment layer
 	for equip_name in equipment_to_add:
 		var equip_sprite = create_equipment_sprite(equip_name)
@@ -564,9 +605,12 @@ func create_equipment_layers() -> void:
 			equipment_sprites.append(equip_sprite)
 			add_child(equip_sprite)
 
-	# Weapon handling
-	if always_has_weapon or randf() < 0.25:
-		# Guardians always have weapon, regular skeletons 25% chance
+	# Weapon handling - corruption increases weapon chance for regular skeletons
+	var weapon_chance = 0.25
+	if not is_guardian and corruption_tier >= 3:
+		weapon_chance = 0.60  # Cursed: 60% weapon chance
+	if always_has_weapon or randf() < weapon_chance:
+		# Guardians always have weapon, regular skeletons variable chance
 		var weapons = ["sword", "mace"]
 		var weapon_name = weapons[randi() % weapons.size()]
 		var weapon_sprite = create_weapon_sprite(weapon_name)
@@ -574,31 +618,161 @@ func create_equipment_layers() -> void:
 			equipment_sprites.append(weapon_sprite)
 			add_child(weapon_sprite)
 
+func _get_level_tint() -> Color:
+	"""Get color tint based on enemy level difficulty tier."""
+	if enemy_level >= 10:
+		return Color(1.2, 0.85, 0.85, 1.0)  # Ancient tier - reddish
+	elif enemy_level >= 7:
+		return Color(0.9, 0.9, 1.0, 1.0)    # Elite tier - gray/steel
+	elif enemy_level >= 4:
+		return Color(1.0, 0.95, 0.9, 1.0)   # Armored tier - subtle tan
+	else:
+		return Color(1.0, 1.0, 1.0, 1.0)    # L1-3: no tint
+
 func apply_level_visual_scaling() -> void:
 	"""Apply visual scaling based on enemy level for West→East difficulty progression.
 	Higher level enemies are larger and have different color tints."""
-	var level = enemy_level
-
 	# Size scaling: L1=1.0x, L15=1.5x (smooth progression)
-	# Formula: 1.0 + (level - 1) * 0.033 gives ~1.0x at L1, ~1.46x at L15
-	var scale_mult = 1.0 + (level - 1) * 0.033
+	var scale_mult = 1.0 + (enemy_level - 1) * 0.033
 	scale = Vector2(scale_mult, scale_mult)
 
-	# Color tint based on difficulty tier
-	# L1-3: Default (no tint)
-	# L4-6: Slight tan/bone tint (armored tier)
-	# L7-9: Gray/steel tint (elite tier)
-	# L10+: Dark red/ancient tint (endgame tier)
-	if level >= 10:
-		# Ancient tier - reddish tint (menacing)
-		modulate = Color(1.2, 0.85, 0.85, 1.0)
-	elif level >= 7:
-		# Elite tier - gray/steel tint (armored feel)
-		modulate = Color(0.9, 0.9, 1.0, 1.0)
-	elif level >= 4:
-		# Armored tier - subtle tan tint
-		modulate = Color(1.0, 0.95, 0.9, 1.0)
-	# L1-3: Keep default white modulate (no change)
+	# Apply level tint multiplied by corruption tint
+	var level_tint = _get_level_tint()
+	modulate = level_tint * corruption_tint
+	original_modulate = modulate
+
+func _on_corruption_changed(_new_value: float) -> void:
+	"""Called when OssuaryManager corruption value changes."""
+	if not OssuaryManager:
+		return
+	var new_tier = OssuaryManager.get_corruption_tier()
+	if new_tier == corruption_tier:
+		return  # Same tier, no visual change needed
+
+	# Defer update if in crit window (would interfere with grow/shrink visuals)
+	if in_crit_window or _crit_window_transitioning:
+		_pending_corruption_update = true
+		return
+
+	corruption_tier = new_tier
+	corruption_tint = CORRUPTION_TINTS[corruption_tier]
+	apply_corruption_visual()
+
+func apply_corruption_visual() -> void:
+	"""Apply corruption-based visual tinting to this enemy."""
+	if _is_server_mode:
+		return
+
+	# Recompute composite modulate: level_tint * corruption_tint
+	var level_tint = _get_level_tint()
+	modulate = level_tint * corruption_tint
+	original_modulate = modulate
+
+	apply_corruption_to_equipment()
+	create_corruption_particles()
+
+func apply_corruption_to_equipment() -> void:
+	"""Apply corruption tint to equipment sprites via self_modulate."""
+	if _is_server_mode:
+		return
+	var equip_tint = EQUIPMENT_CORRUPTION_TINTS[corruption_tier]
+	for equip_sprite in equipment_sprites:
+		if is_instance_valid(equip_sprite):
+			equip_sprite.self_modulate = equip_tint
+
+func create_corruption_particles() -> void:
+	"""Create ambient corruption particle wisps that scale with tier."""
+	if _is_server_mode:
+		return
+
+	# Free existing particles
+	if corruption_particles and is_instance_valid(corruption_particles):
+		corruption_particles.queue_free()
+		corruption_particles = null
+
+	# Clean tier: no particles
+	if corruption_tier == 0:
+		return
+
+	# Particle config per tier
+	var amount: int
+	var particle_color: Color
+	var particle_color_dark: Color
+	var alpha: float
+	var velocity: float
+
+	match corruption_tier:
+		1:  # Tainted: few amber wisps
+			amount = 4
+			particle_color = Color(0.9, 0.7, 0.3, 0.6)
+			particle_color_dark = Color(0.7, 0.5, 0.2, 0.3)
+			alpha = 0.5
+			velocity = 8.0
+		2:  # Blighted: moderate crimson-purple
+			amount = 8
+			particle_color = Color(0.7, 0.3, 0.6, 0.7)
+			particle_color_dark = Color(0.5, 0.2, 0.4, 0.3)
+			alpha = 0.6
+			velocity = 12.0
+		3:  # Cursed: dense dark violet aura
+			amount = 15
+			particle_color = Color(0.5, 0.2, 0.5, 0.8)
+			particle_color_dark = Color(0.3, 0.1, 0.3, 0.4)
+			alpha = 0.7
+			velocity = 15.0
+		_:
+			return
+
+	corruption_particles = CPUParticles2D.new()
+	corruption_particles.name = "CorruptionParticles"
+	corruption_particles.emitting = true
+	corruption_particles.amount = amount
+	corruption_particles.lifetime = 1.5
+	corruption_particles.preprocess = 0.8
+	corruption_particles.local_coords = true
+	corruption_particles.z_index = -1
+
+	# Emission rectangle shaped to body
+	corruption_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	corruption_particles.emission_rect_extents = Vector2(12, 24)
+
+	# Upward drift
+	corruption_particles.direction = Vector2(0, -1)
+	corruption_particles.spread = 45.0
+	corruption_particles.initial_velocity_min = velocity * 0.5
+	corruption_particles.initial_velocity_max = velocity
+	corruption_particles.gravity = Vector2(0, -5)
+
+	# Small wisp texture
+	var img = Image.create(4, 4, false, Image.FORMAT_RGBA8)
+	img.fill(Color.WHITE)
+	var tex = ImageTexture.create_from_image(img)
+	corruption_particles.texture = tex
+
+	corruption_particles.scale_amount_min = 1.0
+	corruption_particles.scale_amount_max = 2.0
+
+	corruption_particles.color = particle_color
+
+	# Fade in and out
+	var gradient = Gradient.new()
+	gradient.add_point(0.0, Color(1, 1, 1, 0))
+	gradient.add_point(0.2, Color(1, 1, 1, alpha))
+	gradient.add_point(0.7, Color(1, 1, 1, alpha * 0.6))
+	gradient.add_point(1.0, Color(1, 1, 1, 0))
+	corruption_particles.color_ramp = gradient
+
+	# Color variation
+	var color_curve = Gradient.new()
+	color_curve.add_point(0.0, particle_color)
+	color_curve.add_point(1.0, particle_color_dark)
+	corruption_particles.color_initial_ramp = color_curve
+
+	add_child(corruption_particles)
+
+	# Hide if not at LOD 0
+	if current_lod > 0:
+		corruption_particles.visible = false
 
 func create_equipment_sprite(equip_name: String) -> AnimatedSprite2D:
 	"""Create an animated sprite for a piece of equipment"""
@@ -983,7 +1157,12 @@ func spawn_weakpoints() -> void:
 	else:
 		num_weakpoints = 1  # Level 1-10: 1 weakpoint
 
-	# print("🎯 Calculating weakpoints: Player level %d → %d weakpoints" % [player_level, num_weakpoints])
+	# Corruption bonus weakpoints (low corruption = more weakpoints)
+	if corruption_tier == 0:  # Clean: +1 bonus
+		num_weakpoints += 1
+	elif corruption_tier == 1 and randf() < 0.5:  # Tainted: 50% chance +1
+		num_weakpoints += 1
+	num_weakpoints = mini(num_weakpoints, 4)  # Cap at 4
 
 	# Calculate sprite bounds for random positioning within sections
 	var sprite_scale = sprite.scale if sprite else Vector2.ONE
@@ -1080,6 +1259,10 @@ func spawn_weakpoints() -> void:
 		# Emit signal so CritWindowManager can track it
 		weakpoint_spawned.emit(weakpoint)
 
+	# Spawn decoy weakpoints based on corruption tier (client-only visual trick)
+	if not _is_server_mode:
+		_spawn_decoy_weakpoints(sprite_scale, sprite_pos, sprite_width, sprite_height)
+
 	# Tutorial: Show red arrow pointing at first weakpoint for the first N crit windows
 	skeleton_crit_windows_triggered += 1
 	if skeleton_crit_windows_triggered <= TUTORIAL_ARROW_CRIT_WINDOWS and chosen_positions.size() > 0:
@@ -1090,6 +1273,59 @@ func spawn_weakpoints() -> void:
 
 # NOTE: grow_for_crit_window_client() and spawn_weakpoints_at_positions() were removed
 # Client-independent crit windows now use the regular grow_for_crit_window() via CritWindowManager
+
+func _spawn_decoy_weakpoints(_sprite_scale: Vector2, sprite_pos: Vector2, sprite_width: float, sprite_height: float) -> void:
+	"""Spawn decoy weakpoints based on corruption tier. Client-only visual trick."""
+	var num_decoys: int = 0
+	var mode: int = 0  # 0=waste, 1=fragile, 2=glass
+	var theme: String = "bone"
+
+	match corruption_tier:
+		3:  # Cursed: 2 waste decoys (absorb hits, no reward)
+			num_decoys = 2
+			mode = 0
+			theme = "corrupted_bone"
+		2:  # Blighted: 1 waste decoy
+			num_decoys = 1
+			mode = 0
+			theme = "corrupted_bone"
+		1:  # Tainted: 1 fragile decoy (1-hit break, 1.5x burst)
+			num_decoys = 1
+			mode = 1
+			theme = "bone"
+		0:  # Clean: 1-2 glass decoys (1-hit break, 2x burst)
+			num_decoys = 1 + (1 if randf() < 0.5 else 0)
+			mode = 2
+			theme = "bone"
+
+	if num_decoys == 0:
+		return
+
+	var counter_scale = 1.0 / Constants.WEAKPOINT_COUNTER_SCALE_DIVISOR
+
+	for i in range(num_decoys):
+		# Generate random position spread across the body
+		var margin_x = sprite_width * 0.15
+		var random_x = randf_range(-sprite_width / 2.0 + margin_x, sprite_width / 2.0 - margin_x)
+		var random_y = randf_range(sprite_pos.y - sprite_height * 0.4, sprite_pos.y + sprite_height * 0.4)
+		var decoy_pos = Vector2(random_x, random_y)
+
+		var weakpoint_scene = preload("res://scenes/enemies/weakpoint.tscn")
+		var decoy = weakpoint_scene.instantiate()
+		decoy.color_theme = theme
+		decoy.is_decoy = true
+		decoy.decoy_mode = mode
+		decoy.position = decoy_pos
+		decoy.scale = Vector2(counter_scale, counter_scale) * 3.0
+		decoy.rotation = randf_range(-PI, PI)
+
+		# Connect signals (decoys still emit destroyed for cleanup)
+		decoy.weakpoint_hit.connect(_on_weakpoint_hit)
+		decoy.weakpoint_destroyed.connect(_on_weakpoint_destroyed_local)
+
+		add_child(decoy)
+		weakpoints.append(decoy)
+		weakpoint_spawned.emit(decoy)
 
 # 🔍 DEBUG VISUALIZATION - Shows where all 17 positions are!
 func _draw() -> void:
@@ -1202,6 +1438,8 @@ func apply_lod_settings() -> void:
 				shadow_sprite.visible = true
 			if sprite and sprite is AnimatedSprite2D:
 				sprite.speed_scale = 1.0
+			if corruption_particles and is_instance_valid(corruption_particles) and corruption_tier > 0:
+				corruption_particles.visible = true
 			# Enable processing for animations
 			set_process(true)
 		1:  # Reduced detail - hide shadow, slower animations
@@ -1209,11 +1447,15 @@ func apply_lod_settings() -> void:
 				shadow_sprite.visible = false
 			if sprite and sprite is AnimatedSprite2D:
 				sprite.speed_scale = 0.5  # Half speed animations
+			if corruption_particles and is_instance_valid(corruption_particles):
+				corruption_particles.visible = false
 		2:  # Minimal detail - no shadow, pause animations
 			if shadow_sprite:
 				shadow_sprite.visible = false
 			if sprite and sprite is AnimatedSprite2D:
 				sprite.speed_scale = 0.0  # Pause animations (shows idle frame)
+			if corruption_particles and is_instance_valid(corruption_particles):
+				corruption_particles.visible = false
 
 func set_lod_level(lod_level: int) -> void:
 	"""Set LOD level directly (for external calls)"""
@@ -1451,6 +1693,15 @@ func shrink_after_crit_window() -> void:
 				equip_sprite.scale = base_sprite_scale
 
 	_crit_window_transitioning = false  # Unlock after shrink complete
+
+	# Apply deferred corruption update if corruption changed during crit window
+	if _pending_corruption_update and OssuaryManager:
+		_pending_corruption_update = false
+		var new_tier = OssuaryManager.get_corruption_tier()
+		if new_tier != corruption_tier:
+			corruption_tier = new_tier
+			corruption_tint = CORRUPTION_TINTS[corruption_tier]
+			apply_corruption_visual()
 
 	# Clean up tutorial arrow when crit window ends
 	clear_tutorial_arrow()
