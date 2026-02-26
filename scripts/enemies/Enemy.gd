@@ -1090,8 +1090,8 @@ func grow_for_crit_window(_difficulty: float = 1.0) -> void:
 	_crit_window_transitioning = true  # Lock during async grow
 	in_crit_window = true  # Set flag for local checks
 
-	# Reset parent to neutral and change sprite to subtle white for crit window
-	self.modulate = Color(1.0, 1.0, 1.0, 1.0)
+	# Keep corruption tint during crit window — brighten sprite slightly for emphasis
+	# but preserve the corruption color on the parent node
 	if sprite:
 		sprite.modulate = Color(1.0, 1.0, 1.05, 1.0)  # Barely brighter than normal
 		if has_node("HitFlash"):
@@ -1116,6 +1116,9 @@ func grow_for_crit_window(_difficulty: float = 1.0) -> void:
 			for equip_sprite in equipment_sprites:
 				if is_instance_valid(equip_sprite):
 					_grow_tween.tween_property(equip_sprite, "scale", target_sprite_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
+			# Scale corruption particles with sprite
+			if corruption_particles and is_instance_valid(corruption_particles):
+				_grow_tween.tween_property(corruption_particles, "scale", target_sprite_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
 			z_index = Constants.CRIT_WINDOW_Z_INDEX
 			await _grow_tween.finished
 			_grow_tween = null
@@ -1681,6 +1684,9 @@ func shrink_after_crit_window() -> void:
 		for equip_sprite in equipment_sprites:
 			if is_instance_valid(equip_sprite):
 				tween.tween_property(equip_sprite, "scale", base_sprite_scale, 0.25)
+		# Shrink corruption particles back to base
+		if corruption_particles and is_instance_valid(corruption_particles):
+			tween.tween_property(corruption_particles, "scale", base_sprite_scale, 0.25)
 		await tween.finished
 
 		if is_instance_valid(self) and sprite:
@@ -1691,6 +1697,9 @@ func shrink_after_crit_window() -> void:
 		for equip_sprite in equipment_sprites:
 			if is_instance_valid(equip_sprite):
 				equip_sprite.scale = base_sprite_scale
+		# Ensure corruption particles scale is reset
+		if corruption_particles and is_instance_valid(corruption_particles):
+			corruption_particles.scale = base_sprite_scale
 
 	_crit_window_transitioning = false  # Unlock after shrink complete
 
