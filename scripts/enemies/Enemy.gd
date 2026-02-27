@@ -26,15 +26,15 @@ const LOOT_BODY_UI_SCENE: PackedScene = preload("res://scenes/ui/loot_body_ui.ts
 # Corruption visual tints (multiplied with level tint: final = level_tint * corruption_tint)
 const CORRUPTION_TINTS = {
 	0: Color(1.05, 1.0, 0.9),    # Clean: warm gold wash
-	1: Color(1.0, 0.9, 0.8),     # Tainted: amber
-	2: Color(0.85, 0.7, 0.8),    # Blighted: crimson-purple
-	3: Color(0.7, 0.55, 0.7),    # Cursed: dark violet
+	1: Color(1.0, 0.92, 0.85),   # Tainted: amber
+	2: Color(0.95, 0.82, 0.9),   # Blighted: soft purple
+	3: Color(0.88, 0.72, 0.88),  # Cursed: violet (bright enough to read)
 }
 const EQUIPMENT_CORRUPTION_TINTS = {
 	0: Color(1.1, 1.05, 0.85),   # Clean: polished gold sheen
-	1: Color(0.95, 0.85, 0.75),  # Tainted: tarnished
-	2: Color(0.75, 0.55, 0.7),   # Blighted: corrupted purple
-	3: Color(0.55, 0.35, 0.55),  # Cursed: deep dark violet
+	1: Color(1.0, 0.9, 0.82),    # Tainted: tarnished
+	2: Color(0.88, 0.72, 0.82),  # Blighted: corrupted purple
+	3: Color(0.75, 0.58, 0.75),  # Cursed: violet (not muddy)
 }
 
 # Performance: cache player reference (set once at ready, not refreshed every second)
@@ -102,7 +102,7 @@ var _crit_window_transitioning: bool = false  # Lock during grow/shrink async op
 var original_scale: Vector2 = Vector2.ONE
 var original_modulate: Color = Color.WHITE  # Store original difficulty color
 var corruption_tier: int = 3  # Default: Cursed (game starts at 100%)
-var corruption_tint: Color = Color(0.7, 0.55, 0.7)  # Default to Cursed tint
+var corruption_tint: Color = Color(0.88, 0.72, 0.88)  # Default to Cursed tint
 var corruption_particles: CPUParticles2D = null
 var _pending_corruption_update: bool = false  # Deferred update during crit window
 var _weakpoint_configs: Array = []  # All configs for this crit window (sequential spawning)
@@ -706,20 +706,20 @@ func create_corruption_particles() -> void:
 	match corruption_tier:
 		1:  # Tainted: few amber wisps
 			amount = 4
-			particle_color = Color(0.9, 0.7, 0.3, 0.6)
-			particle_color_dark = Color(0.7, 0.5, 0.2, 0.3)
+			particle_color = Color(1.0, 0.8, 0.4, 0.6)
+			particle_color_dark = Color(0.8, 0.6, 0.3, 0.3)
 			alpha = 0.5
 			velocity = 8.0
-		2:  # Blighted: moderate crimson-purple
+		2:  # Blighted: moderate purple wisps
 			amount = 8
-			particle_color = Color(0.7, 0.3, 0.6, 0.7)
-			particle_color_dark = Color(0.5, 0.2, 0.4, 0.3)
+			particle_color = Color(0.85, 0.45, 0.75, 0.7)
+			particle_color_dark = Color(0.65, 0.3, 0.55, 0.3)
 			alpha = 0.6
 			velocity = 12.0
-		3:  # Cursed: dense dark violet aura
+		3:  # Cursed: vivid violet aura
 			amount = 15
-			particle_color = Color(0.5, 0.2, 0.5, 0.8)
-			particle_color_dark = Color(0.3, 0.1, 0.3, 0.4)
+			particle_color = Color(0.75, 0.4, 0.85, 0.8)
+			particle_color_dark = Color(0.55, 0.25, 0.6, 0.4)
 			alpha = 0.7
 			velocity = 15.0
 		_:
