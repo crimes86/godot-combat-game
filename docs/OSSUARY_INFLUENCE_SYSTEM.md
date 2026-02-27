@@ -16,7 +16,7 @@ Together they create a cycle: arrive at a corrupted POI → fight the corruption
 
 ## The Core Loop
 
-Every POI follows the same cycle. Chunk 0 (home campfire) is the intro version. Outer chunks are tuned for groups.
+Every POI follows the same cycle. Chunk -1 (home campfire) is the intro version. Outer chunks are tuned for groups.
 
 ```
     ┌─────────────────────────────────────────────┐
@@ -123,7 +123,7 @@ CORRUPTION_PURIFY_THRESHOLD = 5.0      # Below this triggers purification event
 Each POI has its own corruption instance:
 
 ```
-Chunk 0: Home Campfire (solo intro)
+Chunk -1: Home Campfire (solo intro)
   - Faster corruption growth (teaches the cycle quickly)
   - Scaled for solo/duo play
   - Corruption boss is a named skeleton (intro difficulty)
@@ -158,10 +158,10 @@ Influence directly buffs weakpoint window duration and damage. A client-authorit
 
 | Influence | Window Duration | Damage Multiplier | Feel |
 |-----------|----------------|-------------------|------|
-| 0-25 (Quiet) | Base (4.0s) | 1.0x | Normal combat |
-| 25-50 (Stirring) | +25% (5.0s) | 1.15x | Noticeable improvement |
-| 50-75 (Rising) | +50% (6.0s) | 1.30x | Hitting hard |
-| 75-100 (Surging) | +75% (7.0s) | 1.50x | Peak power fantasy |
+| 0-25 (Unnoticed) | Base (4.0s) | 1.0x | Normal combat |
+| 25-50 (Noticed) | +25% (5.0s) | 1.15x | Noticeable improvement |
+| 50-75 (Hunted) | +50% (6.0s) | 1.30x | Hitting hard |
+| 75-100 (Marked) | +75% (7.0s) | 1.50x | Peak power fantasy |
 
 This creates the intended dynamic:
 - Arrive at corrupted POI → influence is 0 → boss fight is genuinely hard
@@ -230,7 +230,7 @@ The corruption/influence loop creates natural PvP hotspots in outer chunks:
 
 ## Zone Scaling
 
-### Chunk 0 — Home Campfire (Introduction)
+### Chunk -1 — Home Campfire (Introduction)
 
 The first campfire teaches the corruption/influence loop in a safe, solo-friendly environment:
 
@@ -254,29 +254,41 @@ Each POI in outer chunks has its own corruption tracker:
 
 ---
 
-## HUD
+## HUD & UI
 
-### Ossuary Bar (below minimap)
+### Influence Bar (top-center HUD)
 
-Two rows showing personal influence and area corruption:
+Personal kill momentum displayed in top-center of screen:
 
 ```
-[Skull Icon] [Influence Bar ||||||||---] Stirring    (your kill momentum)
-[Rot Icon]  [Corruption Bar |||--------] Tainted     (area corruption)
+[Influence Bar ||||||||---] Unnoticed    (your kill momentum)
 ```
 
-- **Influence bar**: green (low) → yellow → orange → red (high)
-  - Flash/pulse effect on kill (white flash, quick fade) so small changes are visible
-- **Corruption bar**: grey (low) → yellow-green → green → vivid toxic green (high)
-  - Flash effect on kill (brief brighten then fade)
-- Tier labels update per meter
+- green (Unnoticed) → yellow-green (Noticed) → orange (Hunted) → red (Marked)
+- Panel border color matches tier
+- White flash on kill confirms progress
+- Tooltip on hover shows value, tier, and mechanic explanation
+
+### Corruption Meter (world-space, above campfire)
+
+Community corruption displayed floating above the campfire in world space:
+
+```
+[Corruption Bar ||||--------] Tainted    (area corruption)
+```
+
+- Dark violet (Cursed) → crimson-purple (Blighted) → amber (Tainted) → gold (Clean)
+- Pulsing glow effect scales with corruption level (stronger pulse = more corrupted)
+- Scale-pop flash on any player kill (community-wide, all players see it)
+- Distance-based visibility (800px range)
+- Panel border color matches tier
+- Tooltip on hover shows value, tier, and mechanic explanation
 
 ### Kill Feedback
 
-On skeleton kill, both bars briefly flash to show movement:
-- Influence bar: white flash → fade back to normal (bar went up)
-- Corruption bar: white flash → fade back to normal (bar went down)
-- Even if the movement is tiny (0.5-1.0 points), the flash confirms progress
+On skeleton kill:
+- Influence bar: white flash → fade (bar went up) — local player only
+- Corruption meter: bright flash + scale pop → fade (bar went down) — all players near campfire
 
 ---
 
@@ -285,18 +297,18 @@ On skeleton kill, both bars briefly flash to show movement:
 ### Influence Tiers (per-player)
 | Range | Name | Color | Weakpoint Bonus |
 |-------|------|-------|-----------------|
-| 0-25 | Quiet | Muted green | Base duration |
-| 25-50 | Stirring | Yellow-green | +25% duration, 1.15x damage |
-| 50-75 | Rising | Orange | +50% duration, 1.30x damage |
-| 75-100 | Surging | Red | +75% duration, 1.50x damage |
+| 0-25 | Unnoticed | Muted green | Base duration |
+| 25-50 | Noticed | Amber-green | +25% duration, 1.15x damage |
+| 50-75 | Hunted | Warm orange | +50% duration, 1.30x damage |
+| 75-100 | Marked | Intense red | +75% duration, 1.50x damage |
 
 ### Corruption Tiers (per-POI)
 | Range | Name | Color | World State |
 |-------|------|-------|-------------|
-| 0-25 | Clean | Grey | Safe, minimal spawns |
-| 25-50 | Tainted | Pale yellow-green | Moderate, normal patrols |
-| 50-75 | Blighted | Sickly green | Dangerous, aggressive enemies |
-| 75-100 | Cursed | Vivid toxic green | Maximum threat, campfire under siege |
+| 0-25 | Clean | Warm gold | Safe, minimal spawns |
+| 25-50 | Tainted | Muted amber | Moderate, normal patrols |
+| 50-75 | Blighted | Dark crimson-purple | Dangerous, aggressive enemies |
+| 75-100 | Cursed | Deep dark violet | Maximum threat, campfire under siege |
 
 ---
 
@@ -308,13 +320,25 @@ On skeleton kill, both bars briefly flash to show movement:
 - [x] Two-row HUD with both bars
 - [x] Start corruption at 100% on server restart
 
-### Phase 2: Per-Player Influence (Server-Authoritative)
-- Move influence tracking to server-side per-player dictionary
-- Pass killer peer_id through `on_skeleton_killed()`
-- Server sends each player their own influence via targeted RPC
-- Each player's influence decays independently on server
-- Client HUD displays local player's influence from server updates
-- Add kill flash effect on both HUD bars
+### Phase 2: Per-Player Influence (DONE)
+- [x] Server-side per-player influence dictionary (peer_id → float)
+- [x] Killer peer_id passed through `on_skeleton_killed()`
+- [x] Targeted RPC sends each player their own influence value
+- [x] Per-player idle decay on server (60s delay, ~1.0/min)
+- [x] Kill flash effect on influence bar
+
+### Phase 2.5: World-Space Corruption Meter (DONE)
+- [x] Move corruption bar from HUD to world-space above campfire
+- [x] Influence bar moved to top-center HUD (standalone)
+- [x] Rename influence tiers: Unnoticed → Noticed → Hunted → Marked
+- [x] Corruption color scheme: dark violet (Cursed) → gold (Clean)
+- [x] Pulsing glow effect scales with corruption tier
+- [x] Community-wide kill flash + scale pop (all players see it)
+- [x] Distance-based visibility (800px)
+- [x] Tier-colored panel borders on both meters
+- [x] Hover tooltips on both meters explaining mechanics
+- [x] Consistent styling between influence and corruption meters
+- [x] Fix inventory persistence on server restart (backend sync)
 
 ### Phase 3: Influence → Weakpoint Buff
 - Server validates weakpoint window duration against player's influence
@@ -343,7 +367,7 @@ On skeleton kill, both bars briefly flash to show movement:
 ### Phase 7: Multi-Chunk POI System
 - Per-POI corruption trackers for outer chunks
 - POI rotation gameplay (farm one, let others rebuild)
-- Chunk-appropriate scaling (solo chunk 0, group chunk 1+)
+- Chunk-appropriate scaling (solo chunk -1, group chunk 1+)
 - PvP interactions around POI control
 
 ---
@@ -404,7 +428,7 @@ WAVE_BASE_ENEMIES = 4
 2. **Corruption is per-POI** — each area cycles independently. Allows rotation farming.
 3. **Corruption starts at 100%** on server restart. World begins dangerous.
 4. **Both cycle endpoints reward equally** — boss loot at high corruption, purification cache at low corruption. Neither side is "the real reward."
-5. **Outer chunks are group content** — solo players handle chunk 0, groups coordinate on outer POIs.
+5. **Outer chunks are group content** — solo players handle chunk -1, groups coordinate on outer POIs.
 6. **PvP integration is natural** — guarding corruption = guarding future loot. Creates organic conflict.
 7. **Meters reset on server restart** — no backend persistence needed for corruption. Influence resets per-player on login.
 8. **Kill flash on HUD bars** — visual confirmation that small per-kill changes registered.

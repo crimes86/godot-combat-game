@@ -11,9 +11,8 @@ var sparkle_particles: CPUParticles2D
 var shine_layers: Array = []  # Store shine polygons for brightness animation
 var charging_tween: Tween = null  # Reference to charging animation tween
 
-# Decoy weakpoint system
-var is_decoy: bool = false
-var decoy_mode: int = 0  # 0=waste (absorb hits, no damage), 1=fragile (1-hit, 1.5x), 2=glass (1-hit, 2x)
+# Grow-in animation state (for sequential spawning)
+var is_growing: bool = false
 
 # Color theme: "blood" for training dummy, "bone" for skeletons
 var color_theme: String = "blood"
@@ -56,15 +55,6 @@ var theme_colors = {
 		"particle_dark": Color(0.5, 0.15, 0.8, 1.0),  # Dark purple
 		"wave": Color(0.8, 0.4, 1.4, 1.0)  # Shockwave purple
 	},
-	"corrupted_bone": {
-		"base": Color(0.7, 0.6, 0.7, 1.0),      # Purplish bone
-		"glow": Color(0.8, 0.6, 0.9, 0.85),      # Purple glow
-		"shine": Color(1.0, 0.8, 1.1, 0.5),       # Purple-white shine
-		"flash": Color(0.9, 0.7, 1.0, 1.0),       # Purple flash
-		"particle_base": Color(0.8, 0.6, 0.9, 1.0),  # Purple particles
-		"particle_dark": Color(0.6, 0.4, 0.7, 1.0),  # Dark purple
-		"wave": Color(0.7, 0.5, 0.9, 1.0)         # Purple shockwave
-	}
 }
 
 signal weakpoint_hit(weakpoint)
@@ -433,8 +423,8 @@ func set_damage_per_hit(damage: int) -> void:
 	damage_per_hit = damage
 
 func _on_input(_vp: Node, event: InputEvent, _idx: int) -> void:
-	if is_destroyed or is_charging:
-		return  # Block input while charging (waiting for server confirmation)
+	if is_destroyed or is_charging or is_growing:
+		return  # Block input while charging or growing in
 
 	# Don't allow hits if parent enemy is dying or a corpse
 	var parent = get_parent()
@@ -454,19 +444,14 @@ func _on_input(_vp: Node, event: InputEvent, _idx: int) -> void:
 		hit()
 
 func hit() -> void:
-	if is_destroyed or is_charging:
-		return  # Block hits while charging (waiting for server confirmation)
+	if is_destroyed or is_charging or is_growing:
+		return  # Block hits while charging or growing in
 
 	# Don't allow hits if parent enemy is dying or a corpse
 	var parent = get_parent()
 	if parent and parent.has_method("get"):
 		if parent.get("is_dying") or parent.get("is_corpse"):
 			return
-
-	# Decoy weakpoint handling
-	if is_decoy:
-		_handle_decoy_hit()
-		return
 
 	current_hits += 1
 
@@ -569,68 +554,17 @@ func hit() -> void:
 		# Server validates total damage at crit window end
 		destroy()
 
-func _handle_decoy_hit() -> void:
-	"""Handle hit on a decoy weakpoint based on decoy_mode."""
-	current_hits += 1
-
-	match decoy_mode:
-		0:  # Waste mode (high corruption) - absorb hits, no damage, muted feedback
-			_play_decoy_waste_feedback()
-			if current_hits >= max_hits:
-				# Break with no reward
-				is_destroyed = true
-				input_pickable = false
-				weakpoint_destroyed.emit(self)
-				weakpoint_destroyed_local.emit(self)
-				# Quiet destruction - just fade out
-				if sprite:
-					var fade = create_tween()
-					fade.tween_property(sprite, "modulate:a", 0.0, 0.2)
-					await fade.finished
-				queue_free()
-
-		1:  # Fragile mode (tainted corruption) - 1-hit break, 1.5x burst
-			total_damage_dealt += int(damage_per_hit * 1.5)
-			weakpoint_hit.emit(self)
-			# Satisfying break feedback
-			var sound_manager = get_node_or_null("/root/SoundManager")
-			if sound_manager:
-				sound_manager.play_weakpoint_destroyed_sound(global_position, -6.0)
-			var combat_juice = get_node_or_null("/root/CombatJuice")
-			if combat_juice:
-				combat_juice.on_weakpoint()
-			destroy()
-
-		2:  # Glass mode (clean corruption) - 1-hit break, 2x burst
-			total_damage_dealt += int(damage_per_hit * 2.0)
-			weakpoint_hit.emit(self)
-			# Extra satisfying break feedback
-			var sound_manager = get_node_or_null("/root/SoundManager")
-			if sound_manager:
-				sound_manager.play_weakpoint_destroyed_sound(global_position, -4.0)
-			var combat_juice = get_node_or_null("/root/CombatJuice")
-			if combat_juice:
-				combat_juice.on_kill()  # Bigger impact for glass mode
-			destroy()
-
-func _play_decoy_waste_feedback() -> void:
-	"""Muted, unrewarding feedback for waste-mode decoy hits."""
-	if not sprite:
-		return
-
-	# Brief gray flash (muted, not satisfying)
-	var gray_flash = Color(0.5, 0.5, 0.5, 1.0)
-	var original_color = sprite.color
-	sprite.color = gray_flash
-
-	var color_tween = create_tween()
-	color_tween.tween_property(sprite, "color", original_color, 0.15)
-
-	# Subtle shake (smaller than real weakpoint)
-	var shake_tween = create_tween()
-	shake_tween.tween_property(sprite, "position", Vector2(1.5, 0), 0.02)
-	shake_tween.tween_property(sprite, "position", Vector2(-1.5, 0), 0.02)
-	shake_tween.tween_property(sprite, "position", Vector2(0, 0), 0.02)
+func grow_in() -> void:
+	"""Animate this weakpoint growing in from nothing (for sequential spawning)."""
+	is_growing = true
+	var target_scale = scale
+	scale = Vector2.ZERO
+	modulate.a = 0.0
+	var tween = create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(self, "scale", target_scale, 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tween.tween_property(self, "modulate:a", 1.0, 0.2)
+	tween.chain().tween_callback(func(): is_growing = false)
 
 func spawn_hit_number() -> void:
 	"""Show HIT indicator"""

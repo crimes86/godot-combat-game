@@ -183,6 +183,14 @@ func get_influence_tier() -> int:
 	else:
 		return Constants.OSSUARY_TIER_QUIET
 
+func get_influence_tier_for_peer(peer_id: int) -> int:
+	"""Server-side: get influence tier for a specific peer."""
+	var inf = _player_influence.get(peer_id, 0.0)
+	if inf >= 75.0: return Constants.OSSUARY_TIER_SURGING
+	elif inf >= 50.0: return Constants.OSSUARY_TIER_RISING
+	elif inf >= 25.0: return Constants.OSSUARY_TIER_STIRRING
+	else: return Constants.OSSUARY_TIER_QUIET
+
 func get_corruption_tier() -> int:
 	"""Returns 0-3 tier based on current corruption."""
 	if corruption >= 75.0:

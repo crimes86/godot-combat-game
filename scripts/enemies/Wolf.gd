@@ -1120,13 +1120,10 @@ func spawn_weakpoints() -> void:
 	if is_dying or is_corpse:
 		return
 
-	# Number of weakpoints based on player level
-	var player_level = CharacterStats.level
+	# Number of weakpoints based on influence tier
 	var num_weakpoints = 1
-	if player_level >= 21:
-		num_weakpoints = 3
-	elif player_level >= 11:
-		num_weakpoints = 2
+	if OssuaryManager:
+		num_weakpoints = OssuaryManager.get_influence_tier() + 1
 
 	# Wolf sprite bounds (smaller than skeleton)
 	var sprite_scale = sprite.scale if sprite else Vector2.ONE
@@ -1198,14 +1195,11 @@ func _on_weakpoint_destroyed(weakpoint) -> void:
 
 
 func get_crit_window_weakpoint_count() -> int:
-	"""Returns number of weakpoints for this crit window"""
+	"""Returns number of weakpoints for this crit window (influence-based)."""
 	if weakpoints.size() > 0:
 		return weakpoints.size()
-	var player_level = CharacterStats.level
-	if player_level >= 21:
-		return 3
-	elif player_level >= 11:
-		return 2
+	if OssuaryManager:
+		return OssuaryManager.get_influence_tier() + 1
 	return 1
 
 

@@ -1937,28 +1937,13 @@ func process_crit_window_result(enemy_network_id: int, weakpoints_destroyed: int
 	notify_crit_window_end_to_player(enemy_network_id, attacker_id)
 
 func _get_expected_weakpoint_count(attacker_peer_id: int) -> int:
-	"""Get expected weakpoint count based on attacker's level."""
-	var attacker_level = 1
-
-	var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
-	for player in players:
-		var player_peer_id = 1
-		if player.has_method("get_multiplayer_authority"):
-			player_peer_id = player.get_multiplayer_authority()
-
-		if player_peer_id == attacker_peer_id:
-			if player.has_method("get_level"):
-				attacker_level = player.get_level()
-			elif player.get("level") != null:
-				attacker_level = player.level
-			break
-
-	return _get_weakpoint_count_for_level(attacker_level)
+	"""Get expected weakpoint count based on attacker's influence tier."""
+	if OssuaryManager:
+		return OssuaryManager.get_influence_tier_for_peer(attacker_peer_id) + 1
+	return 1
 
 func _calculate_max_crit_damage(_enemy: Node, attacker_peer_id: int) -> int:
 	"""Calculate maximum possible crit window damage for validation."""
-	# Get player's level and damage stats
-	var attacker_level = 1
 	var base_damage = 10
 	var crit_mult = 2.0
 
@@ -1972,15 +1957,10 @@ func _calculate_max_crit_damage(_enemy: Node, attacker_peer_id: int) -> int:
 		if player_peer_id == attacker_peer_id:
 			if player.get("attack_damage") != null:
 				base_damage = player.attack_damage
-			# Get player level for weakpoint count calculation
-			if player.has_method("get_level"):
-				attacker_level = player.get_level()
-			elif player.get("level") != null:
-				attacker_level = player.level
 			break
 
-	# Calculate weakpoint count based on ATTACKER's level (not server's CharacterStats)
-	var num_weakpoints = _get_weakpoint_count_for_level(attacker_level)
+	# Calculate weakpoint count based on attacker's influence tier
+	var num_weakpoints = _get_expected_weakpoint_count(attacker_peer_id)
 
 	# Get max hits per weakpoint (usually 3-5)
 	var hits_per_weakpoint = 5  # Max possible
@@ -1992,15 +1972,6 @@ func _calculate_max_crit_damage(_enemy: Node, attacker_peer_id: int) -> int:
 	var max_possible = num_weakpoints * hits_per_weakpoint * damage_per_hit
 
 	return max_possible
-
-func _get_weakpoint_count_for_level(player_level: int) -> int:
-	"""Calculate number of weakpoints based on player level."""
-	if player_level >= 21:
-		return 3  # Level 21+: All 3 weakpoints
-	elif player_level >= 11:
-		return 2  # Level 11-20: 2 weakpoints
-	else:
-		return 1  # Level 1-10: 1 weakpoint
 
 func _get_max_player_damage(attacker_peer_id: int) -> float:
 	"""Get the maximum expected base damage for a player (for anti-cheat validation)."""

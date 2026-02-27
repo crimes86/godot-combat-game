@@ -191,19 +191,19 @@ func _start_growing_sprite_window(target: Node, window_data: WindowData) -> void
 			target.died.connect(_on_target_died.bind(target))
 
 	# Create and start timer (owned by manager) BEFORE grow starts
-	# Scale duration by corruption tier: Clean=longer, Cursed=shorter
+	# Scale duration by influence tier: higher influence = more weakpoints = more time
 	var base_duration = Constants.CRIT_WINDOW_DURATION
-	var corruption_scale = 1.0
+	var influence_scale = 1.0
 	if OssuaryManager:
-		var c_tier = OssuaryManager.get_corruption_tier()
-		match c_tier:
-			0: corruption_scale = 1.5   # Clean: 6.0s — more time
-			1: corruption_scale = 1.25  # Tainted: 5.0s
-			2: corruption_scale = 1.0   # Blighted: 4.0s — no change
-			3: corruption_scale = 0.85  # Cursed: 3.4s — shorter, harder
+		var i_tier = OssuaryManager.get_influence_tier()
+		match i_tier:
+			0: influence_scale = 1.0   # Unnoticed: 1 wp, 4.0s
+			1: influence_scale = 1.35  # Noticed: 2 wp, 5.4s
+			2: influence_scale = 1.7   # Hunted: 3 wp, 6.8s
+			3: influence_scale = 2.0   # Marked: 4 wp, 8.0s
 
 	var timer = Timer.new()
-	timer.wait_time = base_duration * corruption_scale
+	timer.wait_time = base_duration * influence_scale
 	timer.one_shot = true
 	timer.timeout.connect(_on_window_timeout.bind(target))
 	add_child(timer)
