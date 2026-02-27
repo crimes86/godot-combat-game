@@ -994,10 +994,10 @@ func perform_attack(player: Node, direction: Vector2) -> void:
 		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
 		if network_enemy_mgr and network_enemy_mgr.has_method("deal_damage_to_player"):
 			var peer_id = player.get_multiplayer_authority() if player.has_method("get_multiplayer_authority") else 1
-			network_enemy_mgr.deal_damage_to_player(peer_id, base_damage)
+			network_enemy_mgr.deal_damage_to_player(peer_id, base_damage, name)
 		elif player.has_method("take_damage"):
 			# Fallback for singleplayer
-			player.take_damage(base_damage)
+			player.take_damage(base_damage, "pve", -1, name)
 		# Reset _was_attacked after successfully attacking - spider got its revenge
 		_was_attacked = false
 

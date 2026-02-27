@@ -1687,20 +1687,30 @@ func perform_attack(player: Node, direction: Vector2) -> void:
 	# Deal damage after a short delay (sync with animation)
 	await get_tree().create_timer(0.3).timeout
 
+	# Bail out if wolf died during attack animation
+	if not is_instance_valid(self) or is_dying or is_corpse:
+		is_attacking = false
+		return
+
 	if is_instance_valid(player) and global_position.distance_to(player.global_position) <= ATTACK_RANGE * 1.5:
 		# Use NetworkEnemyManager for proper multiplayer damage sync
 		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
 		if network_enemy_mgr and network_enemy_mgr.has_method("deal_damage_to_player"):
 			var peer_id = player.get_multiplayer_authority() if player.has_method("get_multiplayer_authority") else 1
-			network_enemy_mgr.deal_damage_to_player(peer_id, base_damage)
+			network_enemy_mgr.deal_damage_to_player(peer_id, base_damage, name)
 		elif player.has_method("take_damage"):
 			# Fallback for singleplayer
-			player.take_damage(base_damage)
+			player.take_damage(base_damage, "pve", -1, name)
 		# Reset _was_attacked after successfully attacking - wolf got its revenge
 		_was_attacked = false
 
 	# Wait for attack animation to finish
 	await get_tree().create_timer(0.5).timeout
+
+	# Check again after second await
+	if not is_instance_valid(self) or is_dying or is_corpse:
+		is_attacking = false
+		return
 	is_attacking = false
 
 

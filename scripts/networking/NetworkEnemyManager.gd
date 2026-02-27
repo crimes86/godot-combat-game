@@ -1746,7 +1746,7 @@ func _client_crit_window_ended(_enemy_network_id: int) -> void:
 # PLAYER DAMAGE SYNC (Server -> Clients)
 # ═══════════════════════════════════════════════════════════════════════════
 
-func deal_damage_to_player(target_peer_id: int, damage: float) -> void:
+func deal_damage_to_player(target_peer_id: int, damage: float, source_name: String = "") -> void:
 	"""Server tells a specific client to take damage."""
 	if not multiplayer.is_server():
 		return
@@ -1755,13 +1755,13 @@ func deal_damage_to_player(target_peer_id: int, damage: float) -> void:
 	if target_peer_id == 1:
 		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 		if player and player.has_method("take_damage"):
-			player.take_damage(damage)
+			player.take_damage(damage, "pve", -1, source_name)
 	else:
 		# Send to specific client
-		_client_take_damage.rpc_id(target_peer_id, damage)
+		_client_take_damage.rpc_id(target_peer_id, damage, source_name)
 
 @rpc("authority", "reliable")
-func _client_take_damage(damage: float) -> void:
+func _client_take_damage(damage: float, source_name: String = "") -> void:
 	"""Client receives damage from server (enemy attack)."""
 	# Find local player and apply damage
 	var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
@@ -1770,13 +1770,13 @@ func _client_take_damage(damage: float) -> void:
 		if player.has_method("take_damage"):
 			# In multiplayer, each client has their own local player
 			if player.get_multiplayer_authority() == multiplayer.get_unique_id() or not multiplayer.has_multiplayer_peer():
-				player.take_damage(damage)
+				player.take_damage(damage, "pve", -1, source_name)
 				return
 
 	# Fallback: just damage first player found
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 	if player and player.has_method("take_damage"):
-		player.take_damage(damage)
+		player.take_damage(damage, "pve", -1, source_name)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PLAYER DEATH TRACKING (Server-side)

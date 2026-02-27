@@ -1304,6 +1304,11 @@ func perform_attack() -> void:
 		is_performing_attack = false
 		return
 
+	# Bail out if enemy died during attack animation
+	if enemy.is_dying or enemy.is_corpse:
+		is_performing_attack = false
+		return
+
 	# Don't deal damage to dead players
 	if _is_player_dead(player):
 		is_performing_attack = false
@@ -1325,11 +1330,11 @@ func perform_attack() -> void:
 			target_peer_id = player.get_meta("peer_id")
 
 		if _network_enemy_mgr:
-			_network_enemy_mgr.deal_damage_to_player(target_peer_id, damage)
+			_network_enemy_mgr.deal_damage_to_player(target_peer_id, damage, enemy.name)
 		else:
 			# Fallback: direct damage (only works for local player)
 			if player.has_method("take_damage"):
-				player.take_damage(damage)
+				player.take_damage(damage, "pve", -1, enemy.name)
 	else:
 		# Single player or client (shouldn't happen - AI only runs on server)
 		if player.has_method("take_damage"):

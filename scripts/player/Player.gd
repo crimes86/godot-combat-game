@@ -54,6 +54,7 @@ var attack_cooldown: float = Constants.PLAYER_ATTACK_COOLDOWN
 var max_health: float = 100.0
 var current_health: float = 100.0
 var is_dead: bool = false  # Prevent multiple death calls
+var _last_damage_source: String = ""  # Track what dealt the killing blow
 
 # Passive Healing System (Out-of-Combat Regeneration)
 @export var out_of_combat_delay: float = 5.0  # Seconds after taking damage before healing starts
@@ -2159,7 +2160,7 @@ func _on_attack_animation_finished() -> void:
 	var lpc_dir = convert_to_lpc_direction(dir_str)
 	character_sprite.play_lpc_animation("idle", lpc_dir)
 
-func take_damage(amount: float, source_type: String = "pve", source_player_id: int = -1) -> void:
+func take_damage(amount: float, source_type: String = "pve", source_player_id: int = -1, source_name: String = "") -> void:
 	var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
 
 	# I-frames during dash
@@ -2264,7 +2265,15 @@ func take_damage(amount: float, source_type: String = "pve", source_player_id: i
 				print("🛡️ Armor mitigated %.1f → %.1f (%.0f%% reduction from %d defense)" % [
 					amount, mitigated_amount, mitigation_pct * 100, defense])
 
-	print("Player taking %.1f damage (current: %.1f)" % [mitigated_amount, current_health])
+	# Track damage source for death log
+	if source_name != "":
+		_last_damage_source = source_name
+	elif source_type == "player":
+		_last_damage_source = "Player_%d" % source_player_id
+	else:
+		_last_damage_source = "Unknown"
+
+	print("Player taking %.1f damage from '%s' (current: %.1f)" % [mitigated_amount, _last_damage_source, current_health])
 	current_health -= mitigated_amount
 
 	# Ensure health doesn't go below 0
@@ -5017,6 +5026,7 @@ func die() -> void:
 
 	var death_position = global_position
 	print("\n💀 ===== PLAYER DEATH =====")
+	print("💀 Killed by: %s" % _last_damage_source)
 	print("Position: ", death_position)
 	print("Remaining health: ", current_health)
 
