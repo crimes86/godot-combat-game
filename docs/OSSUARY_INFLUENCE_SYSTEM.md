@@ -8,7 +8,7 @@ Two meters drive a repeating **push-pull gameplay loop** at every Point of Inter
 
 - **Corruption** (per-POI, community-shared) — the skeleton faction's grip on the land. Starts maxed out on server restart. All player kills in the area chip it down. Left alone, it grows back. High corruption = dangerous world, bosses present, high-tier loot. Low corruption = safe, farmable, culminating reward.
 
-- **Influence** (per-player, server-authoritative) — your personal kill momentum. The harder and faster you fight, the longer and stronger your weakpoint windows become. Decays when you stop fighting.
+- **Reputation** (per-player, server-authoritative, **permanent**) — your faction standing with the Ossuary. Earned by killing skeletons. Never decays. Persists across sessions via backend. Higher reputation = more weakpoints on all enemy types.
 
 Together they create a cycle: arrive at a corrupted POI → fight the corruption boss (hard, influence is low) → clear the remaining mobs (influence rises, corruption falls) → claim the purification reward at low corruption (easy, influence is high) → leave → corruption rebuilds → repeat.
 
@@ -40,7 +40,7 @@ Every POI follows the same cycle. Chunk -1 (home campfire) is the intro version.
     ├─────────────────────────────────────────────┤
     │              ↓ Players leave ↓              │
     │  Corruption passively rebuilds.             │
-    │  Influence decays per-player.               │
+    │  Reputation persists (permanent).           │
     │  Boss respawns when corruption hits 100%.   │
     └──────────── CYCLE RESTARTS ─────────────────┘
 ```
@@ -143,10 +143,11 @@ Chunk 1+: Outer POIs (group endgame)
 |----------|-------|
 | Range | 0.0 — 100.0 |
 | Starting value | 0.0 |
-| Scope | Per-player (YOUR kill momentum) |
+| Scope | Per-player (YOUR faction standing) |
 | Grows from | You killing skeleton-type enemies |
-| Decays from | Time without killing |
-| Authority | **Server-authoritative** (affects damage output) |
+| Decays from | **Never** — reputation is permanent |
+| Persistence | Backend-stored, survives disconnect/restart |
+| Authority | **Server-authoritative** (affects weakpoint count) |
 
 ### Why Server-Authoritative
 
@@ -172,15 +173,26 @@ This creates the intended dynamic:
 - PvP: influence buffs weakpoint windows against players too (risk/reward for area control)
 - Group "guarding" an area to build corruption → PvP to protect the mobs → corruption boss spawns → group clears and farms at high influence
 
-### Influence Constants
+### Reputation Constants
 
 ```
-INFLUENCE_BASE_GAIN = 1.0              # Per skeleton kill
-INFLUENCE_LEVEL_BONUS = 0.15           # Per enemy level above 1
-INFLUENCE_GUARDIAN_BONUS = 2.0         # Extra for guardian kills
-INFLUENCE_DECAY_DELAY = 60.0           # Seconds before decay starts
-INFLUENCE_DECAY_RATE = 0.0167/s        # ~1.0/min after idle
+INFLUENCE_BASE_GAIN = 0.2              # Per skeleton kill (~500 kills to max)
+INFLUENCE_LEVEL_BONUS = 0.03           # Per enemy level above 1
+INFLUENCE_GUARDIAN_BONUS = 0.4         # Extra for guardian kills (0.6 total)
+# No decay — reputation is permanent
 ```
+
+### Reputation Gain Math
+
+| Tier | Threshold | ~Kills (L1) | Name |
+|------|-----------|-------------|------|
+| 0 | 0 | 0 | Unnoticed |
+| 1 | 25 | 125 | Noticed |
+| 2 | 50 | 250 | Hunted |
+| 3 | 75 | 375 | Marked |
+| Max | 100 | 500 | — |
+
+Guardian kills earn 0.6 rep (3x normal). Higher level enemies get mild bonus (+0.03 per level).
 
 ### Server Tracking
 
@@ -340,11 +352,14 @@ On skeleton kill:
 - [x] Consistent styling between influence and corruption meters
 - [x] Fix inventory persistence on server restart (backend sync)
 
-### Phase 3: Influence → Weakpoint Buff
-- Server validates weakpoint window duration against player's influence
-- Window duration scales: base 4.0s → up to 7.0s at max influence
-- Weakpoint damage multiplier scales: 1.0x → 1.50x at max influence
-- Display influence buff indicator during weakpoint windows
+### Phase 3: Influence → Weakpoint Buff (DONE)
+- [x] Weakpoint count scales with influence tier (1–4 sequential, tier + 1)
+- [x] Window duration scales with influence tier (4.0s–8.0s)
+- [x] Server validates weakpoint count against player's influence
+- [x] Sequential spawning: weakpoints appear one at a time with grow-in animation
+- [x] Removed decoy/wave complexity in favor of clean sequential system
+- [~] Damage multiplier — cut (more weakpoints = more damage naturally)
+- [~] Buff indicator — cut (additional weakpoints are a clear enough tell)
 
 ### Phase 4: Corruption Boss + Threshold Events
 - Corruption boss spawns at 100% per POI
@@ -402,12 +417,10 @@ CORRUPTION_BOSS_THRESHOLD = 100.0
 CORRUPTION_MINI_BOSS_THRESHOLDS = [75, 50, 25]
 CORRUPTION_PURIFY_THRESHOLD = 5.0
 
-# Influence (per-player)
-INFLUENCE_BASE_GAIN = 1.0
-INFLUENCE_LEVEL_BONUS = 0.15
-INFLUENCE_GUARDIAN_BONUS = 2.0
-INFLUENCE_DECAY_DELAY = 60.0              # Seconds before decay
-INFLUENCE_DECAY_RATE = 0.0167/s           # ~1.0/min
+# Reputation (per-player, permanent, backend-persisted)
+INFLUENCE_BASE_GAIN = 0.2                 # ~500 kills to max
+INFLUENCE_LEVEL_BONUS = 0.03
+INFLUENCE_GUARDIAN_BONUS = 0.4            # 0.6 total for guardian kills
 
 # Influence → Weakpoint Scaling
 INFLUENCE_WINDOW_BASE = 4.0              # Base weakpoint duration
@@ -430,5 +443,5 @@ WAVE_BASE_ENEMIES = 4
 4. **Both cycle endpoints reward equally** — boss loot at high corruption, purification cache at low corruption. Neither side is "the real reward."
 5. **Outer chunks are group content** — solo players handle chunk -1, groups coordinate on outer POIs.
 6. **PvP integration is natural** — guarding corruption = guarding future loot. Creates organic conflict.
-7. **Meters reset on server restart** — no backend persistence needed for corruption. Influence resets per-player on login.
+7. **Corruption resets on server restart** — no backend persistence needed for corruption. **Reputation is permanent** — persisted via backend, loaded on login.
 8. **Kill flash on HUD bars** — visual confirmation that small per-kill changes registered.

@@ -57,6 +57,8 @@ var playtest_claimed_items: Array = []  # item_ids of forged items claimed in pl
 # "ashbane" = Default faction (Ashbane tree icon)
 # Other strings = Player-created allegiances (future)
 
+var ossuary_reputation: float = 0.0  # Permanent Ossuary faction reputation (0-100)
+
 var allegiance_id: String = "ashbane"  # Default to Ashbane faction
 var allegiance_last_change: float = 0.0  # Unix timestamp of last allegiance change
 const ALLEGIANCE_CHANGE_COOLDOWN: float = 86400.0  # 1 day in seconds between player allegiance switches
@@ -989,10 +991,13 @@ func get_save_data() -> Dictionary:
 		"allegiance_id": allegiance_id,
 		"allegiance_last_change": allegiance_last_change,
 
+		# Ossuary reputation
+		"ossuary_reputation": ossuary_reputation,
+
 		# Quest progress
 		"quests": quest_data,
 
-		"version": 6  # Added forged weapon metadata persistence
+		"version": 7  # Added persistent ossuary reputation
 	}
 
 func load_save_data(data: Dictionary) -> void:
@@ -1028,6 +1033,13 @@ func load_save_data(data: Dictionary) -> void:
 	# Allegiance
 	allegiance_id = data.get("allegiance_id", ALLEGIANCE_ASHBANE)  # Default to Ashbane
 	allegiance_last_change = data.get("allegiance_last_change", 0.0)
+
+	# Ossuary reputation (permanent, persisted via backend)
+	ossuary_reputation = data.get("ossuary_reputation", 0.0)
+	if ossuary_reputation > 0.0:
+		var ossuary_mgr = get_node_or_null("/root/OssuaryManager")
+		if ossuary_mgr:
+			ossuary_mgr.set_local_influence(ossuary_reputation)
 
 	# Equipped weapon (recreate Weapon resource from saved data)
 	var weapon_data = data.get("equipped_weapon", {})

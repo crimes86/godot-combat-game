@@ -1,8 +1,8 @@
 extends Node
 
-## Ossuary Influence & Corruption System
+## Ossuary Reputation & Corruption System
 ## Two meters that track the skeleton faction's grip on the world:
-##   - Influence (0-100): Per-player, rises when that player kills skeletons, decays after idle.
+##   - Reputation (0-100): Per-player, permanent. Earned by killing skeletons. Never decays. Persists via backend.
 ##   - Corruption (0-100): Community-shared, grows passively, decays when any player kills skeletons.
 ##
 ## Server-authoritative: the host runs the simulation.
@@ -27,12 +27,10 @@ signal corruption_threshold_crossed(tier: int, rising: bool)
 const TICK_INTERVAL: float = 5.0      # Seconds between ticks
 const SYNC_INTERVAL: float = 10.0     # Seconds between client sync broadcasts
 
-## Influence — rises on kills, decays after idle
-const INFLUENCE_BASE_GAIN: float = 1.0       # Influence gained per regular skeleton kill
-const INFLUENCE_LEVEL_BONUS: float = 0.15    # Extra gain per enemy level above 1
-const INFLUENCE_GUARDIAN_BONUS: float = 2.0  # Extra gain for guardian kills (added to base)
-const INFLUENCE_DECAY_DELAY: float = 60.0    # Seconds of no kills before decay starts
-const INFLUENCE_DECAY_RATE: float = 0.0167   # Influence lost per second during decay (~1.0/min)
+## Reputation — rises on kills, never decays (persistent)
+const INFLUENCE_BASE_GAIN: float = 0.2       # Reputation gained per regular skeleton kill (~500 kills to max)
+const INFLUENCE_LEVEL_BONUS: float = 0.03    # Extra gain per enemy level above 1
+const INFLUENCE_GUARDIAN_BONUS: float = 0.4  # Extra gain for guardian kills (added to base)
 
 ## Corruption — grows passively, decays on kills
 const CORRUPTION_GROWTH_RATE: float = 0.04   # Corruption gained per tick (~0.5/min)
@@ -54,10 +52,8 @@ const CORRUPTION_TIER_NAMES: Array[String] = ["Clean", "Tainted", "Blighted", "C
 # STATE
 # ═══════════════════════════════════════════════════════════════════════════
 
-## Per-player influence (server-side): peer_id → float
+## Per-player reputation (server-side): peer_id → float
 var _player_influence: Dictionary = {}
-## Per-player idle timer (server-side): peer_id → seconds since last kill
-var _player_last_kill: Dictionary = {}
 
 ## Local player's influence (set by targeted RPC or directly in single-player)
 var _local_influence: float = 0.0
@@ -109,20 +105,6 @@ func _process(delta: float) -> void:
 		_tick_timer -= TICK_INTERVAL
 		_apply_corruption_growth()
 
-	# Per-player influence decay after idle delay
-	for peer_id in _player_influence.keys():
-		_player_last_kill[peer_id] = _player_last_kill.get(peer_id, 0.0) + delta
-		if _player_last_kill[peer_id] >= INFLUENCE_DECAY_DELAY and _player_influence[peer_id] > 0.0:
-			var old_val = _player_influence[peer_id]
-			_player_influence[peer_id] = clampf(old_val - INFLUENCE_DECAY_RATE * delta, MIN_INFLUENCE, MAX_INFLUENCE)
-			# Update local display if this is our own influence (single-player / host)
-			if _is_local_peer(peer_id):
-				_local_influence = _player_influence[peer_id]
-				if _local_influence != old_val:
-					influence_changed.emit(_local_influence)
-					_check_influence_threshold()
-					_update_hud()
-
 	# Sync to clients (multiplayer only)
 	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
 		_sync_timer += delta
@@ -153,10 +135,7 @@ func deactivate() -> void:
 	_set_hud_visible(false)
 
 func reset() -> void:
-	"""Reset both meters (new game/session)."""
-	_player_influence.clear()
-	_player_last_kill.clear()
-	_local_influence = 0.0
+	"""Reset session-based state (corruption, timers). Reputation is permanent and not cleared."""
 	corruption = MAX_CORRUPTION  # Start fully corrupted
 	_previous_influence_tier = get_influence_tier()
 	_previous_corruption_tier = get_corruption_tier()
@@ -218,6 +197,26 @@ func get_corruption_tier_name() -> String:
 func get_tier_name() -> String:
 	return get_influence_tier_name()
 
+func get_influence_for_peer(peer_id: int) -> float:
+	"""Server-side: get raw reputation value for a specific peer."""
+	return _player_influence.get(peer_id, 0.0)
+
+func set_influence_for_peer(peer_id: int, value: float) -> void:
+	"""Server-side: set reputation for a peer (used when loading from backend)."""
+	_player_influence[peer_id] = clampf(value, MIN_INFLUENCE, MAX_INFLUENCE)
+	if _is_local_peer(peer_id):
+		_local_influence = _player_influence[peer_id]
+		_previous_influence_tier = get_influence_tier()
+		influence_changed.emit(_local_influence)
+		_update_hud()
+
+func set_local_influence(value: float) -> void:
+	"""Client-side: set local reputation (used when loading from save data)."""
+	_local_influence = clampf(value, MIN_INFLUENCE, MAX_INFLUENCE)
+	_previous_influence_tier = get_influence_tier()
+	influence_changed.emit(_local_influence)
+	_update_hud()
+
 func get_corruption_display() -> Dictionary:
 	"""Returns corruption display data (value, tier, colors) for world-space UI."""
 	var tier = get_corruption_tier()
@@ -258,10 +257,9 @@ func on_skeleton_killed(killer_peer_id: int, enemy_level: int, is_guardian: bool
 	if not _is_authority:
 		return
 
-	# --- Per-player influence gain ---
+	# --- Per-player reputation gain ---
 	if not _player_influence.has(killer_peer_id):
 		_player_influence[killer_peer_id] = 0.0
-	_player_last_kill[killer_peer_id] = 0.0
 
 	var gain = INFLUENCE_BASE_GAIN
 	if is_guardian:
@@ -323,8 +321,6 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	"""Clean up per-player data when a player disconnects."""
 	if _player_influence.has(peer_id):
 		_player_influence.erase(peer_id)
-	if _player_last_kill.has(peer_id):
-		_player_last_kill.erase(peer_id)
 	LogManager.info("Ossuary: cleaned up data for disconnected peer %d" % peer_id, "ossuary")
 
 func _apply_corruption_growth() -> void:
@@ -553,7 +549,7 @@ func _update_hud() -> void:
 			next_threshold = "Next tier at 75"
 		else:
 			next_threshold = "Maximum tier reached"
-		_influence_panel.tooltip_text = "Influence: %.0f / 100 (%s)\n%s\n\nKilling skeletons raises your influence.\nThe more you kill, the more they notice you.\nInfluence decays after 60s of no kills." % [_local_influence, tier_name, next_threshold]
+		_influence_panel.tooltip_text = "Reputation: %.0f / 100 (%s)\n%s\n\nKilling skeletons raises your reputation.\nReputation is permanent. Higher rep = more weakpoints." % [_local_influence, tier_name, next_threshold]
 
 func _set_hud_visible(visible: bool) -> void:
 	"""Show/hide the HUD indicator."""

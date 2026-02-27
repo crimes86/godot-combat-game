@@ -69,6 +69,7 @@ class ServerCharacterSync(BaseModel):
     wisdom: int = Field(default=10, ge=1, le=999)
     vitality: int = Field(default=10, ge=1, le=999)
     current_hp: float = Field(default=-1.0, description="Current HP, -1 means not provided")
+    ossuary_reputation: float = Field(default=0.0, ge=0.0, le=100.0)
     # Optional context for logging
     disconnect_reason: Optional[str] = Field(default=None, max_length=64)
 
@@ -100,6 +101,7 @@ class ServerCharacterFetchResponse(BaseModel):
     wisdom: int
     vitality: int
     current_hp: float = Field(default=-1.0)
+    ossuary_reputation: float = Field(default=0.0)
 
 
 # =============================================================================
@@ -164,6 +166,7 @@ async def server_character_sync(
     data["vitality"] = payload.vitality
     if payload.current_hp >= 0:
         data["current_hp"] = payload.current_hp
+    data["ossuary_reputation"] = payload.ossuary_reputation
 
     character.character_data = data
     character.last_played_at = datetime.utcnow()
@@ -260,7 +263,8 @@ async def server_fetch_character(
         intelligence=data.get("intelligence", 10),
         wisdom=data.get("wisdom", 10),
         vitality=data.get("vitality", 10),
-        current_hp=data.get("current_hp", -1.0)
+        current_hp=data.get("current_hp", -1.0),
+        ossuary_reputation=data.get("ossuary_reputation", 0.0)
     )
 
 

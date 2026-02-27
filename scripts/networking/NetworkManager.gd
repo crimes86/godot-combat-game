@@ -1086,7 +1086,8 @@ func _complete_ashbane_auth_with_backend_data(peer_id: int, backend_data: Dictio
 		"equipped_weapon": backend_data.get("equipped_weapon", ""),
 		"equipped_armor": backend_data.get("equipped_armor", {}),
 		"weapon_skills": JSON.stringify(backend_data.get("weapon_skills", {})),
-		"current_hp": backend_data.get("current_hp", -1.0)
+		"current_hp": backend_data.get("current_hp", -1.0),
+		"ossuary_reputation": backend_data.get("ossuary_reputation", 0.0)
 	}
 
 	# Save to local database for future reference
@@ -1187,8 +1188,14 @@ func _finalize_ashbane_auth(peer_id: int, player_data: Dictionary) -> void:
 		"inventory": player_data.get("inventory", "[]"),
 		"equipped_weapon": player_data.get("equipped_weapon", ""),
 		"equipped_armor": player_data.get("equipped_armor", {}),
-		"weapon_skills": player_data.get("weapon_skills", "{}")
+		"weapon_skills": player_data.get("weapon_skills", "{}"),
+		"ossuary_reputation": player_data.get("ossuary_reputation", 0.0)
 	}
+
+	# Inject ossuary reputation into OssuaryManager (server-side)
+	var ossuary_rep = player_data.get("ossuary_reputation", 0.0)
+	if OssuaryManager and ossuary_rep > 0.0:
+		OssuaryManager.set_influence_for_peer(peer_id, ossuary_rep)
 
 	print("[Server] Player %s registered for server-side auto-save" % storage_key)
 
@@ -1515,6 +1522,10 @@ func _build_state_from_player_node(player_node: Node, peer_id: int) -> Dictionar
 			if not state.has(key):
 				state[key] = cached[key]
 
+	# Grab latest ossuary reputation from OssuaryManager (server-side)
+	if OssuaryManager:
+		state["ossuary_reputation"] = OssuaryManager.get_influence_for_peer(peer_id)
+
 	return state
 
 # --- Server → Backend: Sync character on logout ---
@@ -1595,6 +1606,7 @@ func _sync_player_to_backend(user_id: int, username: String, state: Dictionary, 
 		"wisdom": state.get("wisdom", 10),
 		"vitality": state.get("vitality", 10),
 		"current_hp": state.get("current_hp", -1),
+		"ossuary_reputation": state.get("ossuary_reputation", 0.0),
 		"disconnect_reason": disconnect_reason
 	}
 
