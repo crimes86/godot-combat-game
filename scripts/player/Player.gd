@@ -5112,9 +5112,11 @@ func die() -> void:
 			var ai = enemy.get_node("EnemyAI")
 			if ai.has_method("reset_to_patrol"):
 				ai.reset_to_patrol()
-			# Also clear their target directly
 			if "current_target" in ai:
 				ai.current_target = null
+		# Also deaggro wolves and spiders (they have their own AI, not EnemyAI)
+		if "target_player" in enemy:
+			enemy.target_player = null
 	print("🔄 All enemies deaggroed")
 
 	# === SHOW DEATH SCREEN ===

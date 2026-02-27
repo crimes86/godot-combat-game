@@ -796,7 +796,19 @@ func shrink_after_crit_window() -> void:
 
 
 func _on_weakpoint_hit(weakpoint) -> void:
-	var crit_damage = base_damage * Constants.CRIT_DAMAGE_MULTIPLIER
+	var crit_damage = CharacterStats.get_base_damage() * Constants.CRIT_DAMAGE_MULTIPLIER
+
+	# In multiplayer, don't apply damage locally — CritWindowManager reports
+	# total damage to server at window end. Only show visual feedback.
+	var has_peer = multiplayer.has_multiplayer_peer()
+	if has_peer and network_id >= 0:
+		var parent = get_tree().current_scene
+		if parent:
+			CombatText.create_weakpoint(crit_damage, global_position, parent)
+		play_hurt_stagger()
+		return
+
+	# Single player: deal damage directly
 	take_damage(crit_damage, true, true)
 
 
@@ -865,11 +877,14 @@ func _physics_process(delta: float) -> void:
 
 	_wander_timer -= delta
 
-	# Find target player (multiplayer aware)
-	if not is_instance_valid(target_player):
+	# Find target player (multiplayer aware) — also re-check if current target died
+	if not is_instance_valid(target_player) or _is_player_dead(target_player):
+		target_player = null
 		_update_target_player()
 
 	if not target_player:
+		is_running = false
+		_was_attacked = false
 		_do_wander(delta)
 		return
 
@@ -983,8 +998,8 @@ func perform_attack(player: Node, direction: Vector2) -> void:
 
 	velocity = Vector2.ZERO
 
-	# Deal damage if still in range
-	if is_instance_valid(player) and global_position.distance_to(player.global_position) <= ATTACK_RANGE * 1.8:
+	# Deal damage if still in range and player is alive
+	if is_instance_valid(player) and not _is_player_dead(player) and global_position.distance_to(player.global_position) <= ATTACK_RANGE * 1.8:
 		# Use NetworkEnemyManager for proper multiplayer damage sync
 		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
 		if network_enemy_mgr and network_enemy_mgr.has_method("deal_damage_to_player"):
@@ -1022,6 +1037,18 @@ func _on_damage_taken(_damage: float, _is_crit: bool) -> void:
 		_is_wandering = false
 
 
+func _is_player_dead(p: Node) -> bool:
+	"""Check if a player is dead using server-side tracking or local flag."""
+	if not p or not is_instance_valid(p):
+		return true
+	if multiplayer.has_multiplayer_peer():
+		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+		if network_enemy_mgr:
+			var peer_id = p.get_multiplayer_authority() if p.has_method("get_multiplayer_authority") else 1
+			if peer_id > 0:
+				return network_enemy_mgr.is_player_dead(peer_id)
+	return p.get("is_dead") == true
+
 func _update_target_player() -> void:
 	"""Find the nearest valid player to target (multiplayer aware)."""
 	var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
@@ -1036,7 +1063,7 @@ func _update_target_player() -> void:
 	for p in players:
 		if not is_instance_valid(p):
 			continue
-		if p.get("is_dead"):
+		if _is_player_dead(p):
 			continue
 
 		var dist = global_position.distance_to(p.global_position)

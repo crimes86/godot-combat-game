@@ -1185,7 +1185,20 @@ func shrink_after_crit_window() -> void:
 
 func _on_weakpoint_hit(weakpoint) -> void:
 	"""Handle weakpoint being clicked"""
-	var crit_damage = base_damage * Constants.CRIT_DAMAGE_MULTIPLIER
+	var crit_damage = CharacterStats.get_base_damage() * Constants.CRIT_DAMAGE_MULTIPLIER
+
+	# In multiplayer, don't apply damage locally — CritWindowManager reports
+	# total damage to server at window end. Only show visual feedback.
+	var has_peer = multiplayer.has_multiplayer_peer()
+	if has_peer and network_id >= 0:
+		# Spawn combat text for visual feedback
+		var parent = get_tree().current_scene
+		if parent:
+			CombatText.create_weakpoint(crit_damage, global_position, parent)
+		play_hurt_stagger()
+		return
+
+	# Single player: deal damage directly
 	take_damage(crit_damage, true, true)
 
 
@@ -1315,12 +1328,17 @@ func _physics_process(delta: float) -> void:
 	# Update wander timer
 	_wander_timer -= delta
 
-	# Find player if not targeting
-	if not is_instance_valid(target_player):
-		target_player = _get_local_player()
+	# Find player if not targeting (or if current target is dead)
+	if not is_instance_valid(target_player) or _is_player_dead(target_player):
+		target_player = null
+		var candidate = _get_local_player()
+		if candidate and not _is_player_dead(candidate):
+			target_player = candidate
 
 	if not target_player:
 		# No player - wander around spawn point
+		is_running = false
+		_was_attacked = false
 		_do_wander_behavior(delta)
 		return
 
@@ -1686,7 +1704,7 @@ func perform_attack(player: Node, direction: Vector2) -> void:
 		is_attacking = false
 		return
 
-	if is_instance_valid(player) and global_position.distance_to(player.global_position) <= ATTACK_RANGE * 1.5:
+	if is_instance_valid(player) and not _is_player_dead(player) and global_position.distance_to(player.global_position) <= ATTACK_RANGE * 1.5:
 		# Use NetworkEnemyManager for proper multiplayer damage sync
 		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
 		if network_enemy_mgr and network_enemy_mgr.has_method("deal_damage_to_player"):
@@ -1708,6 +1726,20 @@ func perform_attack(player: Node, direction: Vector2) -> void:
 	is_attacking = false
 
 
+func _is_player_dead(p: Node) -> bool:
+	"""Check if a player is dead using server-side tracking or local flag."""
+	if not p or not is_instance_valid(p):
+		return true
+	# In multiplayer, use server-side death tracking
+	if multiplayer.has_multiplayer_peer():
+		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+		if network_enemy_mgr:
+			var peer_id = p.get_multiplayer_authority() if p.has_method("get_multiplayer_authority") else 1
+			if peer_id > 0:
+				return network_enemy_mgr.is_player_dead(peer_id)
+	# Fallback: check local is_dead flag
+	return p.get("is_dead") == true
+
 func _on_damage_taken(_damage: float, _is_crit: bool) -> void:
 	"""Called when wolf takes damage - enter chase mode to attack the player"""
 	if is_dying or is_corpse:
@@ -1717,11 +1749,11 @@ func _on_damage_taken(_damage: float, _is_crit: bool) -> void:
 	_was_attacked = true
 
 	# Get local player as target (the one who hit us)
-	if not is_instance_valid(target_player):
+	if not is_instance_valid(target_player) or _is_player_dead(target_player):
 		target_player = _get_local_player()
 
 	# Enter combat mode - start running at the player
-	if target_player:
+	if target_player and not _is_player_dead(target_player):
 		is_running = true
 		_is_wandering = false
 		# Trigger pack aggro so nearby wolves also attack

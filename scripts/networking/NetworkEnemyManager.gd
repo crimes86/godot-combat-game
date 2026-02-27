@@ -1751,6 +1751,10 @@ func deal_damage_to_player(target_peer_id: int, damage: float, source_name: Stri
 	if not multiplayer.is_server():
 		return
 
+	# Don't send damage to dead players
+	if is_player_dead(target_peer_id):
+		return
+
 	# If target is server (peer_id 1), apply locally
 	if target_peer_id == 1:
 		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
