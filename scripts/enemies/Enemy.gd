@@ -1658,7 +1658,7 @@ func _spawn_weakpoint_combat_text(_weakpoint, damage: float) -> void:
 
 func _on_weakpoint_destroyed_local(weakpoint) -> void:
 	"""Handle weakpoint destruction: advance waves on real kills, ignore decoys for manager."""
-	var is_decoy = weakpoint.get("is_decoy", false)
+	var is_decoy = weakpoint.is_decoy
 
 	if is_decoy:
 		_current_wave_decoys.erase(weakpoint)
