@@ -105,8 +105,9 @@ var corruption_tier: int = 3  # Default: Cursed (game starts at 100%)
 var corruption_tint: Color = Color(0.7, 0.55, 0.7)  # Default to Cursed tint
 var corruption_particles: CPUParticles2D = null
 var _pending_corruption_update: bool = false  # Deferred update during crit window
-var _wave2_configs: Array = []  # Stored weakpoint configs for next wave
-var _wave1_nodes: Array = []  # Node refs for current wave (to detect when cleared)
+var _pending_waves: Array = []  # Remaining wave configs (each wave is Array of config dicts)
+var _current_wave_reals: Array = []  # Real weakpoint nodes in current wave
+var _current_wave_decoys: Array = []  # Decoy nodes in current wave (faded on transition)
 var weakpoints: Array = []  # Just for visual rendering
 var _grow_tween: Tween = null  # Track grow tween so shrink can wait for it
 var _stagger_tween: Tween = null  # Track stagger tween to prevent bouncy overlaps
@@ -1150,8 +1151,9 @@ func spawn_weakpoints() -> void:
 		return
 
 	# Reset wave tracking
-	_wave1_nodes.clear()
-	_wave2_configs.clear()
+	_pending_waves.clear()
+	_current_wave_reals.clear()
+	_current_wave_decoys.clear()
 
 	# Calculate weakpoint count based on CURRENT PLAYER level (when crit triggers, not when enemy spawned)
 	# Level cap is 30, no stat gains past 25
@@ -1259,30 +1261,24 @@ func spawn_weakpoints() -> void:
 		skeleton_crit_windows_triggered += 1
 		return
 
-	# CLIENT: build decoy configs and split into waves of 2
+	# CLIENT: build decoy configs and pair each real weakpoint with a decoy companion
 	var decoy_configs = _build_decoy_configs(sprite_pos, sprite_width, sprite_height, counter_scale)
 
-	# Interleave real and decoy for balanced waves (1 real + 1 decoy per wave when possible)
-	var interleaved: Array = []
-	var reals = real_configs.duplicate()
-	var decoys = decoy_configs.duplicate()
-	while reals.size() > 0 or decoys.size() > 0:
-		if reals.size() > 0:
-			interleaved.append(reals.pop_front())
-		if decoys.size() > 0:
-			interleaved.append(decoys.pop_front())
+	# Build waves: each wave = 1 real + at most 1 decoy (always exactly 1-2 targets visible)
+	_pending_waves.clear()
+	for i in range(real_configs.size()):
+		var wave: Array = [real_configs[i]]
+		if i < decoy_configs.size():
+			wave.append(decoy_configs[i])
+		_pending_waves.append(wave)
 
-	# Split into waves of 2
-	if interleaved.size() <= 2:
-		_spawn_weakpoint_wave(interleaved, true)
-	else:
-		_spawn_weakpoint_wave(interleaved.slice(0, 2), true)
-		_wave2_configs = interleaved.slice(2)
+	# Spawn first wave
+	_spawn_next_wave()
 
 	# Tutorial: Show red arrow pointing at first weakpoint for the first N crit windows
 	skeleton_crit_windows_triggered += 1
-	if skeleton_crit_windows_triggered <= TUTORIAL_ARROW_CRIT_WINDOWS and interleaved.size() > 0:
-		create_and_show_weakpoint_arrow(interleaved[0]["position"])
+	if skeleton_crit_windows_triggered <= TUTORIAL_ARROW_CRIT_WINDOWS and real_configs.size() > 0:
+		create_and_show_weakpoint_arrow(real_configs[0]["position"])
 
 	# CLIENT-INDEPENDENT: Each player's crit window is LOCAL
 	# No broadcasting needed - NetworkEnemyManager notifies specific player to start their local window
@@ -1302,14 +1298,35 @@ func _spawn_single_weakpoint(config: Dictionary) -> void:
 	weakpoint.weakpoint_destroyed.connect(_on_weakpoint_destroyed_local)
 	add_child(weakpoint)
 	weakpoints.append(weakpoint)
-	weakpoint_spawned.emit(weakpoint)
+	# Only emit for real weakpoints — decoys are invisible to CritWindowManager
+	if not config["is_decoy"]:
+		weakpoint_spawned.emit(weakpoint)
 
-func _spawn_weakpoint_wave(configs: Array, is_wave1: bool) -> void:
-	"""Spawn a wave of weakpoints from config dicts."""
-	for config in configs:
+func _spawn_next_wave() -> void:
+	"""Spawn the next wave of weakpoints from _pending_waves."""
+	if _pending_waves.is_empty():
+		return
+	var wave_configs = _pending_waves.pop_front()
+	_current_wave_reals.clear()
+	_current_wave_decoys.clear()
+	for config in wave_configs:
 		_spawn_single_weakpoint(config)
-		if is_wave1:
-			_wave1_nodes.append(weakpoints.back())
+		var wp = weakpoints.back()
+		if config["is_decoy"]:
+			_current_wave_decoys.append(wp)
+		else:
+			_current_wave_reals.append(wp)
+
+func _fade_wave_decoys() -> void:
+	"""Fade out remaining decoys from the current wave when the real target is cleared."""
+	for decoy in _current_wave_decoys:
+		if is_instance_valid(decoy) and not decoy.is_destroyed:
+			decoy.is_destroyed = true
+			decoy.input_pickable = false
+			var tween = create_tween()
+			tween.tween_property(decoy, "modulate:a", 0.0, 0.3)
+			tween.tween_callback(decoy.queue_free)
+	_current_wave_decoys.clear()
 
 func _build_decoy_configs(sprite_pos: Vector2, sprite_width: float, sprite_height: float, counter_scale: float) -> Array:
 	"""Build decoy weakpoint configs based on corruption tier. Returns config dicts."""
@@ -1640,23 +1657,24 @@ func _spawn_weakpoint_combat_text(_weakpoint, damage: float) -> void:
 		CombatText.create_weakpoint(damage, global_position, parent)
 
 func _on_weakpoint_destroyed_local(weakpoint) -> void:
-	"""Local handler - spawn next wave if needed, then forward to manager.
-	Wave 2 must spawn BEFORE forwarding the destroy signal so CritWindowManager
-	sees the new spawned count before checking if all weakpoints are cleared."""
-	if _wave2_configs.size() > 0:
-		_wave1_nodes.erase(weakpoint)
-		# Check if all wave 1 weakpoints are gone
-		var wave1_cleared = true
-		for wp in _wave1_nodes:
-			if is_instance_valid(wp):
-				wave1_cleared = false
-				break
-		if wave1_cleared:
-			var configs_to_spawn = _wave2_configs.duplicate()
-			_wave2_configs.clear()
-			_wave1_nodes.clear()
-			_spawn_weakpoint_wave(configs_to_spawn, false)
-	# Forward to manager
+	"""Handle weakpoint destruction: advance waves on real kills, ignore decoys for manager."""
+	var is_decoy = weakpoint.get("is_decoy", false)
+
+	if is_decoy:
+		_current_wave_decoys.erase(weakpoint)
+		# Decoys are invisible to CritWindowManager — don't forward
+		return
+
+	# Real weakpoint destroyed — check if wave should advance
+	_current_wave_reals.erase(weakpoint)
+	if _current_wave_reals.is_empty() and not _pending_waves.is_empty():
+		# Fade remaining decoys from this wave
+		_fade_wave_decoys()
+		# Spawn next wave BEFORE forwarding destroy signal so CritWindowManager
+		# sees the new spawned count before checking completion
+		_spawn_next_wave()
+
+	# Forward to manager (real weakpoints only)
 	weakpoint_destroyed.emit(weakpoint)
 
 func _clear_weakpoints_delayed() -> void:
@@ -1664,8 +1682,9 @@ func _clear_weakpoints_delayed() -> void:
 	await get_tree().create_timer(0.5).timeout
 	if is_instance_valid(self):
 		weakpoints.clear()
-		_wave1_nodes.clear()
-		_wave2_configs.clear()
+		_pending_waves.clear()
+		_current_wave_reals.clear()
+		_current_wave_decoys.clear()
 
 func shrink_after_crit_window() -> void:
 	"""Visual effect: shrink sprite and cleanup weakpoints (called by CritWindowManager)"""
@@ -1677,14 +1696,15 @@ func shrink_after_crit_window() -> void:
 	if _is_server_mode:
 		in_crit_window = false
 		weakpoints.clear()
-		_wave1_nodes.clear()
-		_wave2_configs.clear()
+		_pending_waves.clear()
+		_current_wave_reals.clear()
+		_current_wave_decoys.clear()
 		return
 
 	# Mark as transitioning during async shrink
 	_crit_window_transitioning = true
 	in_crit_window = false
-	_wave2_configs.clear()  # Discard any unspawned wave 2
+	_pending_waves.clear()  # Discard any unspawned waves
 
 	# On CLIENT: Don't clear weakpoints array immediately - the destruction RPC may still be
 	# in transit. Let weakpoints free themselves after their destruction animations.
