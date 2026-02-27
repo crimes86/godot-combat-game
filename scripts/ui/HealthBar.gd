@@ -194,6 +194,13 @@ func _process(delta: float) -> void:
 		# Always horizontal
 		rotation = 0.0
 
+		# Counter parent's tint so nameplate/healthbar stays at true colors
+		var pm = get_parent().modulate
+		if pm != Color.WHITE:
+			self_modulate = Color(1.0 / maxf(pm.r, 0.01), 1.0 / maxf(pm.g, 0.01), 1.0 / maxf(pm.b, 0.01), 1.0)
+		elif self_modulate != Color.WHITE:
+			self_modulate = Color.WHITE
+
 		# Show the health bar after first successful positioning
 		if not has_positioned_once:
 			visible = true
