@@ -1842,12 +1842,13 @@ func die() -> void:
 			if game_world:
 				CombatText.create_xp(final_xp, global_position, game_world)
 
-			var chat = get_tree().root.get_node_or_null("ChatUI")
-			if chat:
-				if xp_multiplier > 1.0:
-					chat.add_combat_message("You gained %d party experience." % final_xp)
-				else:
-					chat.add_combat_message("You gained %d experience." % final_xp)
+			if final_xp > 0:
+				var chat = get_tree().root.get_node_or_null("ChatUI")
+				if chat:
+					if xp_multiplier > 1.0:
+						chat.add_combat_message("You gained %d party experience." % final_xp)
+					else:
+						chat.add_combat_message("You gained %d experience." % final_xp)
 
 			# Grant weapon skill on kill (only to kill credit holder)
 			if is_kill_credit and CharacterStats.equipped_weapon and WeaponSkillManager:

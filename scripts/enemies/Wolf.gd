@@ -723,9 +723,10 @@ func die() -> void:
 				if game_world:
 					CombatText.create_xp(xp_reward, global_position, game_world)
 
-			var chat = get_tree().root.get_node_or_null("ChatUI")
-			if chat:
-				chat.add_combat_message("You gained %d experience." % xp_reward)
+			if xp_reward > 0:
+				var chat = get_tree().root.get_node_or_null("ChatUI")
+				if chat:
+					chat.add_combat_message("You gained %d experience." % xp_reward)
 
 			# Forged weapon stats: track kill for equipped forged weapons
 			if player and player.has_node("PlayerCombat"):
