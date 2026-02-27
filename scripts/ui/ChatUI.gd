@@ -45,6 +45,8 @@ var SYSTEM_COLOR: Color:
 	get: return UITheme.CHAT_SYSTEM
 var LOCAL_COLOR: Color:
 	get: return UITheme.CHAT_LOCAL
+var COMBAT_COLOR: Color:
+	get: return UITheme.CHAT_COMBAT
 
 # Chat history
 var max_messages: int = 50
@@ -429,9 +431,29 @@ func add_system_message(text: String) -> void:
 	msg_label.text = "[color=#%s][i]%s[/i][/color]" % [color_hex, text]
 
 	message_list.add_child(msg_label)
-
-	# Scroll to bottom after layout updates
+	_trim_messages()
 	_scroll_to_bottom()
+
+func add_combat_message(text: String) -> void:
+	"""Add a combat event message (XP gained, gold looted, etc.)"""
+	var msg_label = RichTextLabel.new()
+	msg_label.bbcode_enabled = true
+	msg_label.fit_content = true
+	msg_label.scroll_active = false
+	msg_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	msg_label.add_theme_font_size_override("normal_font_size", 11)
+	var color_hex = COMBAT_COLOR.to_html(false)
+	msg_label.text = "[color=#%s]%s[/color]" % [color_hex, text]
+	message_list.add_child(msg_label)
+	_trim_messages()
+	_scroll_to_bottom()
+
+func _trim_messages() -> void:
+	"""Remove oldest visual messages when exceeding max_messages"""
+	while message_list.get_child_count() > max_messages:
+		var oldest = message_list.get_child(0)
+		message_list.remove_child(oldest)
+		oldest.queue_free()
 
 func _scroll_to_bottom() -> void:
 	"""Scroll chat to bottom after layout updates - needs multiple frames for RichTextLabel sizing"""

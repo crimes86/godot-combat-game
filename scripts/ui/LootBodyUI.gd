@@ -705,6 +705,9 @@ func loot_gold(corpse, gold_amount: int) -> void:
 			CharacterStats.add_gold(gold_amount)
 			corpse.corpse_gold = 0
 			_show_gold_loot_feedback(gold_amount, corpse.global_position)
+			var chat = get_tree().root.get_node_or_null("ChatUI")
+			if chat:
+				chat.add_combat_message("You looted %d gold." % gold_amount)
 			corpse.check_if_looted_empty()
 		populate_loot_grid()
 		return
@@ -721,6 +724,9 @@ func loot_gold(corpse, gold_amount: int) -> void:
 	# (Server RPC will confirm, but we show instant feedback)
 	CharacterStats.add_gold(gold_amount)
 	_show_gold_loot_feedback(gold_amount, corpse.global_position)
+	var chat = get_tree().root.get_node_or_null("ChatUI")
+	if chat:
+		chat.add_combat_message("You looted %d gold." % gold_amount)
 
 	# Optimistic UI update - clear gold immediately
 	corpse.corpse_gold = 0

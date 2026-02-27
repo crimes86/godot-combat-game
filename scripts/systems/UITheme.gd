@@ -114,6 +114,7 @@ const CHAT_SYSTEM = Color(0.6, 0.7, 0.9, 1.0)
 const CHAT_LOCAL = Color(0.9, 0.85, 0.5, 1.0)
 const CHAT_WHISPER = Color(0.9, 0.5, 0.9, 1.0)
 const CHAT_GROUP = Color(0.5, 0.9, 0.5, 1.0)
+const CHAT_COMBAT = Color(0.75, 0.65, 0.45, 1.0)  # Warm muted amber for combat events
 
 # ═══════════════════════════════════════════════════════════════════════════
 # BUTTON COLORS - Ashbane theme (Neutral Stone Gray)
