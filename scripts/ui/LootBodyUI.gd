@@ -614,6 +614,9 @@ func loot_all_gold(gold_corpses: Array) -> void:
 	# Show combined gold notification
 	if total_gold > 0:
 		_show_gold_loot_feedback(total_gold, first_position)
+		var chat = get_tree().root.get_node_or_null("ChatUI")
+		if chat:
+			chat.add_combat_message("You looted %d gold." % total_gold)
 
 	# Check if corpses are empty and refresh
 	for corpse in gold_corpses:
@@ -887,6 +890,9 @@ func _on_take_all_pressed() -> void:
 	# Show combined gold notification if any
 	if total_gold > 0:
 		_show_gold_loot_feedback(total_gold, corpses_looted[0].global_position if corpses_looted.size() > 0 and is_instance_valid(corpses_looted[0]) else Vector2.ZERO)
+		var chat = get_tree().root.get_node_or_null("ChatUI")
+		if chat:
+			chat.add_combat_message("You looted %d gold." % total_gold)
 
 	# Collect all items and loot them immediately with optimistic adds
 	for corpse in corpses_looted:
