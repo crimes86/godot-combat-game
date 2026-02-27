@@ -1728,35 +1728,10 @@ func _closest_points_between_segments(p1: Vector2, p2: Vector2, p3: Vector2, p4:
 	}
 
 func _spawn_arrow_impact(pos: Vector2, hit: bool) -> void:
-	"""Spawn arrow impact visual and sound at position"""
-	# Play impact sound
+	"""Spawn arrow impact sound at position"""
 	var sound_manager = player.get_node_or_null("/root/SoundManager")
 	if sound_manager and sound_manager.has_method("play_bow_impact_sound"):
 		sound_manager.play_bow_impact_sound(pos, hit, -8.0)
-
-	# Create a simple impact circle
-	var impact = Polygon2D.new()
-	impact.name = "ArrowImpact"
-	impact.global_position = pos
-	impact.z_index = 4
-
-	var color = Color(0.8, 0.6, 0.2, 0.6) if hit else Color(0.5, 0.4, 0.3, 0.4)
-	impact.color = color
-
-	# Create small circle
-	var points = PackedVector2Array()
-	var radius = 8.0 if hit else 5.0
-	for i in range(12):
-		var angle = (float(i) / 12.0) * TAU
-		points.append(Vector2(cos(angle), sin(angle)) * radius)
-	impact.polygon = points
-
-	_add_vfx(impact)
-
-	# Fade out and remove
-	var tween = player.get_tree().create_tween()
-	tween.tween_property(impact, "modulate:a", 0.0, 0.3)
-	tween.tween_callback(impact.queue_free)
 
 # ========================================
 # BURST FIRE SYSTEM (Battle Rifle)
