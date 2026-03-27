@@ -110,7 +110,7 @@ const TTK_BASE_WINDOW_DAMAGE: float = 36.0  # Level 1 perfect window damage with
 
 # Enemy HP multipliers (applied on top of base scaling)
 # These tune individual enemy types to hit TTK targets
-const TTK_MULT_TRASH: float = 1.0      # Standard HP (~100 HP at L1)
+const TTK_MULT_TRASH: float = 1.0      # Standard HP (50 HP at L1, scales exponentially)
 const TTK_MULT_ELITE: float = 2.0      # 2x HP for guardians (was 1.75)
 const TTK_MULT_BOSS: float = 5.0       # 5x HP for extended fights (was 4.0)
 
@@ -123,7 +123,7 @@ const PLAYER_PVP_HP_PER_VIT: float = 15.0  # More impactful than PvE (+15 vs +10
 # ============================================
 
 # Enemy Level Scaling Formulas (rebalanced for smaller numbers)
-const ENEMY_BASE_HEALTH: float = 120.0  # Base health at level 1 (tuned for 3-window TTK)
+const ENEMY_BASE_HEALTH: float = 50.0  # Base health at level 1 (tuned for quick kills at low levels, scales with 1.12 exponential)
 
 # Damage Mitigation Formula: mitigation = defense / (defense + DEFENSE_CONSTANT)
 # Higher constant = defense is less effective. Lower = more effective.
