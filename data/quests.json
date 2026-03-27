@@ -85,6 +85,49 @@
 			"prereq": "kindle_the_flame"
 		},
 		{
+			"id": "hold_the_line",
+			"name": "Hold the Line",
+			"description": "The dead march on the campfire. Stand your ground and survive their assault.",
+			"tier": 2,
+			"level_req": 3,
+			"giver": "wanderer",
+			"objectives": [
+				{"type": "survive_waves", "count": 3, "desc": "Survive skeleton waves at the campfire"}
+			],
+			"xp_reward": 125,
+			"gold_reward": 35,
+			"prereq": "survival_101"
+		},
+		{
+			"id": "blighted_assault",
+			"name": "Blighted Assault",
+			"description": "The corruption deepens. Survive a wave when the dreadland is Blighted or worse.",
+			"tier": 3,
+			"level_req": 5,
+			"giver": "wanderer",
+			"objectives": [
+				{"type": "survive_waves", "count": 1, "min_corruption_tier": 2, "desc": "Survive a Blighted wave"}
+			],
+			"xp_reward": 175,
+			"gold_reward": 50,
+			"prereq": "hold_the_line"
+		},
+		{
+			"id": "campfire_champion",
+			"name": "Campfire Champion",
+			"description": "You are the fire's guardian. Prove it beyond all doubt.",
+			"tier": 5,
+			"level_req": 8,
+			"giver": "wanderer",
+			"objectives": [
+				{"type": "survive_waves", "count": 10, "desc": "Survive 10 waves"},
+				{"type": "kill", "target": "skeleton", "count": 50, "desc": "Kill 50 skeletons"}
+			],
+			"xp_reward": 250,
+			"gold_reward": 100,
+			"prereq": "blighted_assault"
+		},
+		{
 			"id": "fire_and_ash",
 			"name": "Fire and Ash",
 			"description": "Venture beyond the campfire. Seek out the lava pools that dot the dreadland.",

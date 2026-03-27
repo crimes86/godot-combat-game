@@ -506,6 +506,21 @@ func on_campfire_fueled(fuel_amount: int) -> void:
 			if obj.get("type") == "fuel_campfire":
 				update_objective_progress(quest_id, i, fuel_amount)
 
+func on_wave_survived(wave_number: int, corruption_tier: int) -> void:
+	"""Track wave survival for 'survive_waves' objectives - called from WaveSpawner"""
+	for quest_id in active_quest_ids:
+		var quest = all_quests.get(quest_id)
+		if not quest:
+			continue
+
+		var objectives = quest.get("objectives", [])
+		for i in range(objectives.size()):
+			var obj = objectives[i]
+			if obj.get("type") == "survive_waves":
+				var min_tier = obj.get("min_corruption_tier", 0)
+				if corruption_tier >= min_tier:
+					update_objective_progress(quest_id, i, 1)
+
 func on_location_discovered(location_id: String) -> void:
 	"""Track location discovery for 'explore' objectives"""
 	for quest_id in active_quest_ids:

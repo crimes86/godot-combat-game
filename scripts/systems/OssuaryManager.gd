@@ -307,6 +307,29 @@ func on_skeleton_killed(killer_peer_id: int, enemy_level: int, is_guardian: bool
 			killer_peer_id, enemy_level, old_influence, new_influence, gain, old_corruption, corruption, corruption_decay
 		], "ossuary")
 
+const CORRUPTION_DEATH_BOOST: float = 3.0  # Corruption gained when a player dies
+
+func on_player_death() -> void:
+	"""Called when a player dies. Boosts corruption (gives players a breather with easier waves)."""
+	if not _is_authority:
+		return
+
+	var old_corruption = corruption
+	corruption = clampf(corruption + CORRUPTION_DEATH_BOOST, MIN_CORRUPTION, MAX_CORRUPTION)
+
+	if corruption != old_corruption:
+		corruption_changed.emit(corruption)
+		_check_corruption_threshold()
+
+		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+			_broadcast_corruption.rpc(corruption)
+		else:
+			_update_hud()
+
+		LogManager.info("Player death — corruption %.1f → %.1f (+%.1f)" % [
+			old_corruption, corruption, CORRUPTION_DEATH_BOOST
+		], "ossuary")
+
 # ═══════════════════════════════════════════════════════════════════════════
 # INTERNAL
 # ═══════════════════════════════════════════════════════════════════════════

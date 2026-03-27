@@ -48,6 +48,13 @@ var bone_ember_decay_accumulator: float = 0.0
 # Visual scale for fire elements (1.0 = default, 1.5 = 50% bigger)
 const FIRE_VISUAL_SCALE: float = 1.5
 
+# Campfire visual tier system (based on lifetime fuel contributed)
+var total_fuel_contributed: int = 0
+var campfire_tier: int = 0  # 0=Ember, 1=Flame, 2=Blaze, 3=Beacon
+const CAMPFIRE_TIER_THRESHOLDS: Array[int] = [0, 50, 150, 400]
+const CAMPFIRE_TIER_NAMES: Array[String] = ["Ember", "Flame", "Blaze", "Beacon"]
+const CAMPFIRE_TIER_WARMTH_BONUS: Array[float] = [0.0, 0.0, 50.0, 100.0]
+
 # Interaction (Hold-to-fuel system)
 var player_in_interact_range: bool = false
 var interaction_prompt: Label = null
@@ -2376,6 +2383,8 @@ func add_wood_fuel_to_pool(amount: int, enhanced_sound: bool = false) -> bool:
 	var added = min(amount, MAX_WOOD - pool.wood)
 	if added > 0:
 		pool.wood += added
+		total_fuel_contributed += added
+		_check_campfire_tier()
 		update_visual_intensity()
 
 		# Light the fire if it was unlit
@@ -2417,6 +2426,8 @@ func add_bone_ember_fuel_to_pool(amount: int, enhanced_sound: bool = false) -> b
 	var added = min(amount, MAX_BONE_EMBERS - pool.bone_embers)
 	if added > 0:
 		pool.bone_embers += added
+		total_fuel_contributed += added
+		_check_campfire_tier()
 		update_visual_intensity()
 
 		# Light the fire if it was unlit
@@ -2683,6 +2694,39 @@ func _track_quest_fuel(amount: int) -> void:
 	var qm = get_node("/root/QuestManager")
 	qm.on_campfire_fueled(amount)
 
+func _check_campfire_tier() -> void:
+	"""Check if campfire should advance to next visual tier based on lifetime fuel."""
+	if not is_community_campfire:
+		return  # Only community campfires have visual tiers
+
+	var new_tier = 0
+	for i in range(CAMPFIRE_TIER_THRESHOLDS.size() - 1, -1, -1):
+		if total_fuel_contributed >= CAMPFIRE_TIER_THRESHOLDS[i]:
+			new_tier = i
+			break
+
+	if new_tier != campfire_tier:
+		var old_tier = campfire_tier
+		campfire_tier = new_tier
+
+		# Update warmth radius with tier bonus
+		warmth_radius = 150.0 + CAMPFIRE_TIER_WARMTH_BONUS[campfire_tier]
+		# Update collision shape
+		var warmth_area = get_node_or_null("WarmthArea")
+		if warmth_area:
+			for child in warmth_area.get_children():
+				if child is CollisionShape2D and child.shape is CircleShape2D:
+					child.shape.radius = warmth_radius
+
+		# Announce tier up
+		var chat_ui = get_node_or_null("/root/ChatUI")
+		if chat_ui and chat_ui.has_method("add_system_message"):
+			chat_ui.add_system_message("The campfire grows stronger! Tier: %s" % CAMPFIRE_TIER_NAMES[campfire_tier])
+
+		print("🔥 Campfire tier advanced: %s → %s (total fuel: %d)" % [
+			CAMPFIRE_TIER_NAMES[old_tier], CAMPFIRE_TIER_NAMES[campfire_tier], total_fuel_contributed
+		])
+
 func update_visual_intensity() -> void:
 	"""Update campfire visual intensity based on fuel levels"""
 	# Get the correct fuel pool for visuals
@@ -2701,7 +2745,9 @@ func update_visual_intensity() -> void:
 	var total_fuel_percent = (wood_percent + bone_percent) / 2.0
 	if fire_sprite and is_instance_valid(fire_sprite):
 		# Start at 125% base scale, grow up to 187.5% with max fuel (25% larger overall)
-		var campfire_scale = 1.25 + (total_fuel_percent * 0.625)
+		# Campfire tier adds additional scale bonus
+		var tier_scale_bonus = campfire_tier * 0.15  # +15% per tier
+		var campfire_scale = 1.25 + (total_fuel_percent * 0.625) + tier_scale_bonus
 		fire_sprite.scale = Vector2(campfire_scale, campfire_scale)
 
 	# Scale flames vertically with fuel (modest increase, not balloon-like)

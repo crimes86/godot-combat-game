@@ -74,6 +74,14 @@ var duel_aura_tween: Tween = null  # Track tween to kill on removal
 var safe_aura_tween: Tween = null  # Track tween to kill on removal
 var blood_color: Color = Color(0.6, 0.05, 0.05, 0.9)  # Dark blood red (used for PvP hit effects)
 
+# Death Shield System (post-respawn invulnerability)
+var has_death_shield: bool = false
+var death_shield_timer: float = 0.0
+const DEATH_SHIELD_DURATION: float = 45.0
+var death_shield_node: Node2D = null
+var death_shield_tween: Tween = null
+var death_shield_label: Label = null
+
 # Allegiance System (synced for network visibility)
 # "" = Rogue (no allegiance), "ashbane" = Ashbane faction
 var allegiance_id: String = "ashbane"
@@ -1111,6 +1119,14 @@ func _physics_process(delta: float) -> void:
 	if _alpha_barrier_msg_cooldown > 0:
 		_alpha_barrier_msg_cooldown -= delta
 
+	# Tick death shield timer
+	if has_death_shield:
+		death_shield_timer -= delta
+		if death_shield_label:
+			death_shield_label.text = "%ds" % ceili(death_shield_timer)
+		if death_shield_timer <= 0.0:
+			_remove_death_shield()
+
 	# Get input direction (used for movement and animation)
 	# Block movement input when chat is focused
 	var input_direction := Vector2.ZERO
@@ -1343,6 +1359,10 @@ func _input(event: InputEvent) -> void:
 				is_mouse_held = true
 				hold_attack_timer = 0.0
 
+				# Break death shield on attack (can't abuse invulnerability offensively)
+				if has_death_shield:
+					_remove_death_shield()
+
 				# Combat subsystem handles all attack logic
 				if combat_system:
 					combat_system.is_mouse_held = true
@@ -1373,6 +1393,10 @@ func _input(event: InputEvent) -> void:
 				# Touch started in aim zone - trigger attack
 				if is_ui_blocking_input():
 					return
+
+				# Break death shield on attack
+				if has_death_shield:
+					_remove_death_shield()
 
 				# Trigger initial attack (same as mouse press)
 				if combat_system:
@@ -2169,6 +2193,10 @@ func take_damage(amount: float, source_type: String = "pve", source_player_id: i
 			LogManager.debug("TAKE_DMG DENY dash: peer=%d src=%d" % [my_id, source_player_id], "duel")
 		return
 
+	# DEATH SHIELD: Block all damage after respawn
+	if has_death_shield:
+		return
+
 	# SAFE AURA: Block player damage post-duel
 	if has_safe_aura and source_type == "player":
 		LogManager.debug("TAKE_DMG DENY aura: peer=%d src=%d" % [my_id, source_player_id], "duel")
@@ -2614,6 +2642,57 @@ func _remove_safe_aura_visual() -> void:
 	if safe_aura_node and is_instance_valid(safe_aura_node):
 		safe_aura_node.queue_free()
 		safe_aura_node = null
+
+# ============================================
+# DEATH SHIELD (Post-Respawn Invulnerability)
+# ============================================
+
+func _apply_death_shield() -> void:
+	"""Apply 45s invulnerability after respawn. Breaks on attack."""
+	if has_death_shield:
+		_remove_death_shield()
+
+	has_death_shield = true
+	death_shield_timer = DEATH_SHIELD_DURATION
+
+	# Create cyan pulsing aura (distinct from golden safe_aura)
+	death_shield_node = Node2D.new()
+	death_shield_node.name = "DeathShield"
+	death_shield_node.z_index = -1  # Behind player
+
+	var circle = _create_aura_circle(Color(0.3, 0.8, 1.0, 0.3), 35.0)
+	death_shield_node.add_child(circle)
+	add_child(death_shield_node)
+	death_shield_tween = _start_aura_pulse(death_shield_node, Color(0.3, 0.8, 1.0, 0.3), Color(0.5, 0.9, 1.0, 0.5))
+
+	# Create timer label above player
+	death_shield_label = Label.new()
+	death_shield_label.name = "DeathShieldLabel"
+	death_shield_label.text = "%ds" % ceili(DEATH_SHIELD_DURATION)
+	death_shield_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	death_shield_label.add_theme_font_size_override("font_size", 12)
+	death_shield_label.add_theme_color_override("font_color", Color(0.4, 0.85, 1.0, 0.9))
+	death_shield_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
+	death_shield_label.add_theme_constant_override("shadow_offset_x", 1)
+	death_shield_label.add_theme_constant_override("shadow_offset_y", 1)
+	death_shield_label.position = Vector2(-20, -50)
+	death_shield_label.size = Vector2(40, 20)
+	add_child(death_shield_label)
+
+func _remove_death_shield() -> void:
+	"""Remove death shield visual and protection."""
+	has_death_shield = false
+	death_shield_timer = 0.0
+
+	if death_shield_tween and death_shield_tween.is_valid():
+		death_shield_tween.kill()
+		death_shield_tween = null
+	if death_shield_node and is_instance_valid(death_shield_node):
+		death_shield_node.queue_free()
+		death_shield_node = null
+	if death_shield_label and is_instance_valid(death_shield_label):
+		death_shield_label.queue_free()
+		death_shield_label = null
 
 func _create_aura_circle(color: Color, radius: float) -> Polygon2D:
 	"""Create a circular aura polygon"""
@@ -5014,6 +5093,10 @@ func die() -> void:
 
 	is_dead = true
 
+	# Boost corruption on player death (gives breather with easier waves)
+	if OssuaryManager and OssuaryManager.has_method("on_player_death"):
+		OssuaryManager.on_player_death()
+
 	# Notify server so enemies stop attacking (multiplayer)
 	if multiplayer.has_multiplayer_peer():
 		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
@@ -5185,7 +5268,10 @@ func die() -> void:
 			else:
 				network_enemy_mgr.notify_player_respawn.rpc_id(1)
 
-	print("✨ Player respawned at bind point")
+	# Apply death shield (45s invulnerability after respawn)
+	_apply_death_shield()
+
+	print("✨ Player respawned at bind point (death shield active for %ds)" % DEATH_SHIELD_DURATION)
 	print("   XP lost: %d (now at %d)" % [xp_lost, CharacterStats.experience])
 	print("   Equipment: Default clothes only")
 	print("   Gold: 0 (on corpse)")

@@ -2070,13 +2070,14 @@ func generate_corpse_loot() -> Array:
 
 	# Check if this is a guardian (Ruins skeleton with special loot)
 	var is_guardian = get_meta("is_guardian", false)
+	var is_wave_boss = get_meta("is_wave_boss", false)
 
-	# Roll for number of items (0-2)
-	var num_items = CorpseState.roll_loot_count()
+	# Roll for number of items (0-2, wave bosses get guaranteed drops)
+	var num_items = CorpseState.roll_loot_count(is_wave_boss)
 
 	# Generate each item
 	for i in range(num_items):
-		var item = CorpseState.roll_loot_item(is_guardian, enemy_level)
+		var item = CorpseState.roll_loot_item(is_guardian, enemy_level, is_wave_boss)
 		if not item.is_empty():
 			if item.get("stackable", false):
 				item["quantity"] = 1

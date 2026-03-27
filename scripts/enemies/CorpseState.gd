@@ -409,23 +409,121 @@ const GUARDIAN_ELITE_LOOT_TABLE = [
 	}
 ]
 
-static func roll_loot_count() -> int:
+# Wave boss loot table - guaranteed gear drops (higher equipment weights, lower material weights)
+const WAVE_BOSS_LOOT_TABLE = [
+	{
+		"id": "iron_short_sword",
+		"name": "Iron Short Sword",
+		"description": "A reliable iron blade. Standard issue for dreadland survivors.",
+		"weapon_type": "sword",
+		"base_damage": 12,
+		"attack_speed": "medium",
+		"crit_chance": 0.071,
+		"required_level": 1,
+		"value": 150,
+		"rarity": "Common",
+		"sprite_path": "res://assets/equipment/weapons/longsword.png",
+		"drop_weight": 12,
+		"type": "weapon",
+		"slot": "mainhand",
+		"stackable": false
+	},
+	{
+		"id": "copper_plate_boots",
+		"name": "Copper Plate Boots",
+		"description": "Tier 1 copper-plated boots. Basic protection for your feet.",
+		"slot": "feet",
+		"armor_type": "plate",
+		"defense": 5,
+		"type": "armor",
+		"value": 50,
+		"rarity": "Common",
+		"sprite_name": "copper_plate",
+		"drop_weight": 8,
+		"stackable": false
+	},
+	{
+		"id": "rawhide_boots",
+		"name": "Rawhide Boots",
+		"description": "Light leather boots. Quiet and nimble.",
+		"slot": "feet",
+		"armor_type": "leather",
+		"defense": 3,
+		"type": "armor",
+		"value": 40,
+		"rarity": "Common",
+		"sprite_name": "rawhide",
+		"drop_weight": 8,
+		"stackable": false
+	},
+	{
+		"id": "copper_plate_bracers",
+		"name": "Copper Plate Bracers",
+		"description": "Reinforced arm guards. Protects your forearms in combat.",
+		"slot": "arms",
+		"armor_type": "plate",
+		"defense": 6,
+		"type": "armor",
+		"value": 50,
+		"rarity": "Common",
+		"sprite_name": "copper_plate",
+		"drop_weight": 8,
+		"stackable": false
+	},
+	{
+		"id": "rawhide_wraps",
+		"name": "Rawhide Wraps",
+		"description": "Leather strips wrapped around the forearms. Light protection.",
+		"slot": "arms",
+		"armor_type": "leather",
+		"defense": 3,
+		"type": "armor",
+		"value": 40,
+		"rarity": "Common",
+		"sprite_name": "rawhide",
+		"drop_weight": 8,
+		"stackable": false
+	},
+	{
+		"name": "Bone Ember",
+		"description": "dreadland bones infused with supernatural heat. Burns with ghostly fire.",
+		"value": 5,
+		"rarity": "Common",
+		"drop_weight": 20,
+		"type": "material",
+		"stackable": true,
+		"max_stack": 200,
+		"fuel_type": "bone_ember"
+	}
+]
+
+# Wave boss drop chances - guaranteed at least 1 item
+const WAVE_BOSS_DROP_CHANCES = {
+	0: 0.0,   # 0% chance for 0 items (guaranteed drops)
+	1: 0.50,  # 50% chance for 1 item
+	2: 0.50   # 50% chance for 2 items
+}
+
+static func roll_loot_count(is_wave_boss: bool = false) -> int:
 	"""Roll how many items this corpse should drop (0-2)"""
+	var drop_chances = WAVE_BOSS_DROP_CHANCES if is_wave_boss else LOOT_DROP_CHANCES
 	var roll = randf()
 	var cumulative = 0.0
 
 	for count in [0, 1, 2]:
-		cumulative += LOOT_DROP_CHANCES[count]
+		cumulative += drop_chances[count]
 		if roll <= cumulative:
 			return count
 
 	return 0  # Fallback
 
-static func roll_loot_item(is_guardian: bool = false, enemy_level: int = 1) -> Dictionary:
+static func roll_loot_item(is_guardian: bool = false, enemy_level: int = 1, is_wave_boss: bool = false) -> Dictionary:
 	"""Roll a random item from the appropriate loot table"""
 	var loot_table: Array
 
-	if is_guardian:
+	if is_wave_boss:
+		loot_table = WAVE_BOSS_LOOT_TABLE
+	elif is_guardian:
 		# Level 10 guardians use elite table with full copper plate drops
 		if enemy_level >= 10:
 			loot_table = GUARDIAN_ELITE_LOOT_TABLE
