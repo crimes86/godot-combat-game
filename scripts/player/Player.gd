@@ -5306,8 +5306,8 @@ func _get_or_create_death_screen() -> DeathScreenUI:
 
 func _get_bind_point() -> Vector2:
 	"""Get respawn location - guild World Tree or default campfire"""
-	# Default spawn point at campfire (west side of zone 1, X: -6000)
-	var default_spawn = Vector2(-6000, 0)
+	# Default spawn point south of campfire (away from wave assault direction)
+	var default_spawn = Vector2(-6000, 400)
 
 	# Check for guild World Tree
 	if WorldTreeManager and WorldTreeManager.has_method("get_tree_by_guild"):

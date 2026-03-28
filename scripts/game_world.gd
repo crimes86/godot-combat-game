@@ -4579,7 +4579,7 @@ func get_spawn_point() -> Vector2:
 	# Training Dummy is 180px NORTH of campfire
 	# Spawn player SOUTH of campfire so "walk to dummy" feels deliberate
 	var campfire_pos = CAMPFIRE_POS
-	var spawn_offset = Vector2(0, 200)  # South of campfire (positive Y = south)
+	var spawn_offset = Vector2(0, 400)  # South of campfire (positive Y = south), away from wave skeletons
 	# Add slight randomization
 	spawn_offset.x += randf_range(-50, 50)
 	return campfire_pos + spawn_offset
